@@ -136,7 +136,7 @@ tlc:
 - `javaPath`：可填 **portable JRE 目录**（如 `jdk-17.0.20+8-jre`），运行器自动补全 `bin/java`；也可直接填 `java` 可执行文件路径；不配则使用 PATH 中的 `java`
 - `tla2toolsJar`：可填 `tla2tools.jar` 文件路径，或包含该文件的目录
 - `timeoutMs`：模型检查超时上限，状态空间较大时建议调高（如 120000）
-- **降级行为**：仅当 TLC 完全无法启动（未配置 / java 缺失）时，降级为 AI 推演验证（报告标注 `tla-ai-fallback`）。一旦 TLC 成功启动，其结果即权威（报告中 `toolExecuted: true`）：不变量违反、执行超时都直接报告失败，**不再尝试 AI**。唯一例外：代码生成的骨架含未声明的守卫/不变量标识符导致解析/语义失败（生成器无法翻译自然语言表达式，工具未产出结论）时，报告 `toolExecuted: false` 并降级为 AI 推演验证（`tla-ai-fallback`，`rawOutput` 保留 TLC 原始报错）；**退化模式下用户自写的 TLA+ 规格解析失败仍为权威失败**，不降级
+- **降级行为**：**只有未配置 `tlc` 段才降级为 AI 推演验证**（报告标注 `tla-ai-fallback`）。一旦配置了 TLC，其结果即权威（报告中 `toolExecuted: true`）：不变量违反、执行超时、**规格解析/语义失败**（含代码生成骨架未声明标识符的情况）、启动失败（java/jar 路径错误）均直接报告失败，**不再尝试 AI**——失败原因由 `rawOutput` 保留、人工检查点仲裁，避免静默用 AI"通过"掩盖工具失败
 
 示例（真实环境，portable JRE + tla2tools）：
 
