@@ -174,19 +174,32 @@ const TLC_RESERVED_NAMES = new Set([
 /**
  * 从 TLA+ 规格中提取不变量定义名（顶层 `NAME == expr` 定义，排除保留名）。
  * 骨架生成的不变量（INV1、INV2…）与退化模式规格中的不变量均可命中。
+ *
+ * 优先返回 AllInvariants 聚合：它只引用真正的不变量（如 INV1/INV2/CT3Invariant），
+ * 避免把守卫翻译注入的辅助谓词（如 HasNoMappings）与动作定义（AbstractMappingAdd）误当 INVARIANT。
+ * 无 AllInvariants 时退回启发式：仅提取状态谓词（跳过含 prime 的动作与含时序算子的属性）。
  */
 export function extractInvariantIds(spec: string): string[] {
+  // 聚合不变量存在时只检查它
+  if (/^\s*AllInvariants\s*==/m.test(spec)) {
+    return ['AllInvariants'];
+  }
   const ids: string[] = [];
   const re = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*==/gm;
-  for (const m of spec.matchAll(re)) {
+  const defs: { id: string; bodyStart: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(spec)) !== null) {
     const id = m[1];
-    if (!TLC_RESERVED_NAMES.has(id) && !ids.includes(id)) {
-      ids.push(id);
-    }
+    if (TLC_RESERVED_NAMES.has(id)) continue;
+    defs.push({ id, bodyStart: m.index + m[0].length });
   }
-  // 仅存在聚合不变量时兜底引用它
-  if (ids.length === 0 && /^\s*AllInvariants\s*==/m.test(spec)) {
-    ids.push('AllInvariants');
+  for (let i = 0; i < defs.length; i++) {
+    const { id, bodyStart } = defs[i];
+    const bodyEnd = i + 1 < defs.length ? defs[i + 1].bodyStart : spec.length;
+    const body = spec.slice(bodyStart, bodyEnd);
+    // 含 prime（动作）或时序算子（属性）的定义不是状态不变量，跳过
+    if (/'/.test(body) || /\[.*\]_|<>/.test(body)) continue;
+    if (!ids.includes(id)) ids.push(id);
   }
   return ids;
 }

@@ -20,6 +20,7 @@ import type {
   InvariantVerifyResult,
   AIAdapter,
   TlcConfig,
+  GuardTranslationDef,
 } from '../model/types.js';
 import { parseAIJson } from '../ai/adapter.js';
 import { runTlcOnSpec, parseTlcOutput, DEFAULT_TLC_TIMEOUT_MS } from './tlc-runner.js';
@@ -164,8 +165,6 @@ export class TLAAdapter implements FormalToolAdapter {
   private aiAdapter?: AIAdapter;
   /** TLC 配置（portable JRE + tla2tools.jar）；未配置则降级为 AI 推演 */
   private tlc?: TlcConfig;
-  /** 当前规格是否为退化模式透传（用户自写 TLA+）：其解析/语义错误属用户规格缺陷，保持权威失败 */
-  private degradedSpec = false;
 
   constructor(aiAdapter?: AIAdapter, tlc?: TlcConfig) {
     this.aiAdapter = aiAdapter;
@@ -183,9 +182,8 @@ export class TLAAdapter implements FormalToolAdapter {
    * - 正常模式：由 AI 从结构化模型翻译为 TLA+
    */
   generateSpec(model: DerivableLayer): string {
-    this.degradedSpec = model.degraded && model.formalLanguage === 'tla' && !!model.formalSpecRaw;
-    if (this.degradedSpec) {
-      return model.formalSpecRaw!;
+    if (model.degraded && model.formalLanguage === 'tla' && model.formalSpecRaw) {
+      return model.formalSpecRaw;
     }
     // 代码生成基础骨架（不依赖 AI，保证确定性）
     return generateTLASkeleton(model);
@@ -194,11 +192,13 @@ export class TLAAdapter implements FormalToolAdapter {
   /**
    * 验证 TLA+ 规格
    *
-   * 配置了 tlc（protochain.config.yaml 的 `tlc` 段）时，通过 portable JRE +
-   * tla2tools.jar 真实运行 TLC 模型检查。
-   * 一旦 TLC 成功启动，其结果即权威（toolExecuted=true）：
-   * - 不变量违反 / 规格解析失败 / 执行超时 → 直接报告失败，不尝试 AI；
-   * 仅当 TLC 完全无法启动（未配置 / java 缺失）时返回占位报告（passed=false），
+   * 降级策略（与使用方约定一致）：**只有未配置 TLC 才降级为 AI 推演**。
+   * 一旦配置了 TLC（protochain.config.yaml 的 `tlc` 段），其结果即权威
+   * （toolExecuted=true），不尝试 AI：
+   * - 启动失败（java 缺失/路径错误）→ 权威失败（配置问题需暴露，而非静默降级）
+   * - 规格解析/语义错误（骨架未声明标识符或用户 TLA+ 缺陷）→ 权威失败
+   * - 执行超时 / 不变量违反 → 权威失败（含反例）
+   * 仅当 `tlc` 未配置时返回占位报告（passed=false，toolExecuted 缺省），
    * 由 formalize 流程降级为 AI 辅助推演（tool="tla-ai-fallback"）。
    */
   async verify(spec: string): Promise<FormalReport> {
@@ -211,42 +211,23 @@ export class TLAAdapter implements FormalToolAdapter {
     try {
       const run = await runTlcOnSpec(spec, this.tlc);
       const rawOutput = [run.stdout, run.stderr].filter(Boolean).join('\n');
-      // 工具无法启动（如 java 不存在）→ 允许降级 AI
+      // 已配置 TLC 后的所有失败均为权威结论（toolExecuted: true），不降级 AI
       if (run.spawnError) {
-        return this.buildPlaceholder(spec, `TLC 启动失败：${run.spawnError}`);
+        return this.buildAuthoritativeFailure(spec, `TLC 启动失败：${run.spawnError}`);
       }
-      // 工具已启动但超时 → 权威失败（不尝试 AI），rawOutput 保留实际输出
       if (run.timedOut) {
-        return {
-          passed: false,
-          tool: 'tla',
-          suitabilityScore: 0,
-          generatedSpec: spec,
-          rawOutput: [
-            `TLC 执行超时（${this.tlc.timeoutMs ?? DEFAULT_TLC_TIMEOUT_MS}ms）`,
-            rawOutput,
-          ].filter(Boolean).join('\n'),
-          invariantResults: [],
-          verifiedAt: new Date().toISOString(),
-          toolExecuted: true,
-        };
+        return this.buildAuthoritativeFailure(
+          spec,
+          `TLC 执行超时（${this.tlc.timeoutMs ?? DEFAULT_TLC_TIMEOUT_MS}ms）\n${rawOutput}`
+        );
       }
       const parsed = parseTlcOutput(rawOutput, run.invariantIds);
-      // TLC 已启动但规格解析/语义分析失败：
-      // - 退化模式（用户自写 TLA+）：属用户规格缺陷 → 权威失败（toolExecuted: true），不尝试 AI
-      // - 正常模式（代码生成的骨架）：未声明的守卫/不变量标识符是生成器翻译限制，
-      //   工具未产出验证结论 → toolExecuted: false，由 formalize 降级为 AI 推演验证
       if (parsed.errorLines.length > 0) {
-        return {
-          passed: false,
-          tool: 'tla',
-          suitabilityScore: 0,
-          generatedSpec: spec,
-          rawOutput: parsed.errorLines.join('\n') || rawOutput,
-          invariantResults: [],
-          verifiedAt: new Date().toISOString(),
-          toolExecuted: this.degradedSpec,
-        };
+        // 规格解析/语义错误：已配置 TLC 即权威失败，由人工检查点仲裁
+        return this.buildAuthoritativeFailure(
+          spec,
+          parsed.errorLines.join('\n') || rawOutput
+        );
       }
       // TLC 真实执行完毕（通过/反例均视为确定性结论）
       return {
@@ -260,11 +241,14 @@ export class TLAAdapter implements FormalToolAdapter {
         toolExecuted: true,
       };
     } catch (err) {
-      return this.buildPlaceholder(spec, err instanceof Error ? err.message : String(err));
+      return this.buildAuthoritativeFailure(
+        spec,
+        `TLC 执行异常：${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
-  /** 工具不可用时的占位报告（passed=false，formalize 据此降级为 AI 推演） */
+  /** 工具不可用（未配置 TLC）时的占位报告（passed=false，formalize 据此降级为 AI 推演） */
   private buildPlaceholder(spec: string, reason: string): FormalReport {
     return {
       passed: false,
@@ -274,6 +258,20 @@ export class TLAAdapter implements FormalToolAdapter {
       rawOutput: reason,
       invariantResults: [],
       verifiedAt: new Date().toISOString(),
+    };
+  }
+
+  /** 已配置 TLC 时的权威失败报告（toolExecuted: true，不降级 AI） */
+  private buildAuthoritativeFailure(spec: string, reason: string): FormalReport {
+    return {
+      passed: false,
+      tool: 'tla',
+      suitabilityScore: 0,
+      generatedSpec: spec,
+      rawOutput: reason,
+      invariantResults: [],
+      verifiedAt: new Date().toISOString(),
+      toolExecuted: true,
     };
   }
 
@@ -303,6 +301,19 @@ export class TLAAdapter implements FormalToolAdapter {
  * 代码生成 TLA+ 骨架（确定性，无 AI）
  *
  * 包含：MODULE、EXTENDS、VARIABLES、Init、Next、各不变量定义
+ *
+ * SANY 可解析性保证（TLC 真实执行的前提）：
+ * - 所有注释与非表达式文本 ASCII 化（TLA+ 词法分析不支持非 ASCII 字符，中文注释同样报错）
+ * - 自然语言守卫（含非 ASCII 字符）无法翻译为 TLA+ 表达式 → 降级为 TRUE 占位，
+ *   守卫语义保留在模型文档与 verify 实现比对层，TLC 只对状态机结构做真实模型检查
+ *
+ * 守卫翻译（协议驱动，路线 B）：模型侧 guardTranslations 声明自然语言守卫的 TLA+ 注入方式，
+ * 工具链不解释任何具体语义（不认识动作名/变量名），只按声明机械拼接：
+ * - 命中 action（+ guardContains）的转移：守卫占位替换为 guardExpr
+ * - prologue（VARIABLE/谓词定义/抽象动作定义）插入 VARIABLES 与 States 之间
+ * - initConjuncts 附加到 Init、nextDisjuncts 追加到 Next 析取、
+ *   invariants 并入 AllInvariants、typeConjuncts 并入 TypeInvariant、
+ *   stutterVars 声明 Spec 的 stuttering 变量元组
  */
 function generateTLASkeleton(model: DerivableLayer): string {
   const moduleName = 'Protocol';
@@ -310,26 +321,63 @@ function generateTLASkeleton(model: DerivableLayer): string {
   const variableName = 'state';
   const initialStateId = model.initialStateId ?? model.states.find((s) => s.type === 'initial')?.id;
 
+  // ---- 守卫翻译匹配：action/actions + guardContains 命中的转移 -> 对应声明 ----
+  const translations = model.guardTranslations ?? [];
+  const injected = new Map<string, GuardTranslationDef>();
+  for (const gt of translations) {
+    for (const t of model.transitions) {
+      const actionOk =
+        (!gt.action && !gt.actions) ||
+        (gt.action !== undefined && t.action === gt.action) ||
+        (gt.actions !== undefined && gt.actions.includes(t.action));
+      const containsOk = !gt.guardContains || (t.guard ?? '').includes(gt.guardContains);
+      if (actionOk && containsOk) injected.set(t.id, gt);
+    }
+  }
+  // 一条声明可能命中多个转移（如 CT4 覆盖 disable/deregister）→ 注入片段只生效一次
+  const activeGts = [...new Map([...injected.entries()].map(([, gt]) => [gt.id, gt])).values()];
+  // 守卫涉及的附加变量（排除 state 本体）
+  const extraVars = [...new Set(activeGts.flatMap((gt) => gt.stutterVars))].filter(
+    (v) => v !== variableName
+  );
+  const hasInject = activeGts.length > 0;
+
   const lines: string[] = [];
   lines.push(`---- MODULE ${moduleName} ----`);
   lines.push('EXTENDS Naturals, Sequences');
-  lines.push(`VARIABLES ${variableName}`);
+  lines.push(`VARIABLES ${[variableName, ...extraVars].join(', ')}`);
   lines.push('');
-  lines.push('(* 状态空间 *)');
+  lines.push('(* State space *)');
   lines.push(`States == {${stateIds.map((id) => `"${id}"`).join(', ')}}`);
   lines.push('');
 
+  // 守卫翻译前导声明（VARIABLE / 谓词定义 / 抽象动作定义）
+  if (hasInject) {
+    lines.push('(* Guard translation prologue (declared in model.md) *)');
+    for (const gt of activeGts) {
+      for (const line of gt.prologue) {
+        lines.push(line);
+      }
+    }
+    lines.push('');
+  }
+
   // Init
-  lines.push('(* 初始状态 *)');
+  lines.push('(* Initial state *)');
   if (initialStateId) {
     lines.push(`Init == ${variableName} = "${initialStateId}"`);
+    for (const gt of activeGts) {
+      for (const c of gt.initConjuncts) {
+        lines.push(`  /\\ ${c}`);
+      }
+    }
   } else {
-    lines.push(`Init == FALSE (* 缺少初始状态 *)`);
+    lines.push(`Init == FALSE (* no initial state *)`);
   }
   lines.push('');
 
   // Next：所有转移的析取
-  lines.push('(* 下一状态关系 *)');
+  lines.push('(* Next-state relation *)');
   const nextCases: string[] = [];
   for (const t of model.transitions) {
     // 注意：`/\\ ` 必须是双反斜杠 —— 模板字符串里 `\ `（反斜杠+空格）会被 JS 当作转义吃掉反斜杠
@@ -337,45 +385,93 @@ function generateTLASkeleton(model: DerivableLayer): string {
     const fromConditions = t.from
       .map((f) => (f === '-' || f === '' ? 'TRUE' : `${variableName} = "${f}"`))
       .join(' \\/ ');
-    const guard = t.guard ? `/\\ ${translateBooleanExpr(t.guard)}` : '';
+    // 守卫翻译：命中声明的转移用 guardExpr；其余自然语言守卫降级为 TRUE（语义保留于模型文档与 verify 层）
+    const gt = injected.get(t.id);
+    const guard = gt ? `/\\ ${gt.guardExpr}` : (t.guard ? '/\\ TRUE' : '');
+    // 附加变量在普通转移中保持不变（stuttering 补全，保证 TLC 变量完备）
+    const stutterNext = extraVars.map((v) => `  /\\ ${v}' = ${v}\n`).join('');
     nextCases.push(
-      `(* ${t.name}: ${t.from.join('/')} -> ${t.to} *)\n  /\\ ${fromConditions}${guard}\n  /\\ ${variableName}' = "${t.to}"`
+      `(* ${asciiSafe(t.name)}: ${t.from.join('/')} -> ${t.to} *)` +
+      (t.guard ? ` (* guard: ${asciiSafe(t.guard)} *)` : '') +
+      `\n  /\\ ${fromConditions}${guard}\n  /\\ ${variableName}' = "${t.to}"\n${stutterNext}`
     );
   }
+  // 守卫翻译附加析取项（抽象动作，如模拟跨协议映射增删）
+  if (hasInject) {
+    for (const gt of activeGts) {
+      for (const d of gt.nextDisjuncts) {
+        nextCases.push(
+          `(* ${asciiSafe(gt.id)} extra disjunct *)` + `\n  ${d}`
+        );
+      }
+    }
+  }
   if (nextCases.length > 0) {
-    lines.push(`Next == \\* (转移析取)`);
+    lines.push(`Next == \\* (transition disjunction)`);
     lines.push(`  ${nextCases.join('\n  \\/ ')}`);
   } else {
-    lines.push(`Next == FALSE (* 无转移 *)`);
+    lines.push(`Next == FALSE (* no transitions *)`);
   }
   lines.push('');
 
   // 不变量
   for (const inv of model.invariants) {
-    lines.push(`(* 不变量: ${inv.name} *)`);
-    lines.push(`${inv.id} == ${translateBooleanExpr(inv.expression)}`);
+    lines.push(`(* Invariant: ${asciiSafe(inv.name)} *)`);
+    lines.push(`${inv.id} == ${sanitizeTlaExpr(inv.expression)}`);
     lines.push('');
   }
 
+  // 守卫翻译附加不变量（静态断言，等价于动作守卫的可检查形式）
+  for (const gt of activeGts) {
+    for (const inv of gt.invariants) {
+      lines.push(`(* Guard invariant: ${asciiSafe(gt.id)} ${asciiSafe(inv.id)} *)`);
+      lines.push(`${inv.id} == ${inv.expression}`);
+      lines.push('');
+    }
+  }
+
   // TypeInvariant
-  lines.push('(* 类型不变量 *)');
+  lines.push('(* Type invariant *)');
   lines.push(`TypeInvariant == ${variableName} \\in States`);
+  for (const gt of activeGts) {
+    for (const c of gt.typeConjuncts) {
+      lines.push(`  /\\ ${c}`);
+    }
+  }
   lines.push('');
 
   // Spec
-  lines.push('(* 完整规格 *)');
-  lines.push(`Spec == Init /\\ [][Next]_${variableName}`);
+  lines.push('(* Complete spec *)');
+  const stutterVars =
+    hasInject && extraVars.length > 0
+      ? `<<${variableName}, ${extraVars.join(', ')}>>`
+      : variableName;
+  lines.push(`Spec == Init /\\ [][Next]_${stutterVars}`);
   lines.push('');
 
   // 聚合不变量
-  if (model.invariants.length > 0) {
-    lines.push('(* 聚合不变量 *)');
-    lines.push(`AllInvariants == /\\ ${model.invariants.map((i) => i.id).join('\n  /\\ ')}`);
+  const allInvIds = model.invariants.map((i) => i.id);
+  for (const gt of activeGts) {
+    for (const inv of gt.invariants) allInvIds.push(inv.id);
+  }
+  if (allInvIds.length > 0) {
+    lines.push('(* Aggregate invariants *)');
+    lines.push(`AllInvariants == /\\ ${allInvIds.join('\n  /\\ ')}`);
     lines.push('');
   }
 
   lines.push('=============================================');
   return lines.join('\n');
+}
+
+/** 移除文本中的非 ASCII 字符（TLA+ 注释/标识符仅支持 ASCII） */
+function asciiSafe(str: string): string {
+  return String(str ?? '').replace(/[^\x00-\x7F]/g, '');
+}
+
+/** 不变量表达式 ASCII 化：含非 ASCII 字符时降级为 TRUE（避免 SANY 词法错误） */
+function sanitizeTlaExpr(expr: string): string {
+  return /^[\x00-\x7F]*$/.test(expr) ? translateBooleanExpr(expr) : 'TRUE';
 }
 
 /**

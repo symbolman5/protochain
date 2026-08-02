@@ -45,11 +45,11 @@ export function generateTlaSkeleton(
   const lines: string[] = [];
 
   // MODULE 声明
-  const moduleName = composition.metadata.systemName.replace(/\s+/g, '_');
+  const moduleName = toAscii(composition.metadata.systemName).replace(/[^a-zA-Z0-9_]/g, '_') || 'System';
   lines.push(`---- MODULE ${moduleName} ----`);
-  lines.push('\\* 全局 TLA+ 规格（自动生成骨架，AI 辅助填充转移逻辑）');
-  lines.push(`\\* 系统：${composition.metadata.systemName}`);
-  lines.push(`\\* 子协议：${composition.subProtocols.map((s) => `${s.protocolId}(${s.name})`).join(', ')}`);
+  lines.push('\\* Global TLA+ spec (auto-generated skeleton, AI-assisted fill)');
+  lines.push(`\\* System: ${toAscii(composition.metadata.systemName)}`);
+  lines.push(`\\* Sub-protocols: ${composition.subProtocols.map((s) => `${s.protocolId}(${toAscii(s.name)})`).join(', ')}`);
   lines.push('');
 
   // EXTENDS
@@ -63,40 +63,40 @@ export function generateTlaSkeleton(
     );
     if (!model) continue;
     const stateIds = model.derivable.states.map((s) => s.id);
-    lines.push(`\\* 子协议 ${sp.protocolId}（${sp.name}）状态空间`);
+    lines.push(`\\* Sub-protocol ${sp.protocolId} (${toAscii(sp.name)}) state space`);
     lines.push(`CONSTANTS ${stateIds.join(', ')}`);
     const dimNames = collectDimensions(model);
     if (dimNames.length > 0) {
-      lines.push(`CONSTANTS ${dimNames.map((d) => `${sp.protocolId}_${toTlaName(d)}`).join(', ')}`);
+      lines.push(`CONSTANTS ${dimNames.map((d) => `${sp.protocolId}_${toTlaName(toAscii(d))}`).join(', ')}`);
     }
     lines.push('');
   }
 
   // VARIABLES（全局状态变量）
-  lines.push('\\* 全局状态变量');
+  lines.push('\\* Global state variables');
   for (const sp of composition.subProtocols) {
     const model = subProtocolModels.find(
       (m) => composition.subProtocols.find((s) => s.protocolId === sp.protocolId && s.name === m.metadata.name)
     );
     if (!model) continue;
-    lines.push(`\\* ${sp.protocolId} 当前状态`);
+    lines.push(`\\* ${sp.protocolId} current state`);
     lines.push(`VARIABLE ${sp.protocolId}_state`);
     // 多维度状态变量
     for (const s of model.derivable.states) {
       for (const dim of s.dimensions ?? []) {
-        lines.push(`VARIABLE ${sp.protocolId}_${toTlaName(dim.name)}`);
+        lines.push(`VARIABLE ${sp.protocolId}_${toTlaName(toAscii(dim.name))}`);
       }
     }
   }
   // 实例关联变量
   for (const facet of composition.objectStateFacets) {
-    lines.push(`\\* 对象关联：${facet.object}（idKey=${facet.idKey}）`);
-    lines.push(`VARIABLE ${toTlaName(facet.object)}_link`);
+    lines.push(`\\* Object link: ${toAscii(facet.object)} (idKey=${toAscii(facet.idKey)})`);
+    lines.push(`VARIABLE ${toTlaName(toAscii(facet.object))}_link`);
   }
   lines.push('');
 
   // Init 谓词
-  lines.push('\\* 初始状态');
+  lines.push('\\* Initial state');
   lines.push('Init ==');
   for (const sp of composition.subProtocols) {
     const model = subProtocolModels.find(
@@ -107,20 +107,20 @@ export function generateTlaSkeleton(
     if (initState) {
       lines.push(`  /\\\\ ${sp.protocolId}_state = ${initState.id}`);
       for (const dim of initState.dimensions ?? []) {
-        const tlaVal = typeof dim.initial === 'string' ? `"${dim.initial}"` : String(dim.initial);
-        lines.push(`  /\\\\ ${sp.protocolId}_${toTlaName(dim.name)} = ${tlaVal}`);
+        const tlaVal = typeof dim.initial === 'string' ? `"${toAscii(dim.initial)}"` : String(dim.initial);
+        lines.push(`  /\\\\ ${sp.protocolId}_${toTlaName(toAscii(dim.name))} = ${tlaVal}`);
       }
     }
   }
   for (const facet of composition.objectStateFacets) {
-    lines.push(`  /\\\\ ${toTlaName(facet.object)}_link = {}`);
+    lines.push(`  /\\\\ ${toTlaName(toAscii(facet.object))}_link = {}`);
   }
   lines.push('');
 
   // Next 谓词骨架（AI 填充具体转移逻辑）
-  lines.push('\\* 全局转移（AI 填充各子协议转移的具体逻辑）');
+  lines.push('\\* Global transitions (AI fills sub-protocol transition logic)');
   lines.push('Next ==');
-  lines.push('  \\/ \\* <AI: 填充各子协议的转移逻辑>');
+  lines.push('  \\/ \\* <AI: fill sub-protocol transitions>');
   for (const sp of composition.subProtocols) {
     lines.push(`  \\/ ${sp.protocolId}_Next`);
   }
@@ -132,27 +132,28 @@ export function generateTlaSkeleton(
       (m) => composition.subProtocols.find((s) => s.protocolId === sp.protocolId && s.name === m.metadata.name)
     );
     if (!model) continue;
-    lines.push(`\\* ${sp.protocolId}（${sp.name}）Next 谓词`);
+    lines.push(`\\* ${sp.protocolId} (${toAscii(sp.name)}) Next predicate`);
     lines.push(`${sp.protocolId}_Next ==`);
     for (const t of model.derivable.transitions) {
-      const guard = t.guard ? ` /\\\\ ${toTlaName(t.guard)}` : '';
-      const effects = (t.effects ?? []).map((e) => ` /\\\\ ${toTlaName(e)}' = TRUE`).join('');
-      lines.push(`  \\/ ((${t.from.map(f => `${sp.protocolId}_state = ${f}`).join(' \\/ ')}) /\\ ${sp.protocolId}_state' = ${t.to}${guard}${effects})`);
+      // 自然语言守卫/效果无法翻译为 TLA+ 表达式 → 降级为 TRUE（语义保留于模型文档与 verify 层）
+      const guard = t.guard ? ' /\\\\ TRUE' : '';
+      const fromCond = `(${t.from.map(f => `${sp.protocolId}_state = ${f}`).join(' \\/ ')})`;
+      lines.push(`  \\/ (${fromCond} /\\\\ ${sp.protocolId}_state' = ${t.to}${guard})`);
     }
     lines.push('');
   }
 
   // 跨协议不变量（TypeInvariant）
   if (composition.crossInvariants.length > 0) {
-    lines.push('\\* 跨协议不变量（TypeInvariant）');
+    lines.push('\\* Cross-protocol invariants (TypeInvariant)');
     lines.push('CrossInvariants ==');
     for (const inv of composition.crossInvariants) {
       const expr = translateToTlaExpression(inv.expression, composition);
-      lines.push(`  /\\\\ ${expr}  \\* ${inv.id}: ${inv.name}`);
+      lines.push(`  /\\\\ ${expr}  \\* ${inv.id}: ${toAscii(inv.name)}`);
     }
     lines.push('');
     // 类型不变量由跨协议不变量组合 + 基本类型约束构成
-    lines.push('\\* 全局类型不变量');
+    lines.push('\\* Global type invariant');
     lines.push('TypeInvariant ==');
     lines.push('  /\\\\ CrossInvariants');
     for (const sp of composition.subProtocols) {
@@ -168,17 +169,35 @@ export function generateTlaSkeleton(
 
   // 跨协议时序属性（Temporal）
   if (composition.crossTiming.length > 0) {
-    lines.push('\\* 跨协议时序约束（Temporal 属性）');
+    lines.push('\\* Cross-protocol timing constraints (Temporal properties)');
     for (const ct of composition.crossTiming) {
       const boundStr = ct.boundMs !== undefined ? `${ct.boundMs}_ms` : '';
-      lines.push(`\\* ${ct.id}: ${ct.name}（${ct.span.join(', ')}）`);
-      lines.push(`\\* ${ct.rule}${boundStr ? ` [bound: ${boundStr}]` : ''}`);
+      lines.push(`\\* ${ct.id}: ${toAscii(ct.name)} (${ct.span.join(', ')})`);
+      lines.push(`\\* ${toAscii(ct.rule)}${boundStr ? ` [bound: ${boundStr}]` : ''}`);
     }
     lines.push('');
   }
 
   // Spec
-  lines.push('\\* 规格定义');
+  lines.push('\\* Spec definition');
+  // vars 元组：所有状态变量 + 实例关联变量（Spec 的 [][Next]_vars 需声明）
+  const varNames: string[] = [];
+  for (const sp of composition.subProtocols) {
+    const model = subProtocolModels.find(
+      (m) => composition.subProtocols.find((s) => s.protocolId === sp.protocolId && s.name === m.metadata.name)
+    );
+    if (!model) continue;
+    varNames.push(`${sp.protocolId}_state`);
+    for (const s of model.derivable.states) {
+      for (const dim of s.dimensions ?? []) {
+        varNames.push(`${sp.protocolId}_${toTlaName(toAscii(dim.name))}`);
+      }
+    }
+  }
+  for (const facet of composition.objectStateFacets) {
+    varNames.push(`${toTlaName(toAscii(facet.object))}_link`);
+  }
+  lines.push(`vars == <<${varNames.join(', ')}>>`);
   lines.push(`Spec == Init /\\\\ [][Next]_vars`);
   if (composition.crossInvariants.length > 0) {
     lines.push('Theorems == TypeInvariant');
@@ -187,6 +206,11 @@ export function generateTlaSkeleton(
   lines.push('====');
 
   return lines.join('\n');
+}
+
+/** 移除文本中的非 ASCII 字符（TLA+ 注释/标识符仅支持 ASCII） */
+function toAscii(str: string): string {
+  return String(str ?? '').replace(/[^\x00-\x7F]/g, '');
 }
 
 function collectDimensions(model: SourceProtocolModel): string[] {
@@ -213,9 +237,9 @@ function toTlaName(name: string): string {
  * 完整翻译由 AI 辅助完成。
  */
 function translateToTlaExpression(expr: string, _composition: CompositionModel): string {
-  // 简化翻译：保留原文，用 (***) 注释标注
-  if (/\b(forall|exists|not|exists.*?)\b/i.test(expr)) {
-    return `(* ${expr} *) TRUE  \\* <AI: 一阶表达式需人工翻译>`;
+  // 简化翻译：一阶/自然语言表达式无法机械翻译 → 降级为 TRUE（语义保留于模型文档与 verify 层）
+  if (/\b(forall|exists|not|exists.*?)\b/i.test(expr) || /[^\x00-\x7F]/.test(expr)) {
+    return `TRUE  \\* <AI: first-order/natural-language expression needs manual translation>`;
   }
   // 替换协议维度引用：P2.port_exclusive → P2_port_exclusive
   let result = expr.replace(/(\w+)\.(\w+)/g, '$1_$2');

@@ -6,7 +6,7 @@
  * 职责：
  * 1. 基于协议特征选择形式化工具（detectSuitability 规则化评分）
  * 2. 生成形式化规格（退化模式直接透传，正常模式由代码生成骨架）
- * 3. 调用形式化工具验证（P2 提供 AI fallback，工具不可用时降级）
+ * 3. 调用形式化工具验证（仅 TLC 未配置时降级为 AI 推演；已配置 TLC 的失败为权威结论）
  * 4. 解析验证报告，提取每个不变量的验证结果
  *
  * 人工检查点：人仲裁是协议缺陷还是 AI 翻译错误
@@ -79,7 +79,8 @@ export async function formalize(
   }
 
   // 4. 调用工具验证
-  // 配置了 tlc 时调用真实 TLC；工具不可用时降级为 AI 推演
+  // 已配置 tlc 时调用真实 TLC，其任何结果（通过/解析失败/超时/反例）均为权威结论；
+  // 仅 TLC 未配置（工具不可用）时降级为 AI 推演
   let report: FormalReport;
   try {
     const toolReport = await adapter.verify(generatedSpec);
@@ -105,7 +106,7 @@ export async function formalize(
         verifiedAt: new Date().toISOString(),
       };
     } else {
-      // 工具完全无法启动（未配置/启动失败）→ 降级为 AI 推演验证
+      // 工具未配置（verify 返回占位报告）→ 降级为 AI 推演验证
       const toolError = toolReport.rawOutput ? toolReport.rawOutput.split('\n')[0] : undefined;
       report = await aiFallbackVerify(
         model,

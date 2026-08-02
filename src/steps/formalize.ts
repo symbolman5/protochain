@@ -88,8 +88,12 @@ function formatReportSummary(report: FormalReport, reasons: string[]): string {
     }
   }
 
-  if (report.rawOutput && report.tool.includes('fallback')) {
-    lines.push(`  注意: ${report.rawOutput.split('\n')[0]}`);
+  if (report.rawOutput) {
+    const firstLine = report.rawOutput.split('\n').find((l) => l.trim()) ?? '';
+    // 降级（fallback）或权威失败（未通过）都展示首行原因，便于检查点仲裁
+    if (report.tool.includes('fallback') || !report.passed) {
+      lines.push(`  注意: ${firstLine}`);
+    }
   }
 
   return lines.join('\n');

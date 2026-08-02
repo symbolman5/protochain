@@ -108,6 +108,45 @@ export interface DerivableLayer {
   externalEvents?: ExternalEventDef[];
   negativeAssurances?: NegativeAssuranceDef[];
   subsidiaryEntities?: SubsidiaryEntityDef[];
+  /** 守卫翻译声明（协议侧权威源）：把自然语言守卫映射为可注入骨架的 TLA+ 片段 */
+  guardTranslations?: GuardTranslationDef[];
+}
+
+/**
+ * 守卫翻译声明 —— 模型侧声明自然语言守卫的 TLA+ 表达方式。
+ * 工具链不解释任何具体语义（不认识动作名/变量名），只按本声明机械拼接骨架：
+ * 匹配到目标转移时，用 guardExpr 替换守卫占位，并把 prologue/initConjuncts/
+ * nextDisjuncts/invariants/typeConjuncts 原样注入骨架对应位置。
+ * 换协议只需在 model.md 改写本段，工具链无需变更。
+ */
+export interface GuardTranslationDef {
+  /** 声明 ID（如 CT3） */
+  id: string;
+  /** 目标转移匹配：action 动作名（与 actions 二选一或并用） */
+  action?: string;
+  /** 目标转移匹配：动作名列表（一次声明覆盖多个动作，如 CT4 的 disable/deregister） */
+  actions?: string[];
+  /** 目标转移匹配：守卫包含的文本（进一步限定，可选） */
+  guardContains?: string;
+  /** 注入的 TLA+ 守卫表达式（替换原骨架守卫占位，如 "HasNoMappings"） */
+  guardExpr: string;
+  /** 骨架前导声明（VARIABLE / 谓词定义 / 抽象动作定义等），按行插入 VARIABLES 与 States 之间 */
+  prologue: string[];
+  /** Init 附加合取（如 "mappings = {}"） */
+  initConjuncts: string[];
+  /** Next 附加析取项（抽象动作调用，如 "AbstractMappingAdd"），插入转移析取之后 */
+  nextDisjuncts: string[];
+  /** 附加不变量（如 CT3Invariant），并入 AllInvariants */
+  invariants: GuardInvariantDef[];
+  /** TypeInvariant 附加合取（如 "mappings \\subseteq {1, 2}"） */
+  typeConjuncts: string[];
+  /** Spec 的 stuttering 变量元组（含守卫涉及的全部变量） */
+  stutterVars: string[];
+}
+
+export interface GuardInvariantDef {
+  id: string;
+  expression: string;
 }
 
 export interface StateDef {

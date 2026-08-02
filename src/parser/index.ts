@@ -41,6 +41,7 @@ import type {
   ExternalEventDef,
   NegativeAssuranceDef,
   SubsidiaryEntityDef,
+  GuardTranslationDef,
   AttributeEffect,
 } from '../model/types.js';
 import {
@@ -378,6 +379,7 @@ function parseDerivableLayer(
   const externalEvents = parseExternalEvents(sections);
   const negativeAssurances = parseNegativeAssurances(sections, metadata);
   const subsidiaryEntities = parseSubsidiaryEntities(sections);
+  const guardTranslations = parseGuardTranslations(sections);
 
   // 推断初始状态与终态
   const initialStateId = states.find((s) => s.type === 'initial')?.id;
@@ -401,6 +403,8 @@ function parseDerivableLayer(
       negativeAssurances.length > 0 ? negativeAssurances : undefined,
     subsidiaryEntities:
       subsidiaryEntities.length > 0 ? subsidiaryEntities : undefined,
+    guardTranslations:
+      guardTranslations.length > 0 ? guardTranslations : undefined,
   };
 
   // 契约层（可选，仅校验用）
@@ -831,6 +835,40 @@ function parseSubsidiaryEntities(sections: Section[]): SubsidiaryEntityDef[] {
   );
 }
 
+/**
+ * 守卫翻译声明段：YAML 数组，每项描述一条自然语言守卫的 TLA+ 注入方式。
+ * 工具链不解释语义，仅把声明中的 TLA+ 片段机械注入骨架。
+ */
+function parseGuardTranslations(sections: Section[]): GuardTranslationDef[] {
+  return detectExtensionSectionList(
+    sections,
+    ['守卫翻译', 'guardtranslation'],
+    '守卫翻译',
+    (yaml) => {
+      const r = asRecord(yaml, '守卫翻译');
+      const actions = asStringArray(r.actions, '守卫翻译.actions');
+      return {
+        id: requireString(r, 'id', '守卫翻译'),
+        action: optionalString(r, 'action'),
+        actions: actions.length > 0 ? actions : undefined,
+        guardContains: optionalString(r, 'guardContains'),
+        guardExpr: requireString(r, 'guardExpr', '守卫翻译'),
+        prologue: asStringArray(r.prologue, '守卫翻译.prologue') ?? [],
+        initConjuncts: asStringArray(r.initConjuncts, '守卫翻译.initConjuncts') ?? [],
+        nextDisjuncts: asStringArray(r.nextDisjuncts, '守卫翻译.nextDisjuncts') ?? [],
+        invariants: (asRecordArray(r.invariants, '守卫翻译.invariants') ?? []).map(
+          (inv) => ({
+            id: requireString(inv, 'id', '守卫翻译.invariants'),
+            expression: requireString(inv, 'expression', '守卫翻译.invariants'),
+          })
+        ),
+        typeConjuncts: asStringArray(r.typeConjuncts, '守卫翻译.typeConjuncts') ?? [],
+        stutterVars: asStringArray(r.stutterVars, '守卫翻译.stutterVars') ?? [],
+      };
+    }
+  );
+}
+
 /** 解析 StateDimension[]（用于状态维度声明、附属实体 stateSpace） */
 function parseDimensions(yaml: unknown, fieldPath: string): StateDimension[] {
   if (!yaml) return [];
@@ -957,5 +995,18 @@ function asStringArray(yaml: unknown, fieldPath: string): string[] {
       throw new ParseError(`${fieldPath}[${idx}] 必须是字符串`);
     }
     return item;
+  });
+}
+
+function asRecordArray(yaml: unknown, fieldPath: string): Record<string, unknown>[] {
+  if (yaml === undefined || yaml === null) return [];
+  if (!Array.isArray(yaml)) {
+    throw new ParseError(`${fieldPath} 必须是对象数组`);
+  }
+  return yaml.map((item, idx) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new ParseError(`${fieldPath}[${idx}] 必须是对象`);
+    }
+    return item as Record<string, unknown>;
   });
 }
