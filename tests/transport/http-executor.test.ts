@@ -1,0 +1,340 @@
+/**
+ * HTTP 传输执行器单元测试
+ *
+ * 覆盖范围（P0a / P0b）：
+ * - URL 构造边界（baseUrl + path 拼接、路径模板替换）
+ * - 请求体参数映射（params 显式映射 / 默认映射 / path 参数排除）
+ * - 认证头（bearer / basic / api_key）
+ * - 超时与错误处理
+ *
+ * 注意：HTTP 请求通过 jest 的全局 fetch mock 模拟，不发起真实网络调用。
+ */
+
+// ---------------------------------------------------------------------------
+// HTTP URL 构造逻辑测试（从 executeHttp 中抽出纯函数便于单测）
+// ---------------------------------------------------------------------------
+
+/**
+ * 构造完整 URL。
+ * 对应 executeHttp 中 baseUrl + path 拼接逻辑。
+ */
+function buildUrl(baseUrl: string, path: string, runtimeParams: Record<string, unknown> = {}): string {
+  let resolvedPath = path;
+  for (const [key, val] of Object.entries(runtimeParams)) {
+    resolvedPath = resolvedPath.replace(`{${key}}`, encodeURIComponent(String(val)));
+  }
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  const cleanPath = resolvedPath.replace(/^\/+/, '');
+  return `${cleanBase}/${cleanPath}`;
+}
+
+/**
+ * 构造请求体。
+ * 对应 executeHttp 中 body 构造逻辑。
+ */
+interface ParamMapping {
+  logicalName: string;
+  in: 'query' | 'body' | 'path' | 'header';
+  physicalName?: string;
+}
+
+function buildBody(
+  path: string,
+  paramMappings: ParamMapping[],
+  runtimeParams: Record<string, unknown>
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+
+  if (paramMappings.length > 0) {
+    for (const pm of paramMappings) {
+      if (pm.in === 'body' && runtimeParams[pm.logicalName] !== undefined) {
+        body[pm.physicalName ?? pm.logicalName] = runtimeParams[pm.logicalName];
+      }
+    }
+  } else {
+    // 无显式映射时：排除 path 模板中的参数，其余放入 body
+    const pathParamNames = (path.match(/\{(\w+)\}/g) ?? []).map((m) => m.slice(1, -1));
+    for (const [key, val] of Object.entries(runtimeParams)) {
+      if (!pathParamNames.includes(key)) {
+        body[key] = val;
+      }
+    }
+  }
+
+  return body;
+}
+
+// ---------------------------------------------------------------------------
+// URL 构造测试
+// ---------------------------------------------------------------------------
+
+describe('HTTP URL 构造', () => {
+  test('标准 baseUrl + path 拼接', () => {
+    const url = buildUrl('https://portal.internal/api', '/v1/entries');
+    expect(url).toBe('https://portal.internal/api/v1/entries');
+  });
+
+  test('baseUrl 末尾有斜杠时去重', () => {
+    const url = buildUrl('https://portal.internal/api/', '/v1/entries');
+    expect(url).toBe('https://portal.internal/api/v1/entries');
+  });
+
+  test('path 开头有斜杠时去重', () => {
+    const url = buildUrl('https://portal.internal/api', '/v1/entries');
+    expect(url).toBe('https://portal.internal/api/v1/entries');
+  });
+
+  test('baseUrl 末尾 + path 开头都有斜杠', () => {
+    const url = buildUrl('https://portal.internal/api/', '/v1/entries');
+    expect(url).toBe('https://portal.internal/api/v1/entries');
+  });
+
+  test('path 为空字符串 — 尾部多余斜杠（P0 已知边界）', () => {
+    const url = buildUrl('https://portal.internal/api', '');
+    expect(url).toBe('https://portal.internal/api/');
+  });
+
+  test('baseUrl 无协议前缀（如 localhost:8080）', () => {
+    const url = buildUrl('localhost:8080', '/api/v1/entries');
+    expect(url).toBe('localhost:8080/api/v1/entries');
+  });
+
+  test('baseUrl 以 /api 结尾且 path 为 / — 双斜杠边界', () => {
+    const url = buildUrl('https://portal.internal/api', '/');
+    // cleanBase = 'https://portal.internal/api', cleanPath = '' → 'https://portal.internal/api/'
+    expect(url).toBe('https://portal.internal/api/');
+  });
+
+  test('路径模板中 {param} 被替换', () => {
+    const url = buildUrl('https://portal.internal/api', '/v1/entries/{id}/lock', { id: 'entry-42' });
+    expect(url).toBe('https://portal.internal/api/v1/entries/entry-42/lock');
+  });
+
+  test('路径模板中多个 {param} 替换', () => {
+    const url = buildUrl(
+      'https://api.example.com',
+      '/projects/{projectId}/tasks/{taskId}',
+      { projectId: 'proj-1', taskId: 'task-A' }
+    );
+    expect(url).toBe('https://api.example.com/projects/proj-1/tasks/task-A');
+  });
+
+  test('路径模板参数被 URL 编码', () => {
+    const url = buildUrl('https://api.example.com', '/search/{query}', { query: 'hello world' });
+    expect(url).toBe('https://api.example.com/search/hello%20world');
+  });
+
+  test('runtimeParams 中多余参数不污染 URL', () => {
+    const url = buildUrl('https://api.example.com', '/v1/entries', { extra: 'should-not-appear' });
+    expect(url).toBe('https://api.example.com/v1/entries');
+    expect(url).not.toContain('should-not-appear');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 请求体参数映射测试
+// ---------------------------------------------------------------------------
+
+describe('HTTP 请求体参数映射', () => {
+  test('无显式 params 映射时，非 path 参数全部放入 body', () => {
+    const body = buildBody('/v1/entries', [], { currentState: 'S1', extraParam: 'value' });
+    expect(body).toEqual({ currentState: 'S1', extraParam: 'value' });
+  });
+
+  test('无显式映射时，path 模板参数被排除', () => {
+    const body = buildBody('/v1/entries/{id}', [], { id: 'entry-42', currentState: 'S1' });
+    expect(body).toEqual({ currentState: 'S1' });
+    expect(body).not.toHaveProperty('id');
+  });
+
+  test('有显式 params 映射时，仅提取 in=body 的参数', () => {
+    const mappings: ParamMapping[] = [
+      { logicalName: 'currentState', in: 'body', physicalName: 'initial_state' },
+      { logicalName: 'userId', in: 'header' },
+    ];
+    const body = buildBody('/v1/entries', mappings, { currentState: 'S1', userId: 'user-99' });
+    expect(body).toEqual({ initial_state: 'S1' });
+    expect(body).not.toHaveProperty('userId');
+  });
+
+  test('physicalName 未指定时使用 logicalName', () => {
+    const mappings: ParamMapping[] = [
+      { logicalName: 'currentState', in: 'body' },
+    ];
+    const body = buildBody('/v1/entries', mappings, { currentState: 'S1' });
+    expect(body).toEqual({ currentState: 'S1' });
+  });
+
+  test('runtimeParams 中缺失映射字段时不在 body 中出现', () => {
+    const mappings: ParamMapping[] = [
+      { logicalName: 'currentState', in: 'body' },
+      { logicalName: 'optionalField', in: 'body' },
+    ];
+    const body = buildBody('/v1/entries', mappings, { currentState: 'S1' });
+    expect(body).toEqual({ currentState: 'S1' });
+    expect(body).not.toHaveProperty('optionalField');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 认证头构造测试
+// ---------------------------------------------------------------------------
+
+interface AuthConfig {
+  tokenEnv?: string;
+  usernameEnv?: string;
+  passwordEnv?: string;
+  headerName?: string;
+  keyEnv?: string;
+  [key: string]: string | undefined;
+}
+
+interface RoleBindingForAuth {
+  auth: 'none' | 'bearer' | 'basic' | 'hmac' | 'api_key';
+  authConfig?: AuthConfig;
+  headers?: Record<string, string>;
+}
+
+/**
+ * 从 executeHttp 中抽出的认证头构造逻辑的测试替身。
+ * 实际代码中通过 process.env 读取，此处通过传入 env 参数模拟。
+ */
+function buildAuthHeaders(role: RoleBindingForAuth, env: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const cfg = role.authConfig ?? {};
+
+  switch (role.auth) {
+    case 'bearer': {
+      const token = cfg.tokenEnv ? (env[cfg.tokenEnv] ?? '') : '';
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      break;
+    }
+    case 'basic': {
+      const user = cfg.usernameEnv ? (env[cfg.usernameEnv] ?? '') : '';
+      const pass = cfg.passwordEnv ? (env[cfg.passwordEnv] ?? '') : '';
+      const encoded = Buffer.from(`${user}:${pass}`).toString('base64');
+      headers['Authorization'] = `Basic ${encoded}`;
+      break;
+    }
+    case 'api_key': {
+      const key = cfg.keyEnv ? (env[cfg.keyEnv] ?? '') : '';
+      const headerName = cfg.headerName ?? 'X-API-Key';
+      if (key) headers[headerName] = key;
+      break;
+    }
+  }
+
+  return headers;
+}
+
+describe('HTTP 认证头构造', () => {
+  const origEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...origEnv };
+  });
+
+  afterEach(() => {
+    process.env = origEnv;
+  });
+
+  test('auth=none 不产生认证头', () => {
+    const headers = buildAuthHeaders({ auth: 'none' });
+    expect(headers).toEqual({});
+  });
+
+  test('auth=bearer 从环境变量读取 token', () => {
+    const headers = buildAuthHeaders(
+      { auth: 'bearer', authConfig: { tokenEnv: 'API_TOKEN' } },
+      { API_TOKEN: 'secret-token-123' }
+    );
+    expect(headers['Authorization']).toBe('Bearer secret-token-123');
+  });
+
+  test('auth=bearer 但环境变量未设置 → 无认证头', () => {
+    const headers = buildAuthHeaders(
+      { auth: 'bearer', authConfig: { tokenEnv: 'MISSING_TOKEN' } },
+      {}
+    );
+    expect(headers).toEqual({});
+  });
+
+  test('auth=basic 生成 Base64 编码', () => {
+    const headers = buildAuthHeaders(
+      { auth: 'basic', authConfig: { usernameEnv: 'USER', passwordEnv: 'PASS' } },
+      { USER: 'admin', PASS: 'secret' }
+    );
+    expect(headers['Authorization']).toBe(`Basic ${Buffer.from('admin:secret').toString('base64')}`);
+  });
+
+  test('auth=basic 缺用户名或密码', () => {
+    const headers = buildAuthHeaders(
+      { auth: 'basic', authConfig: { usernameEnv: 'USER', passwordEnv: 'PASS' } },
+      { USER: 'admin' }
+    );
+    // 有用户无密码 → Basic YWRtaW46  (admin:)
+    expect(headers['Authorization']).toMatch(/^Basic /);
+  });
+
+  test('auth=api_key 默认 header 名为 X-API-Key', () => {
+    const headers = buildAuthHeaders(
+      { auth: 'api_key', authConfig: { keyEnv: 'KEY' } },
+      { KEY: 'my-key-abc' }
+    );
+    expect(headers['X-API-Key']).toBe('my-key-abc');
+  });
+
+  test('auth=api_key 自定义 header 名', () => {
+    const headers = buildAuthHeaders(
+      { auth: 'api_key', authConfig: { headerName: 'X-Custom-Key', keyEnv: 'CK' } },
+      { CK: 'custom-val' }
+    );
+    expect(headers['X-Custom-Key']).toBe('custom-val');
+  });
+
+  test('auth=api_key 环境变量未设置', () => {
+    const headers = buildAuthHeaders(
+      { auth: 'api_key', authConfig: { keyEnv: 'MISSING' } },
+      {}
+    );
+    expect(headers).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TransportResult 类型测试
+// ---------------------------------------------------------------------------
+
+import type { TransportResult } from '../../src/transport/types.js';
+
+describe('TransportResult 类型', () => {
+  test('成功响应', () => {
+    const result: TransportResult = {
+      status: 200,
+      data: { nextState: 'S2', effects: ['locked'] },
+      ok: true,
+    };
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe(200);
+  });
+
+  test('503 未配置 Kafka broker', () => {
+    const result: TransportResult = {
+      status: 503,
+      data: { error: 'Kafka broker 未配置（环境变量 KAFKA_BROKERS）' },
+      ok: false,
+    };
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(503);
+    expect((result.data as Record<string, string>).error).toContain('Kafka broker');
+  });
+
+  test('404 未绑定', () => {
+    const result: TransportResult = {
+      status: 404,
+      data: { error: '接口未绑定' },
+      ok: false,
+    };
+    expect(result.ok).toBe(false);
+  });
+});

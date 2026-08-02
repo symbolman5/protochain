@@ -1,0 +1,58 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+*.tsbuildinfo
+
+# 测试覆盖率
+coverage/
+
+# 临时测试目录
+tmp-test/
+openfw/
+
+# IDE
+.vscode/
+.idea/
+.history/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 打包产物
+*.tgz
+*.tar.gz
+
+# 临时/备份/合并冲突残留
+*.tmp
+*.orig
+*.rej
+*~
+
+# 派生产物（由工具链生成，不纳入版本控制）
+derived/
+impl-scaffold/
+
+# 协议项目运行时状态（由 orchestrator 写入）
+protocol/scenarios/
+protocol/versions/
+*.state.yaml
+orchestrator-state.yaml
+
+# 差分与影响分析报告（由工具链生成）
+diff/
