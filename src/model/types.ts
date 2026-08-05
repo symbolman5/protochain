@@ -30,7 +30,12 @@ export interface MetadataLayer {
   changeDeclarations?: ChangeDeclaration[];
   /** 待使用方确认的项（由 versioner 维护） */
   pendingConfirmations?: ConfirmableItem[];
+  /** 活性语义声明：weak=弱活性（终态可达，默认）；strong=强活性（所有路径终达终态） */
+  liveness?: LivenessMode;
 }
+
+/** 活性判定模式：weak=每个可达状态存在到达终态的路径；strong=所有路径最终到达终态 */
+export type LivenessMode = 'weak' | 'strong';
 
 export interface RoleDeclaration {
   id: string;
@@ -594,6 +599,8 @@ export interface LivenessResult {
   /** 无法最终到达终态的路径描述 */
   violations: string[];
   notes?: string;
+  /** 判定所用的活性模式（weak/strong） */
+  mode?: LivenessMode;
 }
 
 export interface ConsistencyResult {

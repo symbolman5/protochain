@@ -28,8 +28,9 @@
 
 import { Command } from 'commander';
 import { resolve, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
-import { initProject, initMultiProject } from '../scaffolder/index.js';
+import { initProject, initMultiProject, initRunnerProject } from '../scaffolder/index.js';
 import { parseProtocolFile } from '../parser/index.js';
 import { parseCompositionFile } from '../composition-parser/index.js';
 import { checkCompleteness } from '../checker/index.js';
@@ -653,6 +654,7 @@ program
   .command('reason')
   .description('② AI 推演（可达性/死锁/活性/一致性）')
   .option('-d, --dir <目录>', '项目根目录', process.cwd())
+  .option('-l, --liveness <模式>', '活性判定模式：weak|strong（默认按模型声明或 weak）')
   .action(async (opts) => {
     const ctx = resolveCtx(opts);
     const rootDir = ctx.protocolRoot;
@@ -662,6 +664,14 @@ program
       console.error('步骤 ② AI 推演需要 AI 适配器，请在 protochain.config.yaml 配置 ai');
       process.exit(2);
     }
+    let liveness: 'weak' | 'strong' | undefined;
+    if (opts.liveness !== undefined) {
+      if (opts.liveness !== 'weak' && opts.liveness !== 'strong') {
+        console.error(`--liveness 必须是 weak 或 strong，实际为 ${opts.liveness}`);
+        process.exit(2);
+      }
+      liveness = opts.liveness;
+    }
     let aiAdapter: AIAdapter;
     try {
       aiAdapter = createAIAdapter(config.ai);
@@ -669,17 +679,19 @@ program
       console.error(`AI 适配器初始化失败：${err instanceof Error ? err.message : err}`);
       process.exit(2);
     }
-    registerExecutor('reason', createReasonExecutor(aiAdapter));
+    registerExecutor('reason', createReasonExecutor(aiAdapter, { liveness }));
 
     // 直接调用执行器
     const { parseProtocolFile } = await import('../parser/index.js');
     const model = parseProtocolFile(modelPath);
     const { writeReport } = await import('../orchestrator/index.js');
-    const result = await (await import('../steps/reason.js')).createReasonExecutor(aiAdapter).execute({
-      model,
-      rootDir,
-      artifacts: {},
-    });
+    const result = await (await import('../steps/reason.js'))
+      .createReasonExecutor(aiAdapter, { liveness })
+      .execute({
+        model,
+        rootDir,
+        artifacts: {},
+      });
 
     if (result.reportSummary) console.log(result.reportSummary);
     process.exit(result.passed ? 0 : 1);
@@ -1440,5 +1452,48 @@ function printIssues(category: string, issues: { severity: string; message: stri
     console.log(`    ${tag}${elem} ${issue.message}`);
   }
 }
+
+
+// ==========================================================================
+// init-runner（初始化协议建模工程 + protocol-runner 编排实例）
+// ==========================================================================
+
+program
+  .command('init-runner')
+  .description('初始化协议建模工程 + protocol-runner 编排实例（协议建模驱动开发完整起步）')
+  .requiredOption('-s, --system <系统名>', '系统名称')
+  .requiredOption('-p, --protocols <列表>', '子协议列表，格式 P1:名称1,P2:名称2')
+  .option('--modeling-dir <目录>', '建模目录（相对项目根）', 'modeling')
+  .option('--impl-dir <目录>', '实现目录（相对项目根）', 'impl')
+  .option('--instance-dir <目录>', '编排实例目录（相对项目根）', 'protocol-runner')
+  .option('-d, --dir <目录>', '目标根目录', process.cwd())
+  .option('-f, --force', '覆盖已存在的实例')
+  .action((opts) => {
+    const rootDir = resolve(opts.dir);
+    const protocols = opts.protocols.split(',').map((s: string) => {
+      const [pid, ...nameParts] = s.trim().split(':');
+      const name = nameParts.join(':').trim() || pid.trim();
+      return { protocolId: pid.trim(), name };
+    });
+    const result = initRunnerProject({
+      systemName: opts.system,
+      rootDir,
+      protocols,
+      modelingDir: opts.modelingDir,
+      implDir: opts.implDir,
+      instanceDir: opts.instanceDir,
+      force: opts.force,
+      templateDir: fileURLToPath(new URL('../../templates/protocol-runner-instance', import.meta.url)),
+    });
+    console.log(`协议建模工程 + protocol-runner 实例 "${opts.system}" 已初始化于 ${rootDir}`);
+    console.log('建模骨架目录:');
+    for (const d of result.modeling.createdDirs) console.log(`  + ${opts.modelingDir}/${d}/`);
+    console.log('实例目录:');
+    for (const d of result.createdDirs) console.log(`  + ${d}/`);
+    for (const f of result.createdFiles) console.log(`  + ${f}`);
+    console.log('\n下一步：');
+    console.log(`  1. 在 ${opts.instanceDir}/env/dev.env 填写剩余占位符（如 {{API_KEY}}，位于 scripts/init-modeling.mjs 生成的 config 中）`);
+    console.log(`  2. 输入第一个需求，运行：protocol-runner --project ${rootDir}/${opts.instanceDir}`);
+  });
 
 program.parse();

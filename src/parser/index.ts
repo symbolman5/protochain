@@ -24,6 +24,7 @@ import { parse as parseYaml } from 'yaml';
 import type {
   SourceProtocolModel,
   MetadataLayer,
+  LivenessMode,
   ReadableLayer,
   DerivableLayer,
   StateDef,
@@ -142,8 +143,15 @@ function parseMetadata(frontMatter: string | null): MetadataLayer {
   const purpose = requireString(raw, 'purpose', '元数据层');
   const roles = parseRoles(raw.roles);
   const changeDeclarations = parseChangeDeclarations(raw.changeDeclarations);
+  const liveness = parseLivenessMode(raw.liveness);
 
-  return { name, version, purpose, roles, changeDeclarations };
+  return { name, version, purpose, roles, changeDeclarations, liveness };
+}
+
+function parseLivenessMode(v: unknown): LivenessMode | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (v === 'weak' || v === 'strong') return v;
+  throw new ParseError(`metadata.liveness 必须是 weak 或 strong，实际为 ${v}`);
 }
 
 function parseRoles(raw: unknown): RoleDeclaration[] {

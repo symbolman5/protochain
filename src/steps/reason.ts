@@ -10,12 +10,20 @@
  */
 
 import { join } from 'node:path';
-import type { AIAdapter, ReasoningReport } from '../model/types.js';
+import type { AIAdapter, LivenessMode, ReasoningReport } from '../model/types.js';
 import { reason } from '../reasoner/index.js';
 import type { StepExecutor } from '../orchestrator/index.js';
 import { writeReport } from '../orchestrator/index.js';
 
-export function createReasonExecutor(aiAdapter?: AIAdapter): StepExecutor {
+export interface ReasonExecutorOptions {
+  /** 活性判定模式覆盖（优先级高于模型声明）；不传则按模型声明/默认 */
+  liveness?: LivenessMode;
+}
+
+export function createReasonExecutor(
+  aiAdapter?: AIAdapter,
+  options?: ReasonExecutorOptions
+): StepExecutor {
   return {
     async execute(ctx) {
       const { model, rootDir } = ctx;
@@ -33,7 +41,7 @@ export function createReasonExecutor(aiAdapter?: AIAdapter): StepExecutor {
       }
 
       try {
-        const report = await reason(model, aiAdapter);
+        const report = await reason(model, aiAdapter, { liveness: options?.liveness });
         const path = writeReport(rootDir, 'derived/reasoning-report.json', report);
         ctx.artifacts.reasoning = report;
 
@@ -71,7 +79,7 @@ function formatReportSummary(report: ReasoningReport): string {
         ? `死锁状态 ${report.deadlock.deadlockStates.join(', ')}`
         : ''
     }`,
-    `  活性: ${report.liveness.passed ? '✓' : '✗'}${
+    `  活性${report.liveness.mode ? `(${report.liveness.mode})` : ''}: ${report.liveness.passed ? '✓' : '✗'}${
       report.liveness.violations.length > 0 ? `（${report.liveness.violations.length} 项违反）` : ''
     }`,
     `  一致性: ${report.consistency.passed ? '✓' : '✗'}${

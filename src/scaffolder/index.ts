@@ -10,8 +10,8 @@
  * ⑨实现编码本身不在工具链范围内，scaffolder 仅生成类型定义骨架。
  */
 
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
 import type { InterfaceSpec, ProtochainConfig } from '../model/types.js';
 
@@ -523,4 +523,143 @@ function pascalCase(s: string): string {
     .split(/[_\s-]+/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join('');
+}
+
+// ============================================================================
+// init-runner：初始化协议建模工程 + protocol-runner 编排实例（协议建模驱动开发完整起步）
+// 实例模板位于 templates/protocol-runner-instance（可移植：相对路径、工具走 PATH、自带手册文档）
+// ============================================================================
+
+export interface InitRunnerOptions {
+  /** 系统名称 */
+  systemName: string;
+  /** 子协议列表 */
+  protocols: { protocolId: string; name: string }[];
+  /** 项目根目录（建模目录 = rootDir/modelingDir） */
+  rootDir: string;
+  /** 建模目录（相对项目根，默认 modeling） */
+  modelingDir?: string;
+  /** 实现目录（相对项目根，默认 impl） */
+  implDir?: string;
+  /** 编排实例目录（相对项目根，默认 protocol-runner） */
+  instanceDir?: string;
+  /** 是否覆盖已存在的实例 */
+  force?: boolean;
+  /** 实例模板目录（默认多候选解析；CLI 显式传入） */
+  templateDir?: string;
+}
+
+export interface InitRunnerResult {
+  /** 建模骨架结果（复用 initMultiProject） */
+  modeling: MultiInitResult;
+  /** 实例内创建目录（相对项目根） */
+  createdDirs: string[];
+  /** 实例内创建文件（相对项目根） */
+  createdFiles: string[];
+  /** 模板来源目录 */
+  templateDir: string;
+}
+
+/** 实例模板绝对路径（多候选解析，避免 import.meta 在 CJS 转换上下文不可用）：
+ * 1) 显式传入（InitRunnerOptions.templateDir，CLI 用 import.meta 解析）；2) env 覆盖；
+ * 3) cwd/templates；4) 本文件相对路径（__dirname，CJS 可用）。 */
+function instanceTemplateDir(): string {
+  const candidates: string[] = [
+    process.env.PROTOCHAIN_INSTANCE_TEMPLATE || '',
+    join(process.cwd(), 'templates', 'protocol-runner-instance'),
+    typeof __dirname !== 'undefined' ? join(__dirname, '..', '..', 'templates', 'protocol-runner-instance') : '',
+  ].filter((s) => s.length > 0);
+  for (const c of candidates) {
+    if (existsSync(join(c, 'project.yaml'))) return c;
+  }
+  return candidates[0] ?? join(process.cwd(), 'templates', 'protocol-runner-instance');
+}
+
+/** 递归复制目录，记录相对项目根的路径 */
+function copyTree(src: string, dst: string, createdDirs: string[], createdFiles: string[], base: string): void {
+  mkdirSync(dst, { recursive: true });
+  createdDirs.push(relative(base, dst));
+  for (const e of readdirSync(src, { withFileTypes: true })) {
+    const s = join(src, e.name);
+    const d = join(dst, e.name);
+    if (e.isDirectory()) {
+      copyTree(s, d, createdDirs, createdFiles, base);
+    } else {
+      copyFileSync(s, d);
+      createdFiles.push(relative(base, d));
+    }
+  }
+}
+
+/** 遍历文本文件并替换占位符 */
+function replaceInTree(dir: string, replacements: Array<[RegExp, string]>): void {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) {
+      replaceInTree(p, replacements);
+    } else if (/\.(yaml|yml|mjs|js|md|json|env|txt|ts)$/.test(e.name)) {
+      const text = readFileSync(p, 'utf8');
+      let out = text;
+      for (const [re, v] of replacements) out = out.replace(re, v);
+      if (out !== text) writeFileSync(p, out, 'utf8');
+    }
+  }
+}
+
+/**
+ * 初始化协议建模工程 + protocol-runner 编排实例：
+ * 1) 建模骨架（复用 initMultiProject）置于 <root>/<modelingDir>；
+ * 2) 确保 protochain.config.yaml 含 bindings（实例 check-real-bind 依赖）；
+ * 3) 复制实例模板至 <root>/<instanceDir>（可移植：不含任何工具链源码路径，自带 README 手册）；
+ * 4) 替换占位符：{{PROJECT_NAME}}、{{MODELING_DIR}}（相对实例目录）、{{IMPL_DIR}}。
+ */
+export function initRunnerProject(options: InitRunnerOptions): InitRunnerResult {
+  const {
+    systemName,
+    protocols,
+    rootDir,
+    modelingDir = 'modeling',
+    implDir = 'impl',
+    instanceDir = 'protocol-runner',
+    force = false,
+    templateDir: explicitTemplate,
+  } = options;
+
+  // 1) 建模骨架
+  const modelingRoot = join(rootDir, modelingDir);
+  const modeling = initMultiProject({ systemName, rootDir: modelingRoot, protocols, force });
+
+  // 2) 确保 config 含 bindings（check-real-bind 依赖）
+  const configPath = join(modelingRoot, 'protochain.config.yaml');
+  if (existsSync(configPath)) {
+    const cfg = readFileSync(configPath, 'utf8');
+    if (!/^bindings:/m.test(cfg)) {
+      writeFileSync(
+        configPath,
+        cfg + '\nbindings:\n  defaultEnv: dev\n  roles:\n    R-Op: { roleId: R-Op, baseUrl: http://127.0.0.1:8787, auth: bearer }\n  interfaces: []\n',
+        'utf8',
+      );
+    }
+  }
+
+  // 3) 复制实例模板
+  const templateDir = explicitTemplate ?? instanceTemplateDir();
+  const instanceRoot = join(rootDir, instanceDir);
+  const createdDirs: string[] = [];
+  const createdFiles: string[] = [];
+  if (existsSync(instanceRoot) && !force) {
+    throw new Error(`实例目录已存在: ${instanceDir}（使用 -f 覆盖）`);
+  }
+  copyTree(templateDir, instanceRoot, createdDirs, createdFiles, rootDir);
+
+  // 4) 替换占位符（相对路径以实例目录为锚点）
+  const relModeling = relative(join(rootDir, instanceDir), join(rootDir, modelingDir)).split(sep).join('/');
+  const relImpl = relative(join(rootDir, instanceDir), join(rootDir, implDir)).split(sep).join('/');
+  replaceInTree(instanceRoot, [
+    [/\{\{PROJECT_NAME\}\}/g, systemName],
+    [/\{\{MODELING_DIR\}\}/g, relModeling],
+    [/\{\{IMPL_DIR\}\}/g, relImpl],
+  ]);
+
+  return { modeling, createdDirs, createdFiles, templateDir };
 }
