@@ -158,6 +158,7 @@ tlc:
 |------|------|
 | `init -n <名称>` | 创建单协议项目骨架 |
 | `init-multi -s <系统> -p P1:名称,...` | 创建多协议系统骨架 |
+| `init-runner -s <系统> -p P1:名称,...` | 初始化协议建模工程 + protocol-runner 编排实例（协议建模驱动开发完整起步；生成 modeling/ + protocol-runner/） |
 
 ### 3.2 单协议十步流程
 
@@ -482,6 +483,8 @@ protochain formalize
 
 > **注意**：`reason` 和 `formalize` 需要 AI 适配器配置。`check` 的机械层不依赖 AI，AI 语义层可通过 `--no-ai` 跳过。
 
+**活性判定语义（弱活性）**：`reason` 会解析模型的「活性语义声明（协议正式定义）」——若声明采用弱活性（终态可达 + 无死锁）、并明确"不采用全路径强活性、生命周期循环是合法业务"，则 reason 按 `weak` 模式判定（报告 `liveness.mode: "weak"`），含停用/启用等循环的实体生命周期模型不会因"并非所有路径最终到达终态"被误判。无该声明时按强活性判定。
+
 ### 4.4 第四步：推导接口与契约
 
 ```bash
@@ -707,6 +710,37 @@ saas-mapping/
 │   └── composition.md        # 组合层协议
 └── derived/
 ```
+
+### 5.1.1 协议建模驱动开发（可选：init-runner 初始化编排实例）
+
+当开发流程需要"多 agent 协作编排"（任务拆分、交接单、机械验收、回退、人工终审）时，用 `init-runner` 在建模工程之上再初始化一个 **protocol-runner 编排实例**：
+
+```bash
+protochain init-runner -s "SaaS内网映射系统" -p "P1:转发服务器管理,P2:用户注册登录,P3:内网映射配置"
+```
+
+生成结构（在 init-multi 基础上增加）：
+
+```
+项目根/
+├── modeling/                    # 协议建模骨架（同 init-multi）
+│   ├── protocol/P1..Pn/model.md
+│   └── protochain.config.yaml   # 已含 bindings 段
+├── docs/architecture.md         # 工程架构约束（技术栈/部署形态/架构决策）
+├── impl/CONVENTIONS.md          # 实现规范（工程资产：命名、分层、存储约定）
+└── protocol-runner/             # 编排实例（可移植，随项目版本化）
+    ├── project.yaml             # 单元/阶段/交接单/闭包/环境/执行器
+    ├── checklists/              # M/D/B/I/V/R 六单元清单
+    ├── schemas/ scripts/ env/   # 产物 schema、自举/断言脚本、环境
+    ├── executor-hooks.mjs       # 真实 human 终审执行器
+    └── README.md                # 自带手册（实例化/运行说明）
+```
+
+- **占位符**：`{{PROJECT_NAME}}`/`{{MODELING_DIR}}`/`{{IMPL_DIR}}` 已替换（相对实例目录）；`{{API_KEY}}` 由使用者在生成的 modeling/protochain.config.yaml 中填写；
+- **可移植**：生成的实例不含任何工具链源码路径，依赖 protochain（PATH 或 `{{PROTOCHAIN}}`）与 protocol-runner 引擎（编译版 `dist/runner.js` 或 bin）；
+- **工程约束落点**：架构决策（技术栈/部署/架构）写 `docs/architecture.md`，实现规范（MySQL 命名等）写 `impl/CONVENTIONS.md`——均为工程资产、随项目版本化；I（实现）单元 `read-conventions` 读取遵循、`check-naming`（`scripts/check-mysql-naming.mjs`）机械验收，不合格机械回退；
+- **第一需求自举**：`protocol-runner --project protocol-runner/` 后，M 单元 `init-modeling` 补全建模目录 → D 单元 `produce-derive` 跑十步推演（formalize/TLC 闸门）→ B/I/V → R 人工终审（`--resolve-escalation` 三问）；
+- **模型缺陷闭环**：formalize/TLC 未通过 → m→d 验收失败 → 机械回退 M（derive 阶段 rollbackMap model→model）。
 
 ### 5.2 组合层协议
 

@@ -1,0 +1,6 @@
+# 运行时数据（由 runner 生成，--reset 可重建）
+artifacts/
+handoffs/*.yaml
+state/
+metrics/records/
+metrics/summary.json

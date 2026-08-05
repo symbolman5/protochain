@@ -1,0 +1,429 @@
+schemaVersion: "1.0"
+project:
+  id: "{{PROJECT_NAME}}"
+  name: "{{PROJECT_NAME}}（协议建模驱动开发）"
+  methodologyRef: protocol-collaboration-1.0
+  version: "0.1.0"
+  variant: full
+  finalStage: release
+
+# ---- 阶段集（六阶段对应六单元，收尾为终态）----
+stages:
+  - id: model
+    name: 模型
+    enterGuards: []
+    rollbackMap: []
+  - id: derive
+    name: 推导
+    enterGuards:
+      - { kind: file, path: artifacts/model/model.json, mustExist: true, schemaRef: schemas/model.schema.json }
+    rollbackMap:
+      - { rootCause: model, targetStage: model }
+  - id: bind
+    name: 绑定
+    enterGuards:
+      - { kind: file, path: artifacts/derive/specs.json, mustExist: true, schemaRef: schemas/specs.schema.json }
+    rollbackMap: []
+  - id: impl
+    name: 实现
+    enterGuards:
+      - { kind: file, path: artifacts/derive/specs.json, mustExist: true, schemaRef: schemas/specs.schema.json }
+      - { kind: file, path: artifacts/bind/bindings.json, mustExist: true, schemaRef: schemas/bindings.schema.json }
+    rollbackMap: []
+  - id: verify
+    name: 验证
+    enterGuards:
+      - { kind: file, path: artifacts/impl/impl.json, mustExist: true, schemaRef: schemas/impl.schema.json }
+    rollbackMap:
+      - { rootCause: implementation, targetStage: impl }
+      - { rootCause: model, targetStage: model }
+  - id: release
+    name: 收尾
+    enterGuards:
+      - { kind: file, path: artifacts/verify/verification.json, mustExist: true, schemaRef: schemas/verification.schema.json }
+    rollbackMap: []
+
+# ---- 单元表（六件套 + 三件套）----
+units:
+  - id: m-model
+    name: 模型（M）
+    stage: model
+    readiness: ready
+    checklistRef: checklists/m-model.md
+    context:
+      goal: 按变更单初始化/修改协议模型（首个需求：初始化建模目录与初始模型）
+      inputContract:
+        deliverableRefs: []
+      domainSemantics:
+        fixedIntoContract: ["模型文档结构（frontmatter/活性/状态/转移/守卫/不变量/时序/异常路径）"]
+        fixedIntoBoundary: ["版本号递增规则"]
+        acknowledgedIntent: ["需求理解与范围判断"]
+        reviewGateUnit: r-release
+      environment:
+        staticEnvRef: dev
+        runtimeChecks:
+          - { kind: command, command: "node scripts/env-health.mjs" }
+      boundary:
+        allowedEdits: ["artifacts/model/"]
+        notAllowedEdits: ["artifacts/derive/", "artifacts/impl/"]
+        escalationTypes: ["unclear-requirements", "contract-conflict"]
+    writes:
+      paths: ["artifacts/model/"]
+      resources: []
+    selfCheck:
+      kind: file
+      path: artifacts/model/model.json
+      mustExist: true
+      schemaRef: schemas/model.schema.json
+    executor: { ref: llm-model }
+    notReadList: ["artifacts/impl/", "artifacts/verify/"]
+
+  - id: d-derive
+    name: 推导（D）
+    stage: derive
+    readiness: ready
+    checklistRef: checklists/d-derive.md
+    context:
+      goal: 从模型推导出 specs/contracts/test-cases 及报告（protochain 十步 + TLC 闸门）
+      inputContract:
+        deliverableRefs: ["artifacts/model/model.json"]
+      domainSemantics:
+        fixedIntoContract: ["工具链十步语义", "TLC/形式化概念"]
+        fixedIntoBoundary: ["报告 passed 判定"]
+        acknowledgedIntent: []
+        reviewGateUnit: r-release
+      environment:
+        staticEnvRef: dev
+        runtimeChecks:
+          - { kind: command, command: "node scripts/env-health.mjs" }
+      boundary:
+        allowedEdits: ["artifacts/derive/"]
+        notAllowedEdits: ["artifacts/model/", "artifacts/impl/"]
+        escalationTypes: ["contract-conflict", "dynamic-dependency"]
+    writes:
+      paths: ["artifacts/derive/"]
+      resources: []
+    selfCheck:
+      kind: file
+      path: artifacts/derive/specs.json
+      mustExist: true
+      schemaRef: schemas/specs.schema.json
+    executor: { ref: mech-derive }
+    notReadList: ["artifacts/impl/"]
+
+  - id: b-bind
+    name: 绑定（B）
+    stage: bind
+    readiness: ready
+    checklistRef: checklists/b-bind.md
+    context:
+      goal: 使 specs 全部接口有绑定条目，setup 需求全覆盖（bind 通过）
+      inputContract:
+        deliverableRefs: ["artifacts/model/model.json", "artifacts/derive/specs.json"]
+      domainSemantics:
+        fixedIntoContract: ["bindings 结构（roles/interfaces/transport/protocol 标）"]
+        fixedIntoBoundary: ["状态词表", "多环境语义"]
+        acknowledgedIntent: []
+        reviewGateUnit: r-release
+      environment:
+        staticEnvRef: dev
+        runtimeChecks:
+          - { kind: command, command: "node scripts/env-health.mjs" }
+      boundary:
+        allowedEdits: ["artifacts/bind/"]
+        notAllowedEdits: ["artifacts/model/"]
+        escalationTypes: ["contract-conflict", "dynamic-dependency"]
+    writes:
+      paths: ["artifacts/bind/"]
+      resources: []
+    selfCheck:
+      kind: file
+      path: artifacts/bind/bindings.json
+      mustExist: true
+      schemaRef: schemas/bindings.schema.json
+    executor: { ref: llm-bind }
+    notReadList: ["artifacts/impl/"]
+
+  - id: i-impl
+    name: 实现（I）
+    stage: impl
+    readiness: ready
+    checklistRef: checklists/i-impl.md
+    context:
+      goal: 按 specs/contracts/bindings 初始化/同步实现（首个需求：实现骨架；后续真实实现）
+      inputContract:
+        deliverableRefs: ["artifacts/derive/specs.json", "artifacts/bind/bindings.json"]
+      domainSemantics:
+        fixedIntoContract: ["接口契约", "守卫与不变量"]
+        fixedIntoBoundary: ["构建命令（go build/vet 或等价）", "MySQL 命名规范（见 ../impl/CONVENTIONS.md）", "实现规范（见 ../impl/CONVENTIONS.md 与 ../docs/architecture.md）"]
+        acknowledgedIntent: []
+        reviewGateUnit: r-release
+      environment:
+        staticEnvRef: dev
+        runtimeChecks:
+          - { kind: command, command: "node scripts/env-health.mjs" }
+      boundary:
+        allowedEdits: ["artifacts/impl/"]
+        notAllowedEdits: ["artifacts/model/", "artifacts/verify/"]
+        escalationTypes: ["contract-conflict", "dynamic-dependency", "mis-partition"]
+    writes:
+      paths: ["artifacts/impl/"]
+      resources: []
+    selfCheck:
+      kind: file
+      path: artifacts/impl/impl.json
+      mustExist: true
+      schemaRef: schemas/impl.schema.json
+    executor: { ref: llm-impl }
+    notReadList: ["artifacts/verify/"]
+
+  - id: v-verify
+    name: 验证（V）
+    stage: verify
+    readiness: ready
+    checklistRef: checklists/v-verify.md
+    context:
+      goal: 用真实目标服务验证实现与模型一致性（verify passed；无参考实现时建模-only 跳过并记录）
+      inputContract:
+        deliverableRefs: ["artifacts/model/model.json", "artifacts/bind/bindings.json", "artifacts/impl/impl.json"]
+      domainSemantics:
+        fixedIntoContract: ["verify 报告结构（authoritative 层）", "偏差分类（实现/模型/环境）"]
+        fixedIntoBoundary: ["verify 目标选择", "环境令牌语义"]
+        acknowledgedIntent: ["验收口径歧义"]
+        reviewGateUnit: r-release
+      environment:
+        staticEnvRef: dev
+        runtimeChecks:
+          - { kind: command, command: "node scripts/env-health.mjs" }
+      boundary:
+        allowedEdits: ["artifacts/verify/"]
+        notAllowedEdits: ["artifacts/impl/"]
+        escalationTypes: ["mixed-root-cause", "environment-anomaly"]
+    writes:
+      paths: ["artifacts/verify/"]
+      resources: []
+    selfCheck:
+      kind: file
+      path: artifacts/verify/verification.json
+      mustExist: true
+      schemaRef: schemas/verification.schema.json
+    executor: { ref: mech-verify }
+    notReadList: []
+
+  - id: r-release
+    name: 收尾（R）
+    stage: release
+    readiness: ready
+    checklistRef: checklists/r-release.md
+    context:
+      goal: 闭包检查 + 文档更新 + 版本快照 + 提交清单核对（人工终审）
+      inputContract:
+        deliverableRefs: ["artifacts/verify/verification.json"]
+      domainSemantics:
+        fixedIntoContract: []
+        fixedIntoBoundary: ["提交清单（必提交/绝不提交）"]
+        acknowledgedIntent: ["收尾放行判断"]
+      environment:
+        staticEnvRef: dev
+        runtimeChecks:
+          - { kind: command, command: "node scripts/env-health.mjs" }
+      boundary:
+        allowedEdits: ["artifacts/release/"]
+        notAllowedEdits: ["artifacts/impl/"]
+        escalationTypes: []
+    writes:
+      paths: ["artifacts/release/"]
+      resources: []
+    selfCheck:
+      kind: file
+      path: artifacts/release/release.json
+      mustExist: true
+      schemaRef: schemas/release.schema.json
+    executor: { ref: human-release }
+    notReadList: []
+
+# ---- 交接边（9 前向 + 2 回退；汇合点 B/I/V 入度 ≥ 2）----
+handoffs:
+  - from: m-model
+    to: d-derive
+    deliverables:
+      - { path: artifacts/model/model.json, schemaRef: schemas/model.schema.json, semantic: 模型+版本快照+分类结论 }
+    guards:
+      - { kind: file, path: artifacts/model/model.json, mustExist: true, schemaRef: schemas/model.schema.json }
+    acceptance:
+      - { kind: file, path: artifacts/model/model.json, mustExist: true, schemaRef: schemas/model.schema.json }
+      - { kind: command, command: "node scripts/check-real-model.mjs", covers: ["artifacts/model/model.json"] }
+      - { kind: command, command: "node scripts/check-real-derive.mjs", covers: ["artifacts/model/model.json"] }
+    direction: forward
+  - from: m-model
+    to: b-bind
+    deliverables:
+      - { path: artifacts/model/model.json, schemaRef: schemas/model.schema.json, semantic: 场景文件（setup 需求） }
+    guards:
+      - { kind: file, path: artifacts/model/model.json, mustExist: true, schemaRef: schemas/model.schema.json }
+    acceptance:
+      - { kind: file, path: artifacts/model/model.json, mustExist: true, schemaRef: schemas/model.schema.json }
+      - { kind: command, command: "node scripts/check-real-model.mjs", covers: ["artifacts/model/model.json"] }
+    direction: forward
+  - from: m-model
+    to: v-verify
+    deliverables:
+      - { path: artifacts/model/model.json, schemaRef: schemas/model.schema.json, semantic: 场景文件（verify 输入） }
+    guards:
+      - { kind: file, path: artifacts/model/model.json, mustExist: true, schemaRef: schemas/model.schema.json }
+    acceptance:
+      - { kind: file, path: artifacts/model/model.json, mustExist: true, schemaRef: schemas/model.schema.json }
+      - { kind: command, command: "node scripts/check-real-model.mjs", covers: ["artifacts/model/model.json"] }
+    direction: forward
+  - from: d-derive
+    to: b-bind
+    deliverables:
+      - { path: artifacts/derive/specs.json, schemaRef: schemas/specs.schema.json }
+      - { path: artifacts/derive/test-cases.json, schemaRef: schemas/test-cases.schema.json }
+    guards:
+      - { kind: file, path: artifacts/derive/specs.json, mustExist: true, schemaRef: schemas/specs.schema.json }
+    acceptance:
+      - { kind: file, path: artifacts/derive/specs.json, mustExist: true, schemaRef: schemas/specs.schema.json }
+      - { kind: file, path: artifacts/derive/test-cases.json, mustExist: true, schemaRef: schemas/test-cases.schema.json }
+      - { kind: command, command: "node scripts/check-real-derive.mjs", covers: ["artifacts/derive/specs.json"] }
+    direction: forward
+  - from: d-derive
+    to: i-impl
+    deliverables:
+      - { path: artifacts/derive/specs.json, schemaRef: schemas/specs.schema.json, semantic: specs/contracts/impl-scaffold }
+    guards:
+      - { kind: file, path: artifacts/derive/specs.json, mustExist: true, schemaRef: schemas/specs.schema.json }
+    acceptance:
+      - { kind: file, path: artifacts/derive/specs.json, mustExist: true, schemaRef: schemas/specs.schema.json }
+      - { kind: command, command: "node scripts/check-real-derive.mjs", covers: ["artifacts/derive/specs.json"] }
+    direction: forward
+  - from: b-bind
+    to: i-impl
+    deliverables:
+      - { path: artifacts/bind/bindings.json, schemaRef: schemas/bindings.schema.json }
+    guards:
+      - { kind: file, path: artifacts/bind/bindings.json, mustExist: true, schemaRef: schemas/bindings.schema.json }
+    acceptance:
+      - { kind: file, path: artifacts/bind/bindings.json, mustExist: true, schemaRef: schemas/bindings.schema.json }
+      - { kind: command, command: "node scripts/check-real-bind.mjs", covers: ["artifacts/bind/bindings.json"] }
+    direction: forward
+  - from: b-bind
+    to: v-verify
+    deliverables:
+      - { path: artifacts/bind/bindings.json, schemaRef: schemas/bindings.schema.json }
+    guards:
+      - { kind: file, path: artifacts/bind/bindings.json, mustExist: true, schemaRef: schemas/bindings.schema.json }
+    acceptance:
+      - { kind: file, path: artifacts/bind/bindings.json, mustExist: true, schemaRef: schemas/bindings.schema.json }
+      - { kind: command, command: "node scripts/check-real-bind.mjs", covers: ["artifacts/bind/bindings.json"] }
+    direction: forward
+  - from: i-impl
+    to: v-verify
+    deliverables:
+      - { path: artifacts/impl/impl.json, schemaRef: schemas/impl.schema.json }
+    guards:
+      - { kind: file, path: artifacts/impl/impl.json, mustExist: true, schemaRef: schemas/impl.schema.json }
+    acceptance:
+      - { kind: file, path: artifacts/impl/impl.json, mustExist: true, schemaRef: schemas/impl.schema.json }
+      - { kind: command, command: "node scripts/check-real-impl.mjs", covers: ["artifacts/impl/impl.json"] }
+    direction: forward
+  - from: v-verify
+    to: r-release
+    deliverables:
+      - { path: artifacts/verify/verification.json, schemaRef: schemas/verification.schema.json }
+    guards:
+      - { kind: file, path: artifacts/verify/verification.json, mustExist: true, schemaRef: schemas/verification.schema.json }
+    acceptance:
+      - { kind: file, path: artifacts/verify/verification.json, mustExist: true, schemaRef: schemas/verification.schema.json }
+      - { kind: command, command: "node scripts/check-real-verify.mjs", covers: ["artifacts/verify/verification.json"] }
+    direction: forward
+  - from: v-verify
+    to: i-impl
+    direction: rollback
+    rerunAcceptanceOf: "i-impl-to-v-verify"
+    deliverables: []
+    guards: []
+    acceptance: []
+  - from: v-verify
+    to: m-model
+    direction: rollback
+    rerunAcceptanceOf: "m-model-to-d-derive"
+    deliverables: []
+    guards: []
+    acceptance: []
+
+# ---- 闭包链 ----
+closure:
+  finalStage: release
+  envCheck:
+    - { kind: command, command: "node scripts/final-env-check.mjs" }
+  items:
+    chainComplete: true
+    versionConsistent: strict
+    mergeCoverage: true
+    cyclesExplicit: true
+    contextComplete: true
+    envVerified: true
+  extraItems: []
+
+# ---- 环境（静态声明 + 运行时状态）----
+environments:
+  - id: dev
+    static:
+      path: env/dev.env
+      commands: ["node scripts/env-health.mjs"]
+      sensitiveVars: []
+      sanitization:
+        mechanical: raw
+        llm: redact
+        human: redact
+    runtimeChecks:
+      - { kind: command, command: "node scripts/env-health.mjs" }
+
+# ---- 执行器映射（M/B/I 默认 stub；D/V 机械；R 人工；M 可按需切 harness）----
+executors:
+  - id: llm-model
+    kind: llm
+    config:
+      stub:
+        artifacts:
+          - { path: artifacts/model/model.json, content: "{\"version\": \"{{version}}\", \"model\": {\"status\": \"init\"}}" }
+        readPaths: []
+  - id: mech-derive
+    kind: mechanical
+    config: { runner: "node", allow: ["scripts/produce-derive.mjs"] }
+  - id: llm-bind
+    kind: llm
+    config:
+      stub:
+        artifacts:
+          - { path: artifacts/bind/bindings.json, content: "{\"version\": \"{{version}}\", \"bindings\": []}" }
+        readPaths: ["artifacts/derive/specs.json"]
+  - id: llm-impl
+    kind: llm
+    config:
+      stub:
+        artifacts:
+          - { path: artifacts/impl/impl.json, content: "{\"version\": \"{{version}}\", \"build\": \"ok\"}" }
+        readPaths: ["artifacts/derive/specs.json", "artifacts/bind/bindings.json"]
+  - id: mech-verify
+    kind: mechanical
+    config: { runner: "node", allow: ["scripts/produce-verify.mjs"] }
+  - id: human-release
+    kind: human
+    config:
+      reviewForm: escalation
+      requiresConfirmation: true
+      autoConfirm: false
+      stub:
+        artifacts:
+          - { path: artifacts/release/release.json, content: "{\"version\": \"{{version}}\", \"released\": true}" }
+
+# ---- 指标与诊断阈值 ----
+metrics:
+  thresholds:
+    escalationFrequency: 0.15
+    closureOncePassRate: 0.9
+    humanReviewRatio: 0.5
+    assertionFailureRate: 0.2
+    contextExpansionCount: 3

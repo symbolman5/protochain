@@ -661,5 +661,136 @@ export function initRunnerProject(options: InitRunnerOptions): InitRunnerResult 
     [/\{\{IMPL_DIR\}\}/g, relImpl],
   ]);
 
+  // 5) 项目根工具环境（启动 protocol-runner 引擎用；实例内部脚本环境见 <instanceDir>/env/dev.env）
+  const rootEnvPath = join(rootDir, '.env');
+  if (!existsSync(rootEnvPath) || force) {
+    writeFileSync(
+      rootEnvPath,
+      [
+        '# 项目根工具环境（启动 protocol-runner 引擎用）',
+        '# 留空则用 PATH 中的命令；实例内部脚本环境见 ' + instanceDir + '/env/dev.env',
+        'PROTOCOL_RUNNER=protocol-runner   # 或 node /path/to/protocol-runner/dist/runner.js',
+        'NODE=',
+        'PROTOCHAIN=',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    createdFiles.push('.env');
+  }
+
+  // 6.5) 工程级架构文档 + 实现规范占位（工程资产；实例通过相对路径引用）
+  const docsDir = join(rootDir, 'docs');
+  const archPath = join(docsDir, 'architecture.md');
+  if (!existsSync(archPath) || force) {
+    mkdirSync(docsDir, { recursive: true });
+    writeFileSync(
+      archPath,
+      [
+        '# 架构（实现侧）',
+        '',
+        '> 工程级技术选型与部署拓扑；具体实现规范见 impl/CONVENTIONS.md。',
+        '> 协议语义见 modeling/protocol/*/model.md（与实现解耦）。',
+        '',
+        '## 技术栈',
+        '',
+        '- 语言：<Go / …>',
+        '- 运行环境：<k8s 集群 / …>',
+        '',
+        '## 组件',
+        '',
+        '| 组件 | 职责 | 部署形态 |',
+        '|---|---|---|',
+        '| <portal（控制面）> | <REST API / 状态机 / 守卫> | <k8s Deployment 多副本> |',
+        '| <forward（数据面）> | <端口转发 / 域名路由 / TLS 终止> | <各转发服务器> |',
+        '| <存储> | <持久化> | <k8s StatefulSet + PVC> |',
+        '',
+        '## 部署拓扑',
+        '',
+        '- Ingress → Service → Pod；组件间连接（如 portal → DB）',
+        '- 镜像构建与推送方式',
+        '',
+        '## 存储与密钥',
+        '',
+        '- 密钥（JWT_SECRET / DB 口令）→ k8s Secret',
+        '- 数据分布（端口/域名/证书等）',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    createdFiles.push('docs/architecture.md');
+  }
+  const implAssetDir = join(rootDir, 'impl');
+  const convPath = join(implAssetDir, 'CONVENTIONS.md');
+  if (!existsSync(convPath) || force) {
+    mkdirSync(implAssetDir, { recursive: true });
+    writeFileSync(
+      convPath,
+      [
+        '# 实现规范（CONVENTIONS）',
+        '',
+        '> I 实现单元遵循本规范；可机械化的规范已固化为机械检查（scripts/check-mysql-naming.mjs 等），',
+        '> 违反 → I 验收失败 → 回退 I。',
+        '',
+        '## MySQL 命名规范（示例）',
+        '',
+        '- 表名：snake_case（如 `user_accounts`）',
+        '- 索引前缀：唯一索引 `uk_`、普通索引 `idx_`（如 `uk_accounts_username`）',
+        '- 字符集：`utf8mb4`；时间列用 `DATETIME`；需要时用 JSON 列并显式标注',
+        '- 外键/主键：主键 `id`，外键 `*_id`',
+        '',
+        '## Go 风格（示例）',
+        '',
+        '- 目录按职责分包；导出符号有注释；错误处理显式（不吞错）',
+        '- 通过 `gofmt` / `go vet` / `golint`',
+        '',
+        '## 其他约束',
+        '',
+        '- <按项目补充：目录约定、命名、提交规范等>',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    createdFiles.push('impl/CONVENTIONS.md');
+  }
+
+  // 6) 项目根需求变更单（第一个需求的输入落点；M 单元按本单写模型）
+  const requirementsDir = join(rootDir, 'requirements');
+  const orderPath = join(requirementsDir, 'order.md');
+  if (!existsSync(orderPath) || force) {
+    mkdirSync(requirementsDir, { recursive: true });
+    writeFileSync(
+      orderPath,
+      [
+        '# 变更单（需求输入）',
+        '',
+        '> 每个需求的输入落点：填写下面的 目标 / 范围 / 验收 / 涉及协议，然后运行',
+        '> `source .env && "$PROTOCOL_RUNNER" --project protocol-runner/`，M 单元按本单写模型。',
+        '',
+        '## 目标',
+        '',
+        '- 一句话描述：<首个需求，如"设备管理协议：注册/启用/停用/注销">',
+        '',
+        '## 范围',
+        '',
+        '- 涉及的子协议：P1（<名称>）',
+        '- 本期实现/不实现：<如"本期仅建模与推演；实现与参考实现后置">',
+        '',
+        '## 验收',
+        '',
+        '- 推演通过：check → reason（弱活性）→ formalize（TLC）',
+        '- 派生产物：specs / contracts / test-cases 生成',
+        '- 真实 verify 在参考实现接入后启用',
+        '',
+        '## 备注',
+        '',
+        '- <可选：约束、依赖、风险>',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    createdFiles.push('requirements/order.md');
+  }
+
   return { modeling, createdDirs, createdFiles, templateDir };
 }
