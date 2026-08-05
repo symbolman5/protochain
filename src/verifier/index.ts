@@ -279,7 +279,37 @@ async function runTestCasesBinding(
     passed: failedCount === 0 && skippedCount === 0,
     counts: { passed: passedCount, failed: failedCount, skipped: skippedCount },
     caseResults,
+    scenarioWarnings: collectScenarioWarnings(caseResults, options.scenarios),
   };
+}
+
+/**
+ * 汇总场景命中告警：
+ * - 声明了场景但无任何路径命中 → 强告警（场景写错会被静默回退响应注入掩盖）
+ * - 部分场景未命中 → 次级告警
+ * 未声明场景返回 undefined。
+ */
+function collectScenarioWarnings(
+  caseResults: CaseResult[],
+  scenarios: ScenarioParamSource[] | undefined
+): string[] | undefined {
+  if (!scenarios || scenarios.length === 0) return undefined;
+  const matchedIds = new Set(
+    caseResults
+      .map((c) => c.scenarioMatch?.id)
+      .filter((id): id is string => Boolean(id))
+  );
+  if (matchedIds.size === 0) {
+    const ids = scenarios.map((s) => s.id).join(', ');
+    return [
+      `声明了 ${scenarios.length} 个场景（${ids}），但没有任何测试路径命中；verify 已静默回退到响应注入兜底，请检查 expectedActions 与路径动作序列是否一致`,
+    ];
+  }
+  const unmatched = scenarios.filter((s) => !matchedIds.has(s.id));
+  if (unmatched.length > 0) {
+    return [`场景未全部命中：${unmatched.map((s) => s.id).join(', ')} 未匹配任何路径`];
+  }
+  return undefined;
 }
 
 /**
@@ -566,8 +596,12 @@ async function generateAISummary(
       '输出严格 JSON，不解释。',
     context: JSON.stringify({
       counts: authoritative.counts,
+      scenarioWarnings: authoritative.scenarioWarnings,
+      degradedCount: authoritative.caseResults.filter((c) => c.degraded).length,
       failedCases: failedCases.map((c) => ({
         pathId: c.pathId,
+        scenarioMatch: c.scenarioMatch,
+        degraded: c.degraded,
         deviations: c.deviations,
       })),
       skippedCount: skippedCases.length,
@@ -624,6 +658,18 @@ export function formatVerificationSummary(report: VerificationReport): string {
   const skipped = a.caseResults.filter((c) => c.skipped);
   if (skipped.length > 0) {
     lines.push(`  跳过用例: ${skipped.length} 个（可能未提供实现或初始状态）`);
+  }
+
+  const degradedCases = a.caseResults.filter((c) => c.degraded);
+  if (degradedCases.length > 0) {
+    lines.push(`  降级通过: ${degradedCases.length} 个（无观测绑定，信任协议预期/响应 nextState，非独立验证）`);
+  }
+
+  if (a.scenarioWarnings && a.scenarioWarnings.length > 0) {
+    lines.push('  场景告警:');
+    for (const w of a.scenarioWarnings) {
+      lines.push(`    - ${w}`);
+    }
   }
 
   if (report.auxiliary) {

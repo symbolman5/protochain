@@ -34,6 +34,9 @@ yarn-error.log*
 .env.local
 .env.*.local
 
+# 项目配置（含明文 API key，本地保留、不入库；模板见 protochain.config.example.yaml）
+/protochain.config.yaml
+
 # 打包产物
 *.tgz
 *.tar.gz

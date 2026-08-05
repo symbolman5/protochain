@@ -181,13 +181,18 @@ export async function runBindingPathCase(
 
   // 运行时参数：以场景文件 params 为种子（最高优先级），动作响应字段注入次之
   const seededKeys = new Set<string>();
+  const injectedParams: Record<string, 'scenario' | 'response'> = {};
   const runtimeParams: Record<string, unknown> = { currentState: initialStateId };
   const scenarioSource = selectScenarioSource(path, transitionsById, options.scenarios);
+  const scenarioMatch = options.scenarios && options.scenarios.length > 0
+    ? (scenarioSource ? { id: scenarioSource.id } : null)
+    : undefined;
   if (scenarioSource) {
     for (const [k, v] of Object.entries(scenarioSource.params ?? {})) {
       if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
         runtimeParams[k] = v;
         seededKeys.add(k);
+        injectedParams[k] = 'scenario';
       }
     }
   }
@@ -204,11 +209,12 @@ export async function runBindingPathCase(
         expected: `setup 接口 ${step.action} 已绑定（bindings.interfaces）`,
         actual: 'setup 接口未绑定',
         kind: 'missing_action',
+        stepIndex: -1,
       });
       setupFailed = true;
       break;
     }
-    const setupResult = await transport(setupBinding, { ...(step.params ?? {}) });
+    const setupResult = await safeTransport(transport, setupBinding, { ...(step.params ?? {}) });
     if (!setupResult.ok) {
       deviations.push({
         action: `setup:${step.action}`,
@@ -216,6 +222,9 @@ export async function runBindingPathCase(
         expected: `setup 接口调用成功（${JSON.stringify(step.params ?? {})}）`,
         actual: `setup 失败：${describeTransportError(setupResult)}`,
         kind: 'state_mismatch',
+        stepIndex: -1,
+        httpStatus: setupResult.status,
+        responseBody: summarizeResponseBody(setupResult.data),
       });
       setupFailed = true;
       break;
@@ -227,10 +236,14 @@ export async function runBindingPathCase(
       pathId: path.id,
       passed: false,
       deviations,
+      scenarioMatch,
+      injectedParams: Object.keys(injectedParams).length > 0 ? injectedParams : undefined,
     };
   }
 
-  for (const tid of path.transitionIds) {
+  let degraded = false;
+  for (let stepIdx = 0; stepIdx < path.transitionIds.length; stepIdx++) {
+    const tid = path.transitionIds[stepIdx];
     const t = transitionsById.get(tid);
     if (!t) {
       deviations.push({
@@ -239,6 +252,7 @@ export async function runBindingPathCase(
         expected: `转移 ${tid} 存在`,
         actual: '转移未定义',
         kind: 'missing_action',
+        stepIndex: stepIdx,
       });
       break;
     }
@@ -251,6 +265,7 @@ export async function runBindingPathCase(
         expected: t.from.join('/'),
         actual: currentState,
         kind: 'state_mismatch',
+        stepIndex: stepIdx,
       });
       break;
     }
@@ -264,12 +279,13 @@ export async function runBindingPathCase(
         expected: `接口 ${t.action} 已绑定（bindings.interfaces）`,
         actual: '接口未绑定',
         kind: 'missing_action',
+        stepIndex: stepIdx,
       });
       break;
     }
 
     runtimeParams['currentState'] = currentState;
-    const result = await transport(actionBinding, runtimeParams);
+    const result = await safeTransport(transport, actionBinding, runtimeParams);
     if (!result.ok) {
       deviations.push({
         action: t.action,
@@ -277,13 +293,16 @@ export async function runBindingPathCase(
         expected: `接口调用成功（期望状态 ${t.to}）`,
         actual: `接口调用失败：${describeTransportError(result)}`,
         kind: 'state_mismatch',
+        stepIndex: stepIdx,
+        httpStatus: result.status,
+        responseBody: summarizeResponseBody(result.data),
       });
       break;
     }
 
     // 响应字段注入：非保留字段进入 runtimeParams（场景种子字段优先，不被覆盖）
     if (result.data && typeof result.data === 'object') {
-      injectResponseFields(runtimeParams, result.data, seededKeys);
+      injectResponseFields(runtimeParams, result.data, seededKeys, injectedParams);
     }
 
     const transportType = actionBinding.binding.transport.type;
@@ -311,6 +330,7 @@ export async function runBindingPathCase(
           expected: `poll 模式需要目标状态 ${t.to} 的观测接口绑定`,
           actual: '目标状态无观测绑定',
           kind: 'missing_action',
+          stepIndex: stepIdx,
         });
         break;
       }
@@ -328,13 +348,16 @@ export async function runBindingPathCase(
           expected: `状态在 ${options.pollTimeoutMs ?? 10000}ms 内收敛到 ${t.to}`,
           actual: describeTransportError(pollResult),
           kind: 'state_mismatch',
+          stepIndex: stepIdx,
+          httpStatus: pollResult.status,
+          responseBody: summarizeResponseBody(pollResult.data),
         });
         break;
       }
       actualState = t.to;
     } else if (obs?.binding) {
       // P0b：独立观测读取（观测响应可取 currentState / isInState / status 字段）
-      const obsResult = await transport(obs, runtimeParams);
+      const obsResult = await safeTransport(transport, obs, runtimeParams);
       if (!obsResult.ok) {
         deviations.push({
           action: `observe_${t.to}`,
@@ -342,6 +365,9 @@ export async function runBindingPathCase(
           expected: `观测接口读取成功（期望状态 ${t.to}）`,
           actual: `观测接口失败：${describeTransportError(obsResult)}`,
           kind: 'state_mismatch',
+          stepIndex: stepIdx,
+          httpStatus: obsResult.status,
+          responseBody: summarizeResponseBody(obsResult.data),
         });
         break;
       }
@@ -358,6 +384,7 @@ export async function runBindingPathCase(
           expected: t.to,
           actual: actualState ?? '未知状态',
           kind: 'state_mismatch',
+          stepIndex: stepIdx,
         });
         break;
       }
@@ -365,7 +392,9 @@ export async function runBindingPathCase(
       // 降级：无观测绑定 → 信任动作响应 nextState（P0a）；响应无 nextState → 信任协议预期
       const nextStateRaw = extractNextState(result.data);
       if (nextStateRaw === undefined) {
-        actualState = t.to; // 降级信任协议预期（记录独立性降级）
+        // 降级信任协议预期：标记独立性降级，与真验证通过区分
+        actualState = t.to;
+        degraded = true;
       } else {
         const nextState = normalizeState(
           nextStateRaw,
@@ -380,6 +409,7 @@ export async function runBindingPathCase(
             expected: t.to,
             actual: nextStateRaw,
             kind: 'state_mismatch',
+            stepIndex: stepIdx,
           });
           break;
         }
@@ -394,6 +424,9 @@ export async function runBindingPathCase(
     pathId: path.id,
     passed: deviations.length === 0,
     deviations: deviations.length > 0 ? deviations : undefined,
+    scenarioMatch,
+    injectedParams: Object.keys(injectedParams).length > 0 ? injectedParams : undefined,
+    degraded: degraded || undefined,
   };
 }
 
@@ -426,7 +459,8 @@ function selectScenarioSource(
 function injectResponseFields(
   runtimeParams: Record<string, unknown>,
   data: unknown,
-  seededKeys: Set<string>
+  seededKeys: Set<string>,
+  injectedParams: Record<string, 'scenario' | 'response'>
 ): void {
   const record = data as Record<string, unknown>;
   for (const [k, v] of Object.entries(record)) {
@@ -434,6 +468,7 @@ function injectResponseFields(
     if (seededKeys.has(k)) continue; // 场景参数优先，不被响应覆盖
     if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
       runtimeParams[k] = v;
+      injectedParams[k] = 'response';
     }
   }
 }
@@ -463,7 +498,7 @@ async function pollObservationState(
   };
 
   while (Date.now() < deadline) {
-    last = await transport(obs, {});
+    last = await safeTransport(transport, obs, {});
     if (
       last.ok &&
       resolveObservedState(last.data, expected, options.stateMap, stateNames) === expected
@@ -526,6 +561,34 @@ function describeTransportError(result: TransportResult): string {
   const data = result.data as Record<string, unknown> | undefined;
   const message = data && typeof data['error'] === 'string' ? data['error'] : '';
   return `${result.status}${message ? ` ${message}` : ''}`;
+}
+
+/**
+ * 包裹传输执行器：捕获抛出的异常（网络错误等），转为 ok:false 的 TransportResult，
+ * 避免 verify 因传输层异常整体 reject 而写不出报告。
+ */
+async function safeTransport(
+  transport: TransportExecutorFn,
+  binding: ResolvedBinding | undefined,
+  params: Record<string, unknown>
+): Promise<TransportResult> {
+  try {
+    return await transport(binding, params);
+  } catch (err) {
+    return {
+      status: 0,
+      data: { error: `传输异常：${err instanceof Error ? err.message : String(err)}` },
+      ok: false,
+    };
+  }
+}
+
+/** 响应体摘要：超长（>2KB）截断为字符串，避免报告膨胀。 */
+function summarizeResponseBody(data: unknown): unknown {
+  if (data === undefined || data === null) return undefined;
+  const s = typeof data === 'string' ? data : JSON.stringify(data);
+  if (s.length <= 2048) return data;
+  return `${s.slice(0, 2048)}... (truncated, ${s.length} chars total)`;
 }
 
 function sleep(ms: number): Promise<void> {

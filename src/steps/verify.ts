@@ -67,6 +67,14 @@ export function createVerifyExecutor(
           { useAISummary: !!aiAdapter }
         );
 
+        // 场景命中告警（声明了场景但无路径命中 → 可能场景写错被静默回退掩盖）
+        const scenarioWarnings = report.authoritative.scenarioWarnings;
+        if (scenarioWarnings && scenarioWarnings.length > 0) {
+          console.warn(
+            `\n[verify] 场景告警：\n${scenarioWarnings.map((w) => `  - ${w}`).join('\n')}\n`
+          );
+        }
+
         const path = writeReport(
           rootDir,
           'derived/verification/verification-report.json',

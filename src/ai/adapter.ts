@@ -258,29 +258,40 @@ export class LocalAdapter implements AIAdapter {
 // 适配器工厂
 // ============================================================================
 
+/** 各 provider 对应的工业标准 API key 环境变量名（config.apiKey 缺省时兜底） */
+const ENV_KEY_BY_PROVIDER: Record<string, string> = {
+  openai: 'OPENAI_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+};
+
 export function createAIAdapter(
   config: { provider: 'openai' | 'anthropic' | 'local' | 'deepseek'; apiKey?: string; model?: string; baseUrl?: string }
 ): AIAdapter {
+  // apiKey 优先取 config，缺省时按 provider 读对应环境变量
+  const envKey = ENV_KEY_BY_PROVIDER[config.provider];
+  const apiKey = config.apiKey ?? (envKey ? process.env[envKey] : undefined);
+
   switch (config.provider) {
     case 'openai':
-      if (!config.apiKey) throw new Error('OpenAI 适配器需要 apiKey');
+      if (!apiKey) throw new Error('OpenAI 适配器需要 apiKey（config.ai.apiKey 或 OPENAI_API_KEY 环境变量）');
       return new OpenAIAdapter({
-        apiKey: config.apiKey,
+        apiKey,
         model: config.model,
         baseUrl: config.baseUrl,
       });
     case 'anthropic':
-      if (!config.apiKey) throw new Error('Anthropic 适配器需要 apiKey');
+      if (!apiKey) throw new Error('Anthropic 适配器需要 apiKey（config.ai.apiKey 或 ANTHROPIC_API_KEY 环境变量）');
       return new AnthropicAdapter({
-        apiKey: config.apiKey,
+        apiKey,
         model: config.model,
         baseUrl: config.baseUrl,
       });
     case 'deepseek':
       // DeepSeek 使用 OpenAI 兼容 API
-      if (!config.apiKey) throw new Error('DeepSeek 适配器需要 apiKey');
+      if (!apiKey) throw new Error('DeepSeek 适配器需要 apiKey（config.ai.apiKey 或 DEEPSEEK_API_KEY 环境变量）');
       return new OpenAIAdapter({
-        apiKey: config.apiKey,
+        apiKey,
         model: config.model,
         baseUrl: config.baseUrl ?? 'https://api.deepseek.com',
       });

@@ -13,7 +13,8 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative } from 'node:path';
+import { createHash } from 'node:crypto';
 import { stringify as stringifyYaml } from 'yaml';
 import type {
   SourceProtocolModel,
@@ -157,6 +158,16 @@ export async function runPipeline(options: RunOptions): Promise<RunResult> {
     const ctx: StepContext = { model, rootDir, artifacts, protocolId: options.protocolId };
     const result = await executor.execute(ctx);
 
+    // 记录产物清单（derived/manifest.json）：成功且产出文件时按 stepId upsert
+    if (result.passed && result.outputs && result.outputs.length > 0) {
+      recordManifest(rootDir, {
+        stepId: result.stepId,
+        sourceModelVersion: model.metadata.version,
+        generatedAt: result.executedAt,
+        artifacts: result.outputs,
+      });
+    }
+
     // 记录结果
     const execResult: StepExecutionResult = {
       stepId: result.stepId,
@@ -243,4 +254,74 @@ export function readReport<T>(rootDir: string, relativePath: string): T | undefi
   // YAML 解析延迟加载，避免循环依赖
   const { parse: parseYaml } = require('yaml');
   return parseYaml(raw) as T;
+}
+
+// ============================================================================
+// 推导产物清单（derived/manifest.json）
+//
+// 解决推导产物（specs/contracts/test-cases 等）无顶层版本元数据问题：
+// 每个 step 执行成功后按 stepId upsert 一条记录，含源模型版本、生成时间、
+// 产物相对路径与 sha256，使实例层可做"版本一致性 + 完整性"机械比对，
+// 而非仅存在性检查。不改变既有产物格式，readReport 消费方不受影响。
+// ============================================================================
+
+export interface ManifestArtifact {
+  /** 相对 protocolRoot 的产物路径（如 derived/specs.json） */
+  path: string;
+  /** 产物文件内容 sha256（hex） */
+  sha256: string;
+}
+
+export interface ManifestStepEntry {
+  sourceModelVersion: string;
+  generatedAt: string;
+  artifacts: ManifestArtifact[];
+}
+
+export interface DerivedManifest {
+  schemaVersion: string;
+  steps: Record<string, ManifestStepEntry>;
+}
+
+export interface ManifestEntry {
+  stepId: string;
+  sourceModelVersion: string;
+  generatedAt: string;
+  /** writeReport 返回的绝对路径数组 */
+  artifacts: string[];
+}
+
+const MANIFEST_RELATIVE_PATH = 'derived/manifest.json';
+
+/** 读取 derived/manifest.json；不存在返回 undefined */
+export function readManifest(rootDir: string): DerivedManifest | undefined {
+  return readReport<DerivedManifest>(rootDir, MANIFEST_RELATIVE_PATH);
+}
+
+/**
+ * 按 stepId upsert 一条产物记录到 derived/manifest.json。
+ * 自动计算每个产物文件的 sha256；重跑同一 step 覆盖旧条目（支持 --from/--to 区间重跑）。
+ */
+export function recordManifest(rootDir: string, entry: ManifestEntry): void {
+  const manifestPath = join(rootDir, MANIFEST_RELATIVE_PATH);
+  const existing: DerivedManifest =
+    readManifest(rootDir) ?? { schemaVersion: '1.0', steps: {} };
+
+  const artifacts: ManifestArtifact[] = entry.artifacts.map((abs) => {
+    const rel = relative(rootDir, abs);
+    const content = existsSync(abs) ? readFileSync(abs) : Buffer.alloc(0);
+    return {
+      path: rel,
+      sha256: createHash('sha256').update(content).digest('hex'),
+    };
+  });
+
+  existing.steps[entry.stepId] = {
+    sourceModelVersion: entry.sourceModelVersion,
+    generatedAt: entry.generatedAt,
+    artifacts,
+  };
+
+  mkdirSync(dirname(manifestPath), { recursive: true });
+  writeFileSync(manifestPath, JSON.stringify(existing, null, 2), 'utf-8');
 }

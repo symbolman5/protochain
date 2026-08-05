@@ -874,6 +874,8 @@ export interface AuthoritativeVerification {
   counts: { passed: number; failed: number; skipped: number };
   /** 每个测试用例的结果 */
   caseResults: CaseResult[];
+  /** 场景相关告警（如声明了场景但无路径命中） */
+  scenarioWarnings?: string[];
 }
 
 export interface CaseResult {
@@ -882,6 +884,12 @@ export interface CaseResult {
   skipped?: boolean;
   /** 偏差详情（失败时） */
   deviations?: Deviation[];
+  /** 命中的场景 id（未命中为 null；未声明场景为 undefined） */
+  scenarioMatch?: { id: string } | null;
+  /** 实际注入的运行时参数来源明细（key → 'scenario' | 'response'） */
+  injectedParams?: Record<string, 'scenario' | 'response'>;
+  /** 是否含降级信任（无观测绑定且信任协议预期/响应 nextState 而通过） */
+  degraded?: boolean;
 }
 
 export interface Deviation {
@@ -895,6 +903,12 @@ export interface Deviation {
   actual: string;
   /** 偏差类型 */
   kind: 'state_mismatch' | 'invariant_violation' | 'timing_violation' | 'missing_action';
+  /** 路径内失败步骤索引（0-based；setup 阶段为 -1） */
+  stepIndex?: number;
+  /** 传输层状态码（HTTP 等） */
+  httpStatus?: number;
+  /** 响应体摘要（超长截断） */
+  responseBody?: unknown;
 }
 
 export interface AuxiliarySummary {

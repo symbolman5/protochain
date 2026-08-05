@@ -49,6 +49,7 @@ import {
   buildStatusView,
   formatStatusView,
   getExecutor,
+  recordManifest,
   type CheckpointDecision,
 } from '../orchestrator/index.js';
 import { createCheckExecutor } from '../steps/check.js';
@@ -742,6 +743,14 @@ program
       rootDir,
       artifacts: {},
     });
+    if (result.passed && result.outputs && result.outputs.length > 0) {
+      recordManifest(rootDir, {
+        stepId: result.stepId,
+        sourceModelVersion: model.metadata.version,
+        generatedAt: result.executedAt,
+        artifacts: result.outputs,
+      });
+    }
     if (result.reportSummary) console.log(result.reportSummary);
     process.exit(result.passed ? 0 : 1);
   });
@@ -776,6 +785,14 @@ program
       rootDir,
       artifacts: {},
     });
+    if (result.passed && result.outputs && result.outputs.length > 0) {
+      recordManifest(rootDir, {
+        stepId: result.stepId,
+        sourceModelVersion: model.metadata.version,
+        generatedAt: result.executedAt,
+        artifacts: result.outputs,
+      });
+    }
     if (result.reportSummary) console.log(result.reportSummary);
     process.exit(result.passed ? 0 : 1);
   });
@@ -809,6 +826,14 @@ program
       rootDir,
       artifacts: {},
     });
+    if (result.passed && result.outputs && result.outputs.length > 0) {
+      recordManifest(rootDir, {
+        stepId: result.stepId,
+        sourceModelVersion: model.metadata.version,
+        generatedAt: result.executedAt,
+        artifacts: result.outputs,
+      });
+    }
     if (result.reportSummary) console.log(result.reportSummary);
     process.exit(result.passed ? 0 : 1);
   });
