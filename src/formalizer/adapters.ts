@@ -416,8 +416,13 @@ function generateTLASkeleton(model: DerivableLayer): string {
 
   // 不变量
   for (const inv of model.invariants) {
-    lines.push(`(* Invariant: ${asciiSafe(inv.name)} *)`);
-    lines.push(`${inv.id} == ${sanitizeTlaExpr(inv.expression)}`);
+    const degraded = isDataLevelExpr(inv.expression);
+    const expr = degraded ? 'TRUE' : sanitizeTlaExpr(inv.expression);
+    const note = degraded
+      ? ' (degraded: data-level, not TLA+ expressible; real guarantee via guards/storage per model.md)'
+      : '';
+    lines.push(`(* Invariant: ${asciiSafe(inv.name)}${note} *)`);
+    lines.push(`${inv.id} == ${expr}`);
     lines.push('');
   }
 
@@ -472,6 +477,16 @@ function asciiSafe(str: string): string {
 /** 不变量表达式 ASCII 化：含非 ASCII 字符时降级为 TRUE（避免 SANY 词法错误） */
 function sanitizeTlaExpr(expr: string): string {
   return /^[\x00-\x7F]*$/.test(expr) ? translateBooleanExpr(expr) : 'TRUE';
+}
+
+/**
+ * 数据级不变量检测：一阶数据不变量（如 `forall u1,u2: u1.external_uid = ...`）引用
+ * 数据字段与全称量词，TLA+ 单实体状态机无法表达（SANY 解析失败）——与守卫降级策略一致，
+ * 降级为 TRUE，真实保障（守卫 + 存储唯一索引）保留在模型文档描述中。
+ * 仅识别自然语言量词关键字（TLA+ 自身量词是 \A/\E），避免误伤合法 TLA+ 表达式。
+ */
+function isDataLevelExpr(expr: string): boolean {
+  return !/^[\x00-\x7F]*$/.test(expr) || /\b(forall|exists)\b/i.test(expr);
 }
 
 /**

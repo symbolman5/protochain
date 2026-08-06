@@ -141,6 +141,19 @@ roles:
       expect(spec).toContain('=====');
     });
 
+    test('数据级不变量（forall/exists 量词）降级为 TRUE 并标注（SANY 解析失败根因回归）', () => {
+      const model = parseProtocolContent(readFixture('approval-flow.md'));
+      const adapter = new TLAAdapter();
+      const spec = adapter.generateSpec(model.derivable);
+      // INV1/INV2 为一阶数据不变量：非法 TLA+，降级为 TRUE，不原样塞入
+      expect(spec).toContain('INV1 == TRUE');
+      expect(spec).toContain('INV2 == TRUE');
+      expect(spec).toContain('degraded: data-level');
+      // 原数据级表达式不再出现在 TLA+ 产物（避免 Parsing or semantic analysis failed）
+      expect(spec).not.toContain('forall r:');
+      expect(spec).not.toContain('forall t:');
+    });
+
     test('退化模式直接返回 formalSpecRaw', () => {
       const model = parseProtocolContent(readFixture('degraded-protocol.md'));
       const adapter = new TLAAdapter();
@@ -246,7 +259,7 @@ describe('formalizer 主流程', () => {
     expect(result.selectionReasons.length).toBeGreaterThan(0);
   });
 
-  test('代码生成骨架 TLC 语义错误 → 降级 AI 推演（工具未产出结论，不权威失败）', async () => {
+  test('代码生成骨架 TLC 语义错误 → 权威失败（已配置 TLC 不降级 AI）', async () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
     mockRunTlc.mockResolvedValue(tlcSemanticErrorOutput(['INV1', 'INV2']));
     const ai = new MockAIAdapter(
@@ -260,14 +273,48 @@ describe('formalizer 主流程', () => {
 
     const result = await formalize(model, ai, {
       allowAIFallback: true,
-      preferredTool: 'tla', // 强制 TLA 路径，验证生成骨架语义错误 → 降级
+      preferredTool: 'tla', // 强制 TLA 路径，验证已配置 TLC 的解析失败不降级
       tlc: { javaPath: 'java', tla2toolsJar: 'tla2tools.jar' },
     });
 
-    // 生成骨架未声明守卫/不变量标识符属生成器限制 → 降级，报告标注 fallback
-    expect(result.report.tool).toContain('fallback');
-    expect(result.report.passed).toBe(true);
+    // 已配置 TLC 时解析失败属权威结论（toolExecuted: true），即使 AI 会判定通过也不降级
+    expect(result.report.tool).toBe('tla');
+    expect(result.report.toolExecuted).toBe(true);
+    expect(result.report.passed).toBe(false);
     expect(result.report.rawOutput).toContain('Semantic errors');
+    expect(result.report.tool).not.toContain('fallback');
+  });
+
+  test('已配置 TLC 但启动失败（java 缺失）→ 权威失败，不降级 AI', async () => {
+    const model = parseProtocolContent(readFixture('approval-flow.md'));
+    mockRunTlc.mockResolvedValue({
+      code: null,
+      stdout: '',
+      stderr: '',
+      timedOut: false,
+      invariantIds: ['INV1', 'INV2'],
+      spawnError: 'spawn java ENOENT',
+    });
+    const ai = new MockAIAdapter(
+      JSON.stringify({
+        results: [
+          { invariantId: 'INV1', passed: true },
+          { invariantId: 'INV2', passed: true },
+        ],
+      })
+    );
+
+    const result = await formalize(model, ai, {
+      allowAIFallback: true,
+      preferredTool: 'tla',
+      tlc: { javaPath: 'java', tla2toolsJar: 'tla2tools.jar' },
+    });
+
+    // 配置了 tlc 但环境启动失败：配置问题需暴露，而非静默降级 AI
+    expect(result.report.tool).toBe('tla');
+    expect(result.report.toolExecuted).toBe(true);
+    expect(result.report.passed).toBe(false);
+    expect(result.report.rawOutput).toContain('启动失败');
   });
 
   test('退化模式 TLA+ 规格语义错误 → 权威失败（不降级 AI）', async () => {
