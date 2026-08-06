@@ -4,6 +4,9 @@
  * 完整设计参见 docs/binding-mechanism-plan.md 第 4.3.1 节。
  */
 
+import http from 'node:http';
+import https from 'node:https';
+
 import type { ResolvedBinding, HttpTransport } from '../model/types.js';
 import type { TransportResult } from './types.js';
 
@@ -123,6 +126,67 @@ function missingAuthEnvHint(
 }
 
 /**
+ * 用 Node http/https 模块执行请求。
+ * 必要场景：bindings 声明了 Host header 时，Node fetch（undici）会忽略自定义 Host，
+ * 无法路由到基于虚拟主机的 ingress/nginx——必须用底层 http.request 发送。
+ */
+function httpRequestRaw(
+  urlStr: string,
+  opts: {
+    method: string;
+    headers: Record<string, string>;
+    body?: string;
+    timeoutMs: number;
+  }
+): Promise<{ status: number; data: unknown; ok: boolean }> {
+  return new Promise((resolve) => {
+    const u = new URL(urlStr);
+    const mod = u.protocol === 'https:' ? https : http;
+    const payload = opts.body;
+    const req = mod.request(
+      {
+        hostname: u.hostname,
+        port: u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : 80,
+        path: `${u.pathname}${u.search}`,
+        method: opts.method,
+        headers: {
+          ...opts.headers,
+          ...(payload !== undefined
+            ? { 'Content-Length': Buffer.byteLength(payload) }
+            : {}),
+        },
+        timeout: opts.timeoutMs,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf-8');
+          let data: unknown;
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = text;
+          }
+          const status = res.statusCode ?? 0;
+          resolve({ status, data, ok: status >= 200 && status < 300 });
+        });
+      }
+    );
+    req.on('timeout', () => req.destroy(new Error(`请求超时（${opts.timeoutMs}ms）`)));
+    req.on('error', (err) => {
+      resolve({
+        status: 504,
+        data: { error: err instanceof Error ? err.message : String(err) },
+        ok: false,
+      });
+    });
+    if (payload !== undefined) req.write(payload);
+    req.end();
+  });
+}
+
+/**
  * 通过 HTTP 执行一次接口调用。
  *
  * @param binding 已解析的绑定（含 spec、binding、roleBinding）
@@ -146,46 +210,60 @@ export async function executeHttp(
   };
 
   const timeoutMs = transport.timeoutMs ?? 10000;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const hasHostHeader = Object.keys(headers).some((k) => k.toLowerCase() === 'host');
 
-  try {
-    const res = await fetch(url, {
-      method: transport.method,
-      headers,
-      body: ['GET', 'HEAD'].includes(transport.method)
-        ? undefined
-        : JSON.stringify(body),
-      signal: controller.signal,
-    });
-
-    const text = await res.text();
-    let data: unknown;
+  const raw: { status: number; data: unknown; ok: boolean } = await (async () => {
     try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
-
-    // 401 文案区分：认证所需环境变量未配置 vs 令牌已发送但被拒绝（无效/无权限）
-    if (res.status === 401) {
-      const record = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
-      const serverMsg = typeof record['error'] === 'string' ? record['error'] : '';
-      const hint = missingAuthEnvHint(role);
-      if (hint) {
-        data = { ...record, error: `认证失败：${hint}` };
-      } else if (role.auth === 'bearer' || role.auth === 'basic' || role.auth === 'api_key') {
-        data = { ...record, error: `认证失败：令牌无效${serverMsg ? `（${serverMsg}）` : ''}` };
+      const payload = ['GET', 'HEAD'].includes(transport.method)
+        ? undefined
+        : JSON.stringify(body);
+      if (hasHostHeader) {
+        return httpRequestRaw(url, {
+          method: transport.method,
+          headers,
+          body: payload,
+          timeoutMs,
+        });
       }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, {
+          method: transport.method,
+          headers,
+          body: payload,
+          signal: controller.signal,
+        });
+        const text = await res.text();
+        let data: unknown;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = text;
+        }
+        return { status: res.status, data, ok: res.status >= 200 && res.status < 300 };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (err) {
+      const message = err instanceof Error
+        ? (err.name === 'AbortError' ? `请求超时（${timeoutMs}ms）` : err.message)
+        : String(err);
+      return { status: 504, data: { error: message }, ok: false };
     }
+  })();
 
-    return { status: res.status, data, ok: res.status >= 200 && res.status < 300 };
-  } catch (err) {
-    const message = err instanceof Error
-      ? (err.name === 'AbortError' ? `请求超时（${timeoutMs}ms）` : err.message)
-      : String(err);
-    return { status: 504, data: { error: message }, ok: false };
-  } finally {
-    clearTimeout(timeoutId);
+  // 401 文案区分：认证所需环境变量未配置 vs 令牌已发送但被拒绝（无效/无权限）
+  if (raw.status === 401) {
+    const record = raw.data && typeof raw.data === 'object' ? (raw.data as Record<string, unknown>) : {};
+    const serverMsg = typeof record['error'] === 'string' ? record['error'] : '';
+    const hint = missingAuthEnvHint(role);
+    if (hint) {
+      raw.data = { ...record, error: `认证失败：${hint}` };
+    } else if (role.auth === 'bearer' || role.auth === 'basic' || role.auth === 'api_key') {
+      raw.data = { ...record, error: `认证失败：令牌无效${serverMsg ? `（${serverMsg}）` : ''}` };
+    }
   }
+
+  return { status: raw.status, data: raw.data, ok: raw.ok };
 }

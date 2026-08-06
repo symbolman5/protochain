@@ -541,6 +541,12 @@ export interface SemanticCheckResult {
   semanticIssues: CheckIssue[];
   /** 是否已执行（AI 未配置时为 false） */
   executed: boolean;
+  /**
+   * 语义层是否为 advisory（仅提示、不阻断）性质。
+   * true：结论由 AI 判定（非确定性），只作人工参考，不参与 check 的 passed 硬门判定。
+   * 解决 AI 判定跨 run 漂移导致的 check passed 翻转（问题清单 #10）。
+   */
+  advisory?: boolean;
 }
 
 export interface CheckIssue {

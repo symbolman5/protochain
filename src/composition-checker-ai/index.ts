@@ -46,6 +46,7 @@ export async function checkCompositionSemantic(
       ambiguityIssues: [],
       semanticIssues: [],
       executed: false,
+      advisory: true,
     };
   }
 
@@ -65,17 +66,20 @@ export async function checkCompositionSemantic(
       ambiguityIssues: [],
       semanticIssues: [],
       executed: true,
+      advisory: true,
     };
   }
 
-  const ambiguityIssues = report.ambiguities.map(toIssue);
-  const duplicationIssues = report.duplications.map(toIssue);
-  const semanticIssues = report.semanticIssues.map(toIssue);
+  // 语义层为 advisory（问题清单 #10）：AI 判定跨 run 非确定，
+  // 不能作为 check-composition 的硬门。所有 AI 发现统一降级为 warning。
+  const ambiguityIssues = report.ambiguities.map(toAdvisoryIssue);
+  const duplicationIssues = report.duplications.map(toAdvisoryIssue);
+  const semanticIssues = report.semanticIssues.map(toAdvisoryIssue);
 
   const passed =
-    ambiguityIssues.every((i) => i.severity !== 'error') &&
-    duplicationIssues.every((i) => i.severity !== 'error') &&
-    semanticIssues.every((i) => i.severity !== 'error');
+    ambiguityIssues.length === 0 &&
+    duplicationIssues.length === 0 &&
+    semanticIssues.length === 0;
 
   return {
     passed,
@@ -83,12 +87,14 @@ export async function checkCompositionSemantic(
     ambiguityIssues,
     semanticIssues,
     executed: true,
+    advisory: true,
   };
 }
 
-function toIssue(f: AICompositionSemanticFinding): CheckIssue {
+/** AI 发现的语义问题统一降级为 warning（内容保留，供人工参考，不阻断） */
+function toAdvisoryIssue(f: AICompositionSemanticFinding): CheckIssue {
   return {
-    severity: f.severity,
+    severity: 'warning',
     category: f.category,
     message: f.message,
     elementId: f.elementId,

@@ -46,26 +46,30 @@ export function createCheckExecutor(
         };
       }
 
-      // 2. 语义层（需 AI）
+      // 2. 语义层（需 AI）——advisory 性质，不阻断：
+      //    AI 判定跨 run 非确定（问题清单 #10），机械层是唯一硬门。
+      //    语义发现保留在报告中，供人工复核。
       if (aiAdapter) {
         try {
           const semantic = await checkSemanticCompleteness(model, aiAdapter);
           report.semantic = semantic;
-          report.passed = report.mechanical.passed && semantic.passed;
+          // 语义层不再参与 passed 判定；其结论以 advisory 形式保留
+          report.passed = report.mechanical.passed;
         } catch (err) {
-          report.passed = false;
+          report.passed = report.mechanical.passed;
           report.semantic = {
             passed: false,
             duplicationIssues: [],
             ambiguityIssues: [],
             semanticIssues: [
               {
-                severity: 'error',
+                severity: 'warning',
                 category: 'ai-error',
-                message: `语义层检查执行失败：${err instanceof Error ? err.message : String(err)}`,
+                message: `语义层检查执行失败（不影响机械层结论）：${err instanceof Error ? err.message : String(err)}`,
               },
             ],
             executed: false,
+            advisory: true,
           };
         }
       } else {
@@ -100,8 +104,9 @@ function formatReportSummary(report: CompletenessReport): string {
     `  ID交叉引用: ${m.referenceIssues.length} 项（${countBySeverity(m.referenceIssues)}）`,
   ];
   if (s.executed) {
+    const advisoryTag = s.advisory ? '（advisory，不阻断）' : '';
     lines.push(
-      `语义层：${s.passed ? '✓ 通过' : '✗ 未通过'}（AI 已执行）`,
+      `语义层：${s.passed ? '✓ 通过' : '✗ 未通过'}（AI 已执行）${advisoryTag}`,
       `  语义重复: ${s.duplicationIssues.length} 项`,
       `  表达式歧义: ${s.ambiguityIssues.length} 项`,
       `  独立语义判断: ${s.semanticIssues.length} 项`
@@ -109,14 +114,11 @@ function formatReportSummary(report: CompletenessReport): string {
   } else {
     lines.push('语义层：未执行（未配置 AI 适配器）');
   }
-  // 列出前 5 条 error 级问题
+  // 列出前 5 条 error 级问题（语义层为 advisory，仅机械层 error 阻断）
   const errors = [
     ...m.structuralIssues,
     ...m.fieldIssues,
     ...m.referenceIssues,
-    ...s.duplicationIssues,
-    ...s.ambiguityIssues,
-    ...s.semanticIssues,
   ].filter((i) => i.severity === 'error');
   if (errors.length > 0) {
     lines.push('Error 级问题（前5条）：');

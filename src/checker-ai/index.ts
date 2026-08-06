@@ -47,6 +47,7 @@ export async function checkSemanticCompleteness(
       ambiguityIssues: [],
       semanticIssues: [],
       executed: false,
+      advisory: true,
     };
   }
 
@@ -66,17 +67,21 @@ export async function checkSemanticCompleteness(
       ambiguityIssues: [],
       semanticIssues: [],
       executed: true,
+      advisory: true,
     };
   }
 
-  const duplicationIssues = report.duplications.map(toIssue);
-  const ambiguityIssues = report.ambiguities.map(toIssue);
-  const semanticIssues = report.semanticIssues.map(toIssue);
+  // 语义层为 advisory（问题清单 #10）：AI 判定跨 run 非确定，
+  // 不能作为 check 的硬门。所有 AI 发现统一降级为 warning，
+  // 消除同一条发现被 AI 标 error/warning 导致的 passed 翻转。
+  const duplicationIssues = report.duplications.map(toAdvisoryIssue);
+  const ambiguityIssues = report.ambiguities.map(toAdvisoryIssue);
+  const semanticIssues = report.semanticIssues.map(toAdvisoryIssue);
 
   const passed =
-    duplicationIssues.every((i) => i.severity !== 'error') &&
-    ambiguityIssues.every((i) => i.severity !== 'error') &&
-    semanticIssues.every((i) => i.severity !== 'error');
+    duplicationIssues.length === 0 &&
+    ambiguityIssues.length === 0 &&
+    semanticIssues.length === 0;
 
   return {
     passed,
@@ -84,12 +89,14 @@ export async function checkSemanticCompleteness(
     ambiguityIssues,
     semanticIssues,
     executed: true,
+    advisory: true,
   };
 }
 
-function toIssue(f: AISemanticFinding): CheckIssue {
+/** AI 发现的语义问题统一降级为 warning（内容保留，供人工参考，不阻断 check） */
+function toAdvisoryIssue(f: AISemanticFinding): CheckIssue {
   return {
-    severity: f.severity,
+    severity: 'warning',
     category: f.category,
     message: f.message,
     elementId: f.elementId,

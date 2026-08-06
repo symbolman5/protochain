@@ -178,7 +178,8 @@ program
             console.log('执行语义层 AI 检查...');
             const semantic = await checkSemanticCompleteness(model, adapter);
             report.semantic = semantic;
-            report.passed = report.mechanical.passed && semantic.passed;
+            // 语义层为 advisory（问题清单 #10）：AI 判定跨 run 非确定，不阻断
+            report.passed = report.mechanical.passed;
           } catch (err) {
             console.warn(
               `AI 适配器初始化失败，跳过语义层：${err instanceof Error ? err.message : err}`
@@ -251,7 +252,8 @@ program
             console.log('执行组合层语义层 AI 检查...');
             const semantic = await checkCompositionSemantic(composition, adapter);
             report.semantic = semantic;
-            report.passed = report.mechanical.passed && semantic.passed;
+            // 语义层为 advisory（问题清单 #10）：AI 判定跨 run 非确定，不阻断
+            report.passed = report.mechanical.passed;
           } catch (err) {
             console.warn(
               `AI 适配器初始化失败，跳过语义层：${err instanceof Error ? err.message : err}`
