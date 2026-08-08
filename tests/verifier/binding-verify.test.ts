@@ -474,6 +474,57 @@ roles:
     expect(retireParams?.serverId).toBe('fixed-id');
   });
 
+  test('#14 内核修复：场景数组/对象参数注入 body（nics 数组不再被静默跳过）', async () => {
+    let addParams: Record<string, unknown> | undefined;
+    const transport = makeTransport({
+      add: (params) => {
+        addParams = { ...params };
+        return ok({ serverId: 'srv-001', status: 'S1' });
+      },
+      retire: () => ok({ serverId: 'srv-001', status: 'S4' }),
+      observe_离线: () => ok({ serverId: 'srv-001', status: 'S1' }),
+      observe_已退役: () => ok({ serverId: 'srv-001', status: 'S4' }),
+    });
+    const report = await verify(model, {
+      rootDir: '.',
+      testCases,
+      specs,
+      bindings: makeRoleBindingConfig([
+        { action: 'add', roleId: 'R', transport: { type: 'http', method: 'POST', path: '/v1/servers', params: [{ logicalName: 'nics', in: 'body' }] } },
+        { action: 'retire', roleId: 'R', transport: { type: 'http', method: 'POST', path: '/v1/servers/{serverId}/retire', params: [] } },
+        { action: 'observe_离线', roleId: 'R', transport: { type: 'http', method: 'GET', path: '/v1/servers/{serverId}', params: [] } },
+        { action: 'observe_已退役', roleId: 'R', transport: { type: 'http', method: 'GET', path: '/v1/servers/{serverId}', params: [] } },
+      ]),
+      transportExecutor: transport,
+      scenarios: [
+        { id: 'SC-NICS', expectedActions: ['add', 'retire'], params: { nics: [{ internalIp: '10.0.0.1', publicIp: '203.0.113.1' }] } },
+      ],
+    });
+    expect(report.authoritative.passed).toBe(true);
+    expect(addParams?.nics).toEqual([{ internalIp: '10.0.0.1', publicIp: '203.0.113.1' }]);
+  });
+
+  test('#14 内核修复：场景种子字段阻止响应注入时产生显式告警（不再静默）', async () => {
+    const transport = makeTransport({
+      add: () => ok({ serverId: 'response-id', status: 'S1' }),
+      retire: () => ok({ serverId: 'response-id', status: 'S4' }),
+      observe_离线: () => ok({ serverId: 'response-id', status: 'S1' }),
+      observe_已退役: () => ok({ serverId: 'response-id', status: 'S4' }),
+    });
+    const report = await verify(model, {
+      rootDir: '.',
+      testCases,
+      specs,
+      bindings: makeBindings(),
+      transportExecutor: transport,
+      scenarios: [
+        { id: 'SC1', expectedActions: ['add', 'retire'], params: { serverId: 'fixed-id' } },
+      ],
+    });
+    expect(report.authoritative.passed).toBe(true); // 告警不阻断
+    expect(report.authoritative.scenarioWarnings?.some((w) => w.includes('serverId') && w.includes('冲突'))).toBe(true);
+  });
+
   test('状态词表映射：观测返回系统词汇（status: online）经 stateMap 归一化后通过', async () => {
     const m = parseProtocolContent(`---
 name: 词表协议

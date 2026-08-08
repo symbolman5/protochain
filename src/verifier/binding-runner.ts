@@ -178,6 +178,7 @@ export async function runBindingPathCase(
 
   let currentState = initialStateId;
   const deviations: Deviation[] = [];
+  const warnings: string[] = [];
 
   // 运行时参数：以场景文件 params 为种子（最高优先级），动作响应字段注入次之
   const seededKeys = new Set<string>();
@@ -189,7 +190,16 @@ export async function runBindingPathCase(
     : undefined;
   if (scenarioSource) {
     for (const [k, v] of Object.entries(scenarioSource.params ?? {})) {
+      if (v === undefined || v === null) {
+        warnings.push(`场景参数 ${k} 为 null/undefined，未注入`);
+        continue;
+      }
       if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+        runtimeParams[k] = v;
+        seededKeys.add(k);
+        injectedParams[k] = 'scenario';
+      } else if (typeof v === 'object') {
+        // 数组/对象参数（如 nics:[{...}]）序列化注入 body（#14 内核修复）
         runtimeParams[k] = v;
         seededKeys.add(k);
         injectedParams[k] = 'scenario';
@@ -302,7 +312,7 @@ export async function runBindingPathCase(
 
     // 响应字段注入：非保留字段进入 runtimeParams（场景种子字段优先，不被覆盖）
     if (result.data && typeof result.data === 'object') {
-      injectResponseFields(runtimeParams, result.data, seededKeys, injectedParams);
+      injectResponseFields(runtimeParams, result.data, seededKeys, injectedParams, warnings);
     }
 
     const transportType = actionBinding.binding.transport.type;
@@ -427,6 +437,7 @@ export async function runBindingPathCase(
     scenarioMatch,
     injectedParams: Object.keys(injectedParams).length > 0 ? injectedParams : undefined,
     degraded: degraded || undefined,
+    warnings: warnings.length > 0 ? warnings : undefined,
   };
 }
 
@@ -460,13 +471,26 @@ function injectResponseFields(
   runtimeParams: Record<string, unknown>,
   data: unknown,
   seededKeys: Set<string>,
-  injectedParams: Record<string, 'scenario' | 'response'>
+  injectedParams: Record<string, 'scenario' | 'response'>,
+  warnings: string[]
 ): void {
   const record = data as Record<string, unknown>;
   for (const [k, v] of Object.entries(record)) {
     if (RESERVED_INJECT_KEYS.has(k)) continue;
-    if (seededKeys.has(k)) continue; // 场景参数优先，不被响应覆盖
+    if (seededKeys.has(k)) {
+      // 场景参数优先，不被响应覆盖（#14 内核修复：不再静默跳过，显式告警，
+      // 便于发现"场景占位与系统生成 ID（如 register 返回 serverId）冲突"）
+      warnings.push(
+        `响应字段 ${k} 与场景种子参数冲突：场景值优先，响应注入被跳过（若该字段由系统生成（如 serverId），应从场景 params 删除该键）`
+      );
+      continue;
+    }
+    if (v === undefined || v === null) continue;
     if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+      runtimeParams[k] = v;
+      injectedParams[k] = 'response';
+    } else if (typeof v === 'object') {
+      // 数组/对象响应字段同样序列化注入（#14 内核修复）
       runtimeParams[k] = v;
       injectedParams[k] = 'response';
     }

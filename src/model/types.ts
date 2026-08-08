@@ -903,6 +903,8 @@ export interface CaseResult {
   injectedParams?: Record<string, 'scenario' | 'response'>;
   /** 是否含降级信任（无观测绑定且信任协议预期/响应 nextState 而通过） */
   degraded?: boolean;
+  /** 参数注入/场景冲突告警（如数组参数注入、种子字段覆盖响应注入被跳过） */
+  warnings?: string[];
 }
 
 export interface Deviation {

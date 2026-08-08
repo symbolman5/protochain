@@ -275,11 +275,18 @@ async function runTestCasesBinding(
     }
   }
 
+  // 汇总参数注入告警（CaseResult.warnings，来自 binding-runner #14 内核修复）：
+  // 与场景命中告警合并，随权威报告输出，供人工复核而非阻断。
+  const paramWarnings = caseResults.flatMap((c) => (c.warnings ?? []).map((w) => `[${c.pathId}] ${w}`));
+
   return {
     passed: failedCount === 0 && skippedCount === 0,
     counts: { passed: passedCount, failed: failedCount, skipped: skippedCount },
     caseResults,
-    scenarioWarnings: collectScenarioWarnings(caseResults, options.scenarios),
+    scenarioWarnings: [
+      ...(collectScenarioWarnings(caseResults, options.scenarios) ?? []),
+      ...paramWarnings,
+    ],
   };
 }
 
