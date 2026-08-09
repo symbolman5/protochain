@@ -479,9 +479,14 @@ function injectResponseFields(
     if (RESERVED_INJECT_KEYS.has(k)) continue;
     if (seededKeys.has(k)) {
       // 场景参数优先，不被响应覆盖（#14 内核修复：不再静默跳过，显式告警，
-      // 便于发现"场景占位与系统生成 ID（如 register 返回 serverId）冲突"）
+      // 便于发现"场景占位与系统生成 ID（如 register 返回 serverId）冲突"）。
+      // #16：响应回显请求字段（如 register 返回 name/hostDomain、exchange 返回
+      // username）与种子同值属正常语义，值比较相等时静默跳过，不产生告警噪音。
+      if (JSON.stringify(runtimeParams[k]) === JSON.stringify(v)) {
+        continue;
+      }
       warnings.push(
-        `响应字段 ${k} 与场景种子参数冲突：场景值优先，响应注入被跳过（若该字段由系统生成（如 serverId），应从场景 params 删除该键）`
+        `响应字段 ${k} 与场景种子参数冲突（值不一致）：场景值优先，响应注入被跳过（若该字段由系统生成（如 serverId），应从场景 params 删除该键）`
       );
       continue;
     }

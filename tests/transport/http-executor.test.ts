@@ -306,6 +306,54 @@ describe('HTTP 认证头构造', () => {
 // ---------------------------------------------------------------------------
 
 import type { TransportResult } from '../../src/transport/types.js';
+import { resolveTlsRequestOptions } from '../../src/transport/http-executor.js';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+describe('#15 HTTP TLS 传输选项解析', () => {
+  test('未配置 tls → undefined（保持原行为）', () => {
+    const url = new URL('https://hskng.local/v1/health');
+    expect(resolveTlsRequestOptions(url, undefined)).toBeUndefined();
+  });
+
+  test('connectHost 覆盖连接地址，servername 默认 URL host（SNI 保持域名）', () => {
+    const url = new URL('https://hskng.local/v1/health');
+    const opts = resolveTlsRequestOptions(url, { connectHost: '192.168.34.226' });
+    expect(opts).toEqual({
+      hostname: '192.168.34.226',
+      servername: 'hskng.local',
+      ca: undefined,
+      rejectUnauthorized: undefined,
+    });
+  });
+
+  test('显式 servername 优先于 URL host', () => {
+    const url = new URL('https://10.0.0.5/v1/health');
+    const opts = resolveTlsRequestOptions(url, { servername: 'edge.hskng.local' });
+    expect(opts?.servername).toBe('edge.hskng.local');
+    expect(opts?.hostname).toBe('10.0.0.5');
+  });
+
+  test('caFile（绝对路径）读取为 PEM，提供 CA 时默认严格校验', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hskng-tls-test-'));
+    const caFile = join(dir, 'ca.pem');
+    writeFileSync(caFile, '-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n', 'utf8');
+    const url = new URL('https://hskng.local/v1/health');
+    const opts = resolveTlsRequestOptions(url, { caFile });
+    expect(opts?.ca).toContain('BEGIN CERTIFICATE');
+    expect(opts?.rejectUnauthorized).toBe(true);
+  });
+
+  test('rejectUnauthorized 显式覆盖（false）不被 ca 默认值覆盖', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hskng-tls-test-'));
+    const caFile = join(dir, 'ca.pem');
+    writeFileSync(caFile, '-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n', 'utf8');
+    const url = new URL('https://hskng.local/v1/health');
+    const opts = resolveTlsRequestOptions(url, { caFile, rejectUnauthorized: false });
+    expect(opts?.rejectUnauthorized).toBe(false);
+  });
+});
 
 describe('TransportResult 类型', () => {
   test('成功响应', () => {

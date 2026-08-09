@@ -525,6 +525,30 @@ roles:
     expect(report.authoritative.scenarioWarnings?.some((w) => w.includes('serverId') && w.includes('冲突'))).toBe(true);
   });
 
+  test('#16 内核修复：响应回显与种子同值不告警（值比较），不同值才告警', async () => {
+    const transport = makeTransport({
+      add: () => ok({ serverId: 'response-id', name: 'node-a', status: 'S1' }),
+      retire: () => ok({ serverId: 'response-id', status: 'S4' }),
+      observe_离线: () => ok({ serverId: 'response-id', status: 'S1' }),
+      observe_已退役: () => ok({ serverId: 'response-id', status: 'S4' }),
+    });
+    // 种子 name=node-a 与响应回显同值：不告警；种子 serverId=fixed-id 与响应不同值：告警。
+    const report = await verify(model, {
+      rootDir: '.',
+      testCases,
+      specs,
+      bindings: makeBindings(),
+      transportExecutor: transport,
+      scenarios: [
+        { id: 'SC1', expectedActions: ['add', 'retire'], params: { serverId: 'fixed-id', name: 'node-a' } },
+      ],
+    });
+    expect(report.authoritative.passed).toBe(true);
+    const warnings = report.authoritative.scenarioWarnings ?? [];
+    expect(warnings.some((w) => w.includes('name') && w.includes('冲突'))).toBe(false);
+    expect(warnings.some((w) => w.includes('serverId') && w.includes('冲突'))).toBe(true);
+  });
+
   test('状态词表映射：观测返回系统词汇（status: online）经 stateMap 归一化后通过', async () => {
     const m = parseProtocolContent(`---
 name: 词表协议

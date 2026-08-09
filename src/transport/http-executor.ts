@@ -6,9 +6,46 @@
 
 import http from 'node:http';
 import https from 'node:https';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
 
 import type { ResolvedBinding, HttpTransport } from '../model/types.js';
 import type { TransportResult } from './types.js';
+
+/** RoleBinding.tls 解析结果（#15：https + 环境自签 CA / 连接地址覆盖）。 */
+export interface ResolvedTlsRequestOptions {
+  hostname: string;
+  servername: string;
+  ca?: string;
+  rejectUnauthorized?: boolean;
+}
+
+/**
+ * 解析角色 TLS 配置为 Node https 请求选项（纯函数，便于单测）。
+ * - hostname：tls.connectHost 优先，否则 URL host
+ * - servername：tls.servername 优先，否则 URL host（连接 IP 时保持 SNI=域名）
+ * - ca：tls.caFile 内容（绝对路径直接读；相对路径按进程 cwd 解析）
+ * - rejectUnauthorized：显式配置优先；提供 caFile 时默认 true（严格校验）
+ */
+export function resolveTlsRequestOptions(
+  url: URL,
+  tls: NonNullable<ResolvedBinding['roleBinding']>['tls']
+): ResolvedTlsRequestOptions | undefined {
+  if (!tls) {
+    return undefined;
+  }
+  let ca: string | undefined;
+  if (tls.caFile) {
+    const p = existsSync(tls.caFile) ? tls.caFile : resolvePath(process.cwd(), tls.caFile);
+    ca = readFileSync(p, 'utf8');
+  }
+  return {
+    hostname: tls.connectHost ?? url.hostname,
+    servername: tls.servername ?? url.hostname,
+    ca,
+    rejectUnauthorized: tls.rejectUnauthorized ?? (ca ? true : undefined),
+  };
+}
 
 /**
  * 构造完整 URL。
@@ -137,15 +174,17 @@ function httpRequestRaw(
     headers: Record<string, string>;
     body?: string;
     timeoutMs: number;
+    tls?: ResolvedTlsRequestOptions;
   }
 ): Promise<{ status: number; data: unknown; ok: boolean }> {
   return new Promise((resolve) => {
     const u = new URL(urlStr);
     const mod = u.protocol === 'https:' ? https : http;
     const payload = opts.body;
+    const isHttps = u.protocol === 'https:';
     const req = mod.request(
       {
-        hostname: u.hostname,
+        hostname: opts.tls?.hostname ?? u.hostname,
         port: u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : 80,
         path: `${u.pathname}${u.search}`,
         method: opts.method,
@@ -156,6 +195,13 @@ function httpRequestRaw(
             : {}),
         },
         timeout: opts.timeoutMs,
+        ...(isHttps && opts.tls
+          ? {
+              servername: opts.tls.servername,
+              ca: opts.tls.ca,
+              rejectUnauthorized: opts.tls.rejectUnauthorized,
+            }
+          : {}),
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -211,18 +257,24 @@ export async function executeHttp(
 
   const timeoutMs = transport.timeoutMs ?? 10000;
   const hasHostHeader = Object.keys(headers).some((k) => k.toLowerCase() === 'host');
+  const tlsOpts = resolveTlsRequestOptions(new URL(url), role.tls);
+  const isHttps = url.startsWith('https:');
+  // #15：配置 tls 或声明 Host 头时走底层 http(s).request（fetch 无法自定义
+  // SNI/CA/Host 头）；https 且无 tls 时仍可走 fetch（信任系统 CA）。
+  const useRawHttp = hasHostHeader || (isHttps && Boolean(tlsOpts));
 
   const raw: { status: number; data: unknown; ok: boolean } = await (async () => {
     try {
       const payload = ['GET', 'HEAD'].includes(transport.method)
         ? undefined
         : JSON.stringify(body);
-      if (hasHostHeader) {
+      if (useRawHttp) {
         return httpRequestRaw(url, {
           method: transport.method,
           headers,
           body: payload,
           timeoutMs,
+          tls: tlsOpts,
         });
       }
       const controller = new AbortController();

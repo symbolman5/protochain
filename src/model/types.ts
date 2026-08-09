@@ -1365,6 +1365,19 @@ export interface RoleBinding {
     caPath?: string;
   };
   headers?: Record<string, string>;
+  /**
+   * HTTPS 传输覆盖（#15）：环境自签 CA + 连接地址/SNI 与 URL host 分离时使用。
+   * - caFile：环境根 CA PEM 路径（绝对路径或相对进程 cwd；不配置时按系统信任库）
+   * - connectHost：连接地址覆盖（如集群节点 IP，URL host 仅用于 SNI/Host 头）
+   * - servername：TLS SNI（默认 URL host）
+   * - rejectUnauthorized：默认在提供 caFile 时 true（严格校验），可显式覆盖
+   */
+  tls?: {
+    caFile?: string;
+    connectHost?: string;
+    servername?: string;
+    rejectUnauthorized?: boolean;
+  };
   kafka?: {
     brokersEnv: string;
     consumerGroup?: string;
