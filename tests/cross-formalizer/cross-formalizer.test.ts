@@ -45,7 +45,8 @@ describe('cross-formalizer', () => {
 
     test('生成完整的 MODULE 声明', () => {
       expect(skeleton).toContain('---- MODULE');
-      expect(skeleton).toContain('SaaS_系统');
+      // systemName "SaaS 系统" 经 toAscii 剔除中文 + 空格转下划线 → "SaaS_"（合法 TLA 标识符）
+      expect(skeleton).toContain('SaaS_');
     });
 
     test('包含 EXTENDS 声明', () => {

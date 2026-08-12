@@ -136,29 +136,32 @@ roles:
   });
 
   describe('AI 推演', () => {
-    test('AI 返回活性违反时报告未通过', async () => {
+    test('强活性模式下含循环的协议活性违反 → 报告未通过（代码确定性判定）', async () => {
+      // approval-flow 含 S1↔S2 循环（T1 提交 / T5 超时退回），强活性下存在永不到达终态的路径
       const model = parseProtocolContent(readFixture('approval-flow.md'));
       const aiResponse = JSON.stringify({
         reachability: { passed: true, unreachableStates: [], notes: '' },
         deadlock: { passed: true, deadlockStates: [], notes: '' },
-        liveness: { passed: false, violations: ['存在 T5 超时退回循环，无法到达终态的路径'], notes: '需关注' },
+        liveness: { passed: false, violations: [], notes: 'AI 复核' },
         consistency: { passed: true, violations: [], notes: '' },
       });
       const adapter = new MockAIAdapter(aiResponse);
-      const report = await reason(model, adapter);
+      const report = await reason(model, adapter, { liveness: 'strong' });
 
       expect(report.liveness.passed).toBe(false);
       expect(report.liveness.violations.length).toBeGreaterThan(0);
+      expect(report.liveness.mode).toBe('strong');
       expect(report.passed).toBe(false);
     });
 
-    test('AI 调用失败时返回未通过报告', async () => {
+    test('AI 调用失败时：报告未通过，但活性以代码判定为准不受 AI 失败影响', async () => {
       const model = parseProtocolContent(readFixture('approval-flow.md'));
       const adapter = new MockAIAdapter('', false);
       const report = await reason(model, adapter);
 
-      expect(report.passed).toBe(false);
-      expect(report.liveness.passed).toBe(false);
+      expect(report.passed).toBe(false); // 一致性因 AI 失败而未通过
+      expect(report.liveness.passed).toBe(true); // 弱活性由代码判定，不受 AI 失败影响
+      expect(report.liveness.mode).toBe('weak');
       expect(report.consistency.passed).toBe(false);
     });
 
