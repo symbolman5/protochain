@@ -15,14 +15,16 @@
  * - path：路径覆盖（带最大路径长度限制，防止爆炸）
  */
 
-import type { TestCaseSet, CoverageReport } from '../model/types.js';
-import { generateCases } from '../casegen/index.js';
+import type { TestCaseSet, AIAdapter, ProtochainConfig } from '../model/types.js';
+import { generateCases, generateCasesWithAI, judgeCoveragePass } from '../casegen/index.js';
 import type { StepExecutor } from '../orchestrator/index.js';
 import { writeReport } from '../orchestrator/index.js';
 import { readReport } from '../orchestrator/index.js';
-import type { ProtochainConfig } from '../model/types.js';
 
-export function createCaseGenExecutor(config?: ProtochainConfig): StepExecutor {
+export function createCaseGenExecutor(
+  config?: ProtochainConfig,
+  aiAdapter?: AIAdapter
+): StepExecutor {
   return {
     async execute(ctx) {
       const { model, rootDir } = ctx;
@@ -33,16 +35,25 @@ export function createCaseGenExecutor(config?: ProtochainConfig): StepExecutor {
         const criterion = config?.coverage?.criterion ?? 'state';
         const maxPathLength = config?.coverage?.maxPathLength;
 
-        const testCases = generateCases(model, {
-          criterion,
-          maxPathLength,
-        });
+        // P3：显式启用 AI 生成时走"生成 -> 覆盖度机械预检 -> 修正 -> 重试"loop；
+        // 否则保持确定性路径生成（generateCases）。
+        const useAI = config?.ai?.useForGeneration === true && !!aiAdapter;
+        const testCases = useAI
+          ? await generateCasesWithAI(model, aiAdapter!, {
+              criterion,
+              maxPathLength,
+              loop: config?.ai?.loop,
+            })
+          : generateCases(model, {
+              criterion,
+              maxPathLength,
+            });
 
         const path = writeReport(rootDir, 'derived/test-cases.json', testCases);
         ctx.artifacts.testCases = testCases;
 
         // 通过性判断：默认 state 准则下需 100% 状态覆盖；transition 准则下需 100% 转移覆盖
-        const passed = judgePass(testCases.coverage);
+        const passed = judgeCoveragePass(testCases.coverage);
 
         return {
           stepId: 'generate-cases',
@@ -63,22 +74,6 @@ export function createCaseGenExecutor(config?: ProtochainConfig): StepExecutor {
       }
     },
   };
-}
-
-function judgePass(coverage: CoverageReport): boolean {
-  // 状态覆盖准则：状态覆盖率 100%
-  if (coverage.criterion === 'state') {
-    return coverage.stateCoverage.ratio === 1;
-  }
-  // 转移覆盖准则：转移覆盖率 100%
-  if (coverage.criterion === 'transition') {
-    return coverage.transitionCoverage.ratio === 1;
-  }
-  // 路径覆盖：路径数 > 0 即视为通过（路径覆盖本身无明确"完整"目标）
-  if (coverage.criterion === 'path') {
-    return coverage.stateCoverage.ratio > 0;
-  }
-  return false;
 }
 
 function formatCaseSummary(testCases: TestCaseSet): string {

@@ -18,6 +18,10 @@ Protochain 是一套**协议驱动开发（Protocol-Driven Development）**工�
 
 工具链从 `protocol/model.md`（权威源）出发，执行十个步骤的机械/AI 推导，产出接口规格、契约集、测试用例，并在最终用真实实现驱动一致性验证。
 
+工具链同时可作为 **protocol-runner 的 LLM 子任务执行器**（P3）：`exec-task` 子任务模式消费
+protocol-runner 的结构化任务、按步骤执行推导/生成（含可选 AI 生成 loop），并把效应/事实账本与成本
+回传为结构化回执（见 §七）。
+
 ---
 
 ## 二、安装与配置
@@ -59,6 +63,16 @@ ai:                              # AI 适配器（reason/formalize/casegen 需�
   apiKey: sk-xxx
   model: deepseek-v4-pro
   baseUrl: https://api.deepseek.com
+  models:                         # P3 多模型路由（可选）：按步骤角色覆盖 model
+    semantic: deepseek-v4-flash   #   check / verify 辅助摘要 / diff / version 分类
+    reasoning: deepseek-v4-pro    #   reason / formalize / derive-contracts
+    generation: deepseek-v4-flash #   generate-tests / generate-cases
+  useForGeneration: false         # P3 生成 loop：generate-tests/generate-cases 是否启用
+                                  #   "生成 → 机械预检 → 修正 → 重试"（默认 false，保持确定性路径）
+  loop:                           # 生成 loop 预算（可选；默认 maxIterations=3 / maxTokens=20000 / maxToolCalls=10）
+    maxIterations: 3
+    maxTokens: 20000
+    maxToolCalls: 10
 
 formalTool: auto                  # tla | scxml | decision-table | auto
 
@@ -138,6 +152,25 @@ tlc:
 - `timeoutMs`：模型检查超时上限，状态空间较大时建议调高（如 120000）
 - **降级行为**：**只有未配置 `tlc` 段才降级为 AI 推演验证**（报告标注 `tla-ai-fallback`）。一旦配置了 TLC，其结果即权威（报告中 `toolExecuted: true`）：不变量违反、执行超时、**规格解析/语义失败**（含代码生成骨架未声明标识符的情况）、启动失败（java/jar 路径错误）均直接报告失败，**不再尝试 AI**——失败原因由 `rawOutput` 保留、人工检查点仲裁，避免静默用 AI"通过"掩盖工具失败
 
+### 2.6 AI 生成 loop（P3，可选）
+
+`generate-tests` / `generate-cases` 这类"纯 AI 生成"步骤默认是单次 `complete`（一次性生成 → 解析 →
+失败即报错）。配置 `ai.useForGeneration: true` 后，生成类步骤复用 **"生成 → 机械预检 → 修正 → 重试"** loop
+（实现：[src/ai/generation-loop.ts](../src/ai/generation-loop.ts)）：
+
+- **预检信号来自机械层**：编译（`tsc --noEmit`）、产物 schema 解析、覆盖度统计等低风险预检；
+  未通过时把机械 `feedback` 拼回下一轮 prompt 供 AI 修正；权威结论仍由步骤边界的机械层给出。
+- **硬预算（已实现）**：`loop.maxIterations`（最大生成轮数）、`loop.maxTokens`（近似 token 累计，
+  按字符数/4 估算）、`loop.maxToolCalls`（最大 AI 调用次数）**任一耗尽仍未通过即抛
+  `GenerationLoopError`**，不无限重试。
+- **红线（§7.3）**：loop 只用于生成类步骤；`reason` / `formalize` 的代码确定性预判（BFS/SCC）
+  **不可被 AI 覆盖**，不接入本 loop。
+- **报告**：成功的生成产物记录 `attempts`（每轮解析结果与预检结论）、`corrections`（失败修正轮数）、
+  `toolCalls`（累计 AI 调用次数）。
+
+多模型路由（`ai.models`）为可选优化：语义层检查用便宜模型、reason/formalize 用强模型、
+生成类步骤单独指定；未配置的步骤回退到顶层 `model`。
+
 示例（真实环境，portable JRE + tla2tools）：
 
 ```yaml
@@ -191,6 +224,7 @@ tlc:
 |------|------|
 | `run` | 按 DAG 依赖执行步骤区间 |
 | `status` | 查看步骤进度与检查点状态 |
+| `exec-task <taskFile> --result <resultFile>` | 子任务模式：消费 protocol-runner 的 `task.json`，执行指定步骤后写回结构化 `result.json`（含 effects/facts/openItems/cost；供 protocol-runner `driver: protochain` 调用，见 §七） |
 
 ### 3.5 接口绑定
 
@@ -527,6 +561,10 @@ protochain generate-cases --criterion path --max-path-length 10
 | `state` | 状态覆盖 | 100% 状态被访问 |
 | `transition` | 转移覆盖 | 100% 转移被执行 |
 | `path` | 路径覆盖 | 路径数 > 0 |
+
+> **P3 生成 loop**：配置 `ai.useForGeneration: true`（§2.6）后，⑥/⑦ 从单次生成升级为
+> "生成 → 机械预检（tsc/schema/覆盖度）→ 修正 → 重试"，受 `ai.loop` 硬预算约束；
+> 预算耗尽仍未通过则步骤失败并给出最后一次机械反馈，不会无限重试。
 
 ### 4.6 第六步：生成实现骨架
 
@@ -1189,9 +1227,45 @@ bindings:
 
 ---
 
-## 七、迭代与版本管理
+## 七、protocol-runner 集成（harness 子任务模式，P3）
 
-### 7.1 保存版本快照
+设计依据：《protocol-runner 仓库 harness-design.md》§7（与 protochain 的衔接）。
+protochain 作为 protocol-runner 的 **LLM 子任务执行器**（`config.driver: "protochain"`）接入，
+通过 `exec-task` 子任务模式（实现：[src/exec-task/index.ts](../src/exec-task/index.ts)）消费结构化任务、回传结构化回执。
+
+### 7.1 子任务模式（exec-task）
+
+```bash
+protochain exec-task <taskFile> --result <resultFile> [--dir <modelingDir>] [--persist-state]
+```
+
+- `taskFile`：protocol-runner `driver: protochain` 构造的 JSON（`steps` / `goal` / `useAI` /
+  `context.modelPath` / `inputContract` / `writeDomain` / `budget` / `preflightAssertions`）。
+  步骤来自执行器配置 `steps` 或 checklist 步骤 id；支持多协议（`--dir` 指向多协议建模根 + 子协议清单）。
+- `resultFile`：写回结构化回执 `status`（completed/failed/aborted）+ `summary`/`reason` +
+  `artifacts`/`partialArtifacts` + 账本 `facts`/`effects`/`openItems` + `cost`（含 loop `iterations`/`corrections`）。
+- `--persist-state`：写 `orchestrator-state.yaml` 兼容既有 acceptance（默认无状态）。
+
+### 7.2 预算与 preflight 语义
+
+- `task.context.budget` 覆盖 `config.ai.loop`（`effectiveConfig`）：protocol-runner 实例在
+  `executors[].config.budget` 声明生成 loop 硬预算，`TaskPackage.budget` 透传后由
+  `generation-loop` 执行（§2.6：maxIterations/maxTokens/maxToolCalls 任一耗尽即失败）。
+- `preflightAssertions` 在子任务模式下**只注入提示文本、不在 loop 内执行**（executed=0，
+  与 protocol-runner DSH driver 的 P2 bridge 语义一致）；权威 acceptance 由 protocol-runner
+  在子任务边界执行。
+- AI 只进请求步骤自身的生成 loop；隐式前置推导（specs/contracts）固定走确定性路径，不为隐式重推导消耗预算。
+
+### 7.3 边界红线
+
+- 写域由 protocol-runner 侧 `runSandboxed` 快照强制（越界写入即失败）；exec-task 不自行宣布 acceptance 通过。
+- 不侵入 `reason` / `formalize` 的代码确定性预判（BFS/SCC 主导，AI 不可推翻）。
+
+---
+
+## 八、迭代与版本管理
+
+### 8.1 保存版本快照
 
 ```bash
 # 修改 model.md 前保存当前版本
@@ -1199,14 +1273,14 @@ protochain version save
 # 产出: protocol/versions/v1.0.0-20260731T120000/model.md + metadata.json
 ```
 
-### 7.2 查看版本历史
+### 8.2 查看版本历史
 
 ```bash
 protochain version list
 protochain version show v1.0.0
 ```
 
-### 7.3 差分与影响分析
+### 8.3 差分与影响分析
 
 ```bash
 # 修改 model.md 后，与保存的快照比较
@@ -1217,7 +1291,7 @@ protochain diff --old v1.0.0 --new v1.1.0
 protochain impact
 ```
 
-### 7.4 变更分类
+### 8.4 变更分类
 
 ```bash
 # 将变更分类为"范式重协商"或"协议微调"
@@ -1230,7 +1304,7 @@ protochain version classify
 - **范式重协商（paradigm_renegotiation）**：状态/转移的根本性改变，需要全量重新推导
 - **协议微调（protocol_tweak）**：局部修改（如新增 guard 条件），增量推导即可
 
-### 7.5 变更传播
+### 8.5 变更传播
 
 ```bash
 # 清理因协议变更而 stale 的派生文件，生成增量重推导计划
@@ -1240,7 +1314,7 @@ protochain propagate --clean
 
 ---
 
-## 八、项目目录结构
+## 九、项目目录结构
 
 ```
 project/
@@ -1290,7 +1364,7 @@ project/
 
 ---
 
-## 九、常见问题
+## 十、常见问题
 
 ### Q: 哪些命令需要 AI？
 

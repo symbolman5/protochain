@@ -15,6 +15,21 @@ ai:
   apiKey: ${DEEPSEEK_API_KEY}   # 可省略，留空走环境变量；local 无需此项
   model: deepseek-v4-flash
   baseUrl: https://api.deepseek.com
+  # P3 多模型路由（§7.2）：按步骤角色覆盖 model，未配置的角色回退到上方 model。
+  # 语义层检查用便宜模型，reason/formalize 用强模型，生成类步骤单独指定。
+  models:
+    semantic: deepseek-v4-flash   # check / verify 辅助摘要 / diff / version 分类
+    reasoning: deepseek-v4-pro    # reason / formalize / derive-contracts
+    generation: deepseek-v4-flash # generate-tests / generate-cases
+  # P3：生成类步骤（generate-tests / generate-cases）启用
+  # "生成 -> 机械预检（tsc --noEmit / 覆盖度）-> 修正 -> 重试"loop。
+  # 默认 false：无 AI 适配器或未启用时保持纯代码确定性路径。
+  useForGeneration: false
+  # 生成 loop 预算（可选；默认 maxIterations=3 / maxTokens=20000 / maxToolCalls=10）
+  loop:
+    maxIterations: 3
+    maxTokens: 20000
+    maxToolCalls: 10
 
 # 形式化工具（formalize 步骤；省略则降级 AI 推演）
 formalTool: tla

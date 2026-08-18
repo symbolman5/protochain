@@ -101,14 +101,22 @@ units:
         notAllowedEdits: ["artifacts/model/", "artifacts/impl/"]
         escalationTypes: ["contract-conflict", "dynamic-dependency"]
     writes:
-      paths: ["artifacts/derive/"]
+      paths:
+        - artifacts/derive/
+        # 多根快照：protochain exec-task 子任务产物落在 ../modeling/protocol/<Pn>/derived/，
+        # 纳入写域背书（越界即失败），不再停留在沙箱根之外（hsk-ng 同款约定）
+        - ../modeling/
       resources: []
     selfCheck:
       kind: file
       path: artifacts/derive/specs.json
       mustExist: true
       schemaRef: schemas/specs.schema.json
-    executor: { ref: mech-derive }
+    preflightAssertions:
+      # 幂等/只读/低成本预检（P2：verifier=preflight 时由 bridge 注入 loop 提示模型；
+      # 权威判定仍由 m→d 交接 acceptance 在子任务边界给出）
+      - { kind: command, command: "node scripts/preflight-derive.mjs" }
+    executor: { ref: llm-protochain }
     notReadList: ["artifacts/impl/"]
 
   - id: b-bind
@@ -163,18 +171,23 @@ units:
         runtimeChecks:
           - { kind: command, command: "node scripts/env-health.mjs" }
       boundary:
-        allowedEdits: ["artifacts/impl/"]
+        allowedEdits: ["artifacts/impl/", "../impl/"]
         notAllowedEdits: ["artifacts/model/", "artifacts/verify/"]
         escalationTypes: ["contract-conflict", "dynamic-dependency", "mis-partition"]
     writes:
-      paths: ["artifacts/impl/"]
+      paths:
+        - artifacts/impl/
+        # 多根快照：真实实现落在 ../impl/（IMPL_DIR 相对实例目录），纳入写域背书
+        - ../impl/
       resources: []
     selfCheck:
       kind: file
       path: artifacts/impl/impl.json
       mustExist: true
       schemaRef: schemas/impl.schema.json
-    executor: { ref: llm-impl }
+    preflightAssertions:
+      - { kind: command, command: "node scripts/preflight-impl.mjs" }
+    executor: { ref: llm-dsh }
     notReadList: ["artifacts/verify/"]
 
   - id: v-verify
@@ -380,7 +393,7 @@ environments:
     runtimeChecks:
       - { kind: command, command: "node scripts/env-health.mjs" }
 
-# ---- 执行器映射（M/B/I 默认 stub；D/V 机械；R 人工；M 可按需切 harness）----
+# ---- 执行器映射（harness v0.5 默认：D=protochain exec-task；I=DSH driver；V 机械；R 人工）----
 executors:
   - id: llm-model
     kind: llm
@@ -389,9 +402,27 @@ executors:
         artifacts:
           - { path: artifacts/model/model.json, content: "{\"version\": \"{{version}}\", \"model\": {\"status\": \"init\"}}" }
         readPaths: []
-  - id: mech-derive
-    kind: mechanical
-    config: { runner: "node", allow: ["scripts/produce-derive.mjs"] }
+  - id: llm-protochain
+    kind: llm
+    config:
+      driver: protochain
+      # exec-task 子任务模式（P3）：multi-protocol 推导，AI 全链
+      # check → reason → formalize → derive-specs → derive-contracts → generate-tests → generate-cases；
+      # --persist-state 写 orchestrator-state.yaml 兼容既有 acceptance（executor-hooks 负责 settle 产物）
+      command: 'node "$PROTOCHAIN" exec-task {taskFile} --result {resultFile} --dir {modelingDir} --persist-state'
+      modelingDir: "{{MODELING_DIR}}"
+      protocols: [P1]
+      steps: [check, reason, formalize, derive-specs, derive-contracts, generate-tests, generate-cases]
+      useAI: true
+      trackReads: true
+      timeoutMs: 2400000
+      # 生成 loop 硬预算透传 TaskPackage.budget（protochain 侧 effectiveConfig 覆盖 config.ai.loop；
+      # maxTokens/maxToolCalls 由 protochain generation-loop 执行）
+      budget: { maxIterations: 5, maxTokens: 80000, maxToolCalls: 30 }
+  # 确定性回退（不想用 AI 全链时切回 mech-derive，并把 d-derive.executor.ref 指回本 id）：
+  # - id: mech-derive
+  #   kind: mechanical
+  #   config: { runner: "node", allow: ["scripts/produce-derive.mjs"] }
   - id: llm-bind
     kind: llm
     config:
@@ -399,6 +430,7 @@ executors:
         artifacts:
           - { path: artifacts/bind/bindings.json, content: "{\"version\": \"{{version}}\", \"bindings\": []}" }
         readPaths: ["artifacts/derive/specs.json"]
+  # 语义编辑默认 stub（由人工/外部 agent 按 checklist 填写）；要接 DSH harness 时用 llm-dsh：
   - id: llm-impl
     kind: llm
     config:
@@ -406,6 +438,20 @@ executors:
         artifacts:
           - { path: artifacts/impl/impl.json, content: "{\"version\": \"{{version}}\", \"build\": \"ok\"}" }
         readPaths: ["artifacts/derive/specs.json", "artifacts/bind/bindings.json"]
+  - id: llm-dsh
+    kind: llm
+    config:
+      driver: dsh
+      # DSH 子任务执行器（P1/P2）：scripts/dsh-driver.mjs 消费 PROTOCOL_RUNNER_DSH_* 契约变量，
+      # 静态插件树映射工具面 + 注入 protocol-runner 插件；写域仍由 runSandboxed 快照兜底。
+      command: 'node scripts/dsh-driver.mjs {taskFile} {promptFile} {protocolFile} {resultFile}'
+      streamOutput: true
+      timeoutMs: 600000
+      trackReads: true
+      verifier: preflight     # preflight | none（缺省 none；P1 只提示不注入 bridge）
+      loop: { maxIterations: 24 }
+      # DSH 侧硬预算（maxTokens/maxToolCalls）尚未由 dsh.ts 执行——只透传，见 harness-design §7.6.5
+      # budget: { maxTokens: 80000, maxToolCalls: 30 }
   - id: mech-verify
     kind: mechanical
     config: { runner: "node", allow: ["scripts/produce-verify.mjs"] }

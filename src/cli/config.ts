@@ -3,7 +3,7 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { ProtochainConfig } from '../model/types.js';
 import { CONFIG_FILE, findConfigPath } from '../project/context.js';
@@ -18,7 +18,15 @@ export function loadConfig(rootDir: string): ProtochainConfig {
     return { name: 'unnamed' };
   }
   const raw = readFileSync(configPath, 'utf-8');
-  return parseYaml(raw) as ProtochainConfig;
+  const config = parseYaml(raw) as ProtochainConfig & { bindingsFile?: string };
+  if (config.bindingsFile) {
+    const bindingsPath = resolve(dirname(configPath), config.bindingsFile);
+    if (!readFileSync(bindingsPath, 'utf-8')) {
+      throw new Error(`bindingsFile 不存在: ${bindingsPath}`);
+    }
+    config.bindings = parseYaml(readFileSync(bindingsPath, 'utf-8')) as ProtochainConfig['bindings'];
+  }
+  return config;
 }
 
 /** 写回配置：写入向上查找到的配置文件（保证 config set/get 读写同一文件） */

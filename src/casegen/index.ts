@@ -24,7 +24,15 @@ import type {
   UncoveredDisposition,
   StateDef,
   StateDimension,
+  AIAdapter,
+  AIPrompt,
 } from '../model/types.js';
+import { parseAIJson } from '../ai/adapter.js';
+import {
+  runGenerationLoop,
+  type GenerationAttempt,
+  type GenerationLoopOptions,
+} from '../ai/generation-loop.js';
 
 export interface CaseGenOptions {
   /** 覆盖度准则 */
@@ -33,6 +41,11 @@ export interface CaseGenOptions {
   maxPathLength?: number;
   /** 最大生成路径数（防止爆炸） */
   maxPaths?: number;
+}
+
+export interface CaseGenAIOptions extends CaseGenOptions {
+  /** AI 生成 loop 的预算（maxIterations / maxTokens / maxToolCalls） */
+  loop?: GenerationLoopOptions;
 }
 
 export function generateCases(
@@ -68,6 +81,238 @@ export function generateCases(
     paths,
     coverage,
     generatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * P3：AI 辅助生成测试用例，loop 内以覆盖度报告作为机械预检信号：
+ * 未覆盖状态/转移 -> feedback 交给 AI 补路径 -> 重试，直到准则达标或预算耗尽。
+ *
+ * 与 generateCases 的关系：确定性路径（generateCases）保持默认可用；
+ * 本函数仅在调用方显式传入 AI 适配器并启用 AI 生成时使用。
+ */
+export async function generateCasesWithAI(
+  model: SourceProtocolModel,
+  aiAdapter: AIAdapter,
+  options: CaseGenAIOptions = {}
+): Promise<TestCaseSet> {
+  const {
+    criterion = 'state',
+    maxPathLength = Math.max(6, model.derivable.states.length * 2),
+    maxPaths = 100,
+    loop,
+  } = options;
+
+  const derivable = model.derivable;
+  const initialStateId =
+    derivable.initialStateId ??
+    derivable.states.find((s) => s.type === 'initial')?.id;
+
+  if (!initialStateId) {
+    // 与确定性路径一致：无初始状态时返回空路径 + 覆盖度报告
+    return {
+      paths: [],
+      coverage: computeCoverage(derivable, [], criterion, maxPathLength),
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  const transitionsById = new Map(derivable.transitions.map((t) => [t.id, t]));
+  const { result: materialized } = await runGenerationLoop<MaterializeResult>(
+    aiAdapter,
+    {
+      buildPrompt: ({ iteration, previousAttempts }) =>
+        buildCasesPrompt(
+          derivable,
+          initialStateId,
+          criterion,
+          maxPathLength,
+          maxPaths,
+          iteration,
+          previousAttempts
+        ),
+      parse: async (content) => {
+        const parsed = parseAIJson<{
+          paths?: Array<{ transitionIds?: unknown; description?: string }>;
+        }>(content);
+        if (!parsed || !Array.isArray(parsed.paths)) {
+          throw new Error('输出缺少 paths 数组');
+        }
+        const candidates = parsed.paths.map((p, i) => {
+          if (
+            !Array.isArray(p.transitionIds) ||
+            !p.transitionIds.every((tid) => typeof tid === 'string')
+          ) {
+            throw new Error(`第 ${i + 1} 条路径的 transitionIds 非法（需为字符串数组）`);
+          }
+          return {
+            id: `PATH_AI_${String(i + 1).padStart(3, '0')}`,
+            transitionIds: p.transitionIds as string[],
+            description: p.description,
+          };
+        });
+        return materializePaths(candidates, transitionsById, initialStateId, maxPaths);
+      },
+      preflight: async (candidate) => {
+        const coverage = computeCoverage(
+          derivable,
+          candidate.valid,
+          criterion,
+          maxPathLength
+        );
+        if (!judgeCoveragePass(coverage)) {
+          const uncovered = coverage.uncoveredDispositions
+            .map((u) => `[${u.elementType}] ${u.elementId}`)
+            .join('、');
+          const feedback = [
+            candidate.invalidIssues.length > 0
+              ? `非法路径：${candidate.invalidIssues.join('；')}`
+              : '',
+            uncovered ? `未覆盖项：${uncovered}` : '覆盖度仍未达标',
+            '请补充路径使所有状态/转移被覆盖（返回 paths 数组，元素为 { transitionIds: string[], description?: string }）。',
+          ]
+            .filter(Boolean)
+            .join('\n');
+          return { passed: false, feedback };
+        }
+        return { passed: true, result: candidate };
+      },
+    },
+    loop
+  );
+
+  const paths = materialized.valid;
+  return {
+    paths,
+    coverage: computeCoverage(derivable, paths, criterion, maxPathLength),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/** 覆盖度准则是否达标（与步骤执行器 judgePass 同规则） */
+export function judgeCoveragePass(coverage: CoverageReport): boolean {
+  if (coverage.criterion === 'state') {
+    return coverage.stateCoverage.ratio === 1;
+  }
+  if (coverage.criterion === 'transition') {
+    return coverage.transitionCoverage.ratio === 1;
+  }
+  if (coverage.criterion === 'path') {
+    return coverage.stateCoverage.ratio > 0;
+  }
+  return false;
+}
+
+interface MaterializeResult {
+  valid: ProtocolPath[];
+  invalidIssues: string[];
+}
+
+/**
+ * 把 AI 返回的转移 ID 序列落地为 ProtocolPath：
+ * - 从初始状态出发逐步走转移，校验转移存在且 from 匹配当前状态；
+ * - 序列中任一环非法则整条丢弃，并记录问题供 AI 修正。
+ */
+function materializePaths(
+  candidatePaths: Array<{ id: string; transitionIds: string[]; description?: string }>,
+  transitionsById: Map<string, DerivableLayer['transitions'][number]>,
+  initialStateId: string,
+  maxPaths: number
+): MaterializeResult {
+  const valid: ProtocolPath[] = [];
+  const invalidIssues: string[] = [];
+  for (const candidate of candidatePaths.slice(0, maxPaths)) {
+    const stateIds: string[] = [initialStateId];
+    let current = initialStateId;
+    let broken = false;
+    for (const tid of candidate.transitionIds) {
+      const t = transitionsById.get(tid);
+      if (!t) {
+        invalidIssues.push(`路径 ${candidate.id} 引用未知转移 ${tid}`);
+        broken = true;
+        break;
+      }
+      if (!t.from.includes(current)) {
+        invalidIssues.push(`路径 ${candidate.id} 转移 ${tid} 与当前状态 ${current} 不匹配`);
+        broken = true;
+        break;
+      }
+      current = t.to;
+      stateIds.push(current);
+    }
+    if (broken) continue;
+    valid.push({
+      id: candidate.id,
+      transitionIds: [...candidate.transitionIds],
+      stateIds,
+      length: candidate.transitionIds.length,
+      description: candidate.description ?? stateIds.join(' -> '),
+    });
+  }
+  return { valid, invalidIssues };
+}
+
+function buildCasesPrompt(
+  derivable: DerivableLayer,
+  initialStateId: string,
+  criterion: 'state' | 'transition' | 'path',
+  maxPathLength: number,
+  maxPaths: number,
+  iteration: number,
+  previousAttempts: GenerationAttempt<MaterializeResult>[]
+): AIPrompt {
+  const context = JSON.stringify(
+    {
+      initialStateId,
+      terminalStateIds: derivable.terminalStateIds,
+      states: derivable.states.map((s) => ({
+        id: s.id,
+        type: s.type,
+        dimensions: s.dimensions,
+      })),
+      transitions: derivable.transitions.map((t) => ({
+        id: t.id,
+        from: t.from,
+        to: t.to,
+        action: t.action,
+      })),
+    },
+    null,
+    2
+  );
+
+  const criterionText =
+    criterion === 'state'
+      ? '覆盖全部状态（每个状态至少被一条路径访问）'
+      : criterion === 'transition'
+        ? '覆盖全部转移（每个转移至少被一条路径执行）'
+        : '覆盖尽可能多的状态/转移（路径覆盖）';
+
+  const instruction: string[] = [
+    `第 ${iteration} 次生成。请根据协议状态机设计测试用例路径，要求：${criterionText}。`,
+    `- 每条路径从初始状态 ${initialStateId} 出发，按转移 ID 序列推进；`,
+    `- transitionIds 中的每个转移必须存在且 from 与当前状态匹配；`,
+    `- 最多 ${maxPaths} 条路径，单条长度不超过 ${maxPathLength}；`,
+    '只返回 JSON：{"paths":[{"transitionIds":["T1","T2"],"description":"路径说明"}]}',
+  ];
+  const feedbacks = previousAttempts
+    .map((a) => a.preflight.feedback)
+    .filter((f): f is string => Boolean(f));
+  if (feedbacks.length > 0) {
+    instruction.push(
+      '',
+      '上一轮的机械预检未通过，请根据以下反馈补充/修正路径后重新返回完整 JSON：',
+      feedbacks.map((f) => `---\n${f}`).join('\n')
+    );
+  }
+
+  return {
+    system:
+      '你是协议测试用例生成器。你只根据状态机结构返回合法路径 JSON，覆盖度由机械层校验。',
+    context,
+    instruction: instruction.join('\n'),
+    outputFormat: 'JSON：{"paths":[{"transitionIds":["T1"],"description":"..."}]}',
+    temperature: 0.3,
   };
 }
 

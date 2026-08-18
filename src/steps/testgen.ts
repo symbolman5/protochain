@@ -19,13 +19,17 @@
 import { join } from 'node:path';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import type { AIAdapter, InterfaceSpec, ContractSet, TestToolCode } from '../model/types.js';
+import type { ProtochainConfig } from '../model/types.js';
 import { generateTestTool } from '../testgen/index.js';
 import { specify } from '../specifier/index.js';
 import { deriveContracts } from '../contractor/index.js';
 import type { StepExecutor } from '../orchestrator/index.js';
 import { writeReport } from '../orchestrator/index.js';
 
-export function createTestGenExecutor(aiAdapter?: AIAdapter): StepExecutor {
+export function createTestGenExecutor(
+  aiAdapter?: AIAdapter,
+  config?: ProtochainConfig
+): StepExecutor {
   return {
     async execute(ctx) {
       const { model, rootDir } = ctx;
@@ -49,8 +53,12 @@ export function createTestGenExecutor(aiAdapter?: AIAdapter): StepExecutor {
           ctx.artifacts.contracts = contracts;
         }
 
+        // P3：仅在显式启用（config.ai.useForGeneration）且存在 AI 适配器时走
+        // "生成 -> tsc 机械预检 -> 修正 -> 重试"loop；否则保持纯代码生成确定性路径。
+        const useAI = config?.ai?.useForGeneration === true && !!aiAdapter;
         const testTool = await generateTestTool(model, specs, contracts, aiAdapter, {
-          useAI: false, // P3 阶段：默认纯代码生成；P5 阶段可启用 AI 增强
+          useAI,
+          loop: config?.ai?.loop,
         });
 
         // 写入 4 个源文件

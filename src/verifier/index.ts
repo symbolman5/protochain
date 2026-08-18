@@ -38,6 +38,7 @@ import type {
   InterfaceSpec,
   BindingConfig,
   ResolvedBinding,
+  TestToolRunReport,
 } from '../model/types.js';
 import { parseAIJson } from '../ai/adapter.js';
 import { resolveBindings, filterInterfaces } from '../binder/index.js';
@@ -77,6 +78,8 @@ export interface VerifyContext {
   crossTestCases?: CrossTestCaseSet;
   /** 组合层模型（用于跨协议验证） */
   compositionModel?: CompositionModel;
+  /** test-tool 消费报告（阶段 A/B：由生成测试工具执行的用例结果，作为权威层来源） */
+  testToolRun?: TestToolRunReport;
 }
 
 /**
@@ -115,22 +118,24 @@ export async function verify(
     };
   }
 
-  // 2. 执行单协议测试用例（绑定模式优先于 stub 模式）
-  const authoritative = ctx.bindings
-    ? await runTestCasesBinding(
-        model,
-        testCases,
-        ctx.specs ?? loadSpecs(ctx.rootDir),
-        ctx.bindings,
-        ctx.protocolId,
-        ctx.transportExecutor,
-        {
-          pollTimeoutMs: ctx.pollTimeoutMs,
-          pollIntervalMs: ctx.pollIntervalMs,
-          scenarios: ctx.scenarios,
-        }
-      )
-    : await runTestCases(model, testCases, ctx.implementation);
+  // 2. 执行单协议测试用例（test-tool 消费优先；绑定模式次之；stub 模式兜底）
+  const authoritative = ctx.testToolRun
+    ? authoritativeFromTestTool(ctx.testToolRun)
+    : ctx.bindings
+      ? await runTestCasesBinding(
+          model,
+          testCases,
+          ctx.specs ?? loadSpecs(ctx.rootDir),
+          ctx.bindings,
+          ctx.protocolId,
+          ctx.transportExecutor,
+          {
+            pollTimeoutMs: ctx.pollTimeoutMs,
+            pollIntervalMs: ctx.pollIntervalMs,
+            scenarios: ctx.scenarios,
+          }
+        )
+      : await runTestCases(model, testCases, ctx.implementation);
 
   // 3. 跨协议用例验证（如有）
   if (ctx.crossTestCases) {
@@ -181,6 +186,54 @@ export async function verify(
   return {
     authoritative,
     auxiliary,
+    verifiedAt,
+  };
+}
+
+// ============================================================================
+// test-tool 权威层（阶段 A/B：生成测试工具执行结果 → AuthoritativeVerification）
+// ============================================================================
+
+function authoritativeFromTestTool(run: TestToolRunReport): AuthoritativeVerification {
+  const caseResults: CaseResult[] = run.caseResults.map((c) => ({
+    pathId: c.pathId,
+    passed: c.passed,
+    ...(c.error
+      ? {
+          deviations: [
+            {
+              action: c.pathId,
+              state: 'path',
+              expected: 'test-tool 执行通过',
+              actual: c.error,
+              kind: 'state_mismatch' as const,
+            },
+          ],
+        }
+      : {}),
+  }));
+  return {
+    passed: run.failedCases === 0 && run.executedCases > 0,
+    counts: { passed: run.passedCases, failed: run.failedCases, skipped: 0 },
+    caseResults,
+    testTool: {
+      consumed: true,
+      executedCases: run.executedCases,
+      passedCases: run.passedCases,
+      failedCases: run.failedCases,
+      toolFiles: run.toolFiles,
+      generatedAt: run.generatedAt,
+    },
+  };
+}
+
+/** 由 test-tool 消费报告组装完整 VerificationReport（供 CLI test-tool run 落盘） */
+export function buildVerificationReportFromTestTool(
+  run: TestToolRunReport,
+  verifiedAt: string = new Date().toISOString(),
+): VerificationReport {
+  return {
+    authoritative: authoritativeFromTestTool(run),
     verifiedAt,
   };
 }

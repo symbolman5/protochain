@@ -28,6 +28,11 @@ export class OpenAIAdapter implements AIAdapter {
   name = 'openai';
   private config: Required<OpenAIAdapterConfig>;
 
+  /** 当前使用的模型名（供多模型路由观测/测试） */
+  get modelName(): string {
+    return this.config.model;
+  }
+
   constructor(config: OpenAIAdapterConfig) {
     this.config = {
       apiKey: config.apiKey,
@@ -105,6 +110,11 @@ export interface AnthropicAdapterConfig {
 export class AnthropicAdapter implements AIAdapter {
   name = 'anthropic';
   private config: Required<AnthropicAdapterConfig>;
+
+  /** 当前使用的模型名（供多模型路由观测/测试） */
+  get modelName(): string {
+    return this.config.model;
+  }
 
   constructor(config: AnthropicAdapterConfig) {
     this.config = {
@@ -189,6 +199,11 @@ export class LocalAdapter implements AIAdapter {
   name = 'local';
   private baseUrl?: string;
   private model: string;
+
+  /** 当前使用的模型名（供多模型路由观测/测试） */
+  get modelName(): string {
+    return this.model;
+  }
 
   constructor(config: LocalAdapterConfig = {}) {
     this.baseUrl = config.baseUrl;

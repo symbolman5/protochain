@@ -787,6 +787,62 @@ export interface TestToolCode {
   generatedAt: string;
 }
 
+/**
+ * test-tool 可执行入口契约（阶段 A）：
+ * 生成产物（derived/test-tool/）经 loader 编译/import 后，暴露统一执行入口——
+ * protocol-executor 的 `executePath(transitionIds, implementation)`（按转移 ID 执行，
+ * 绕开同名动作索引丢键）与 protocol-model 的 `TRANSITIONS`（转移表，供用例映射）。
+ */
+export interface TestToolModule {
+  /** 编译后的 protocol-executor 模块（契约：executePath(transitionIds, implementation)） */
+  executor: {
+    executePath: (
+      transitionIds: string[],
+      implementation: ProtocolImplementationStubShape,
+    ) => Promise<TestToolPathOutcome>;
+    [key: string]: unknown;
+  };
+  /** 编译后的 protocol-model 模块（契约：导出 TRANSITIONS） */
+  model: { TRANSITIONS: Array<{ id: string; action: string; from: string[]; to: string }> };
+  /** 编译后的 scenario-loader / consistency-asserter 模块 */
+  scenarioLoader: unknown;
+  consistencyAsserter: unknown;
+  /** 生成文件清单（meta.json.files） */
+  toolFiles: string[];
+  generatedAt?: string;
+}
+
+/** ProtocolImplementation 的形态约束（executePath 收到的实现对象） */
+export interface ProtocolImplementationStubShape {
+  [action: string]: (currentState: string) => Promise<{ nextState: string; effects?: string[] }>;
+}
+
+/** executePath 逐条用例的返回形态（ConsistencyResult 子集） */
+export interface TestToolPathOutcome {
+  passed: boolean;
+  error?: string;
+  finalState?: string;
+  [key: string]: unknown;
+}
+
+/** test-tool 消费记录的用例级结果 */
+export interface TestToolCaseResult {
+  pathId: string;
+  passed: boolean;
+  error?: string;
+}
+
+/** test-tool 消费报告（verify 权威层的证据来源） */
+export interface TestToolRunReport {
+  consumed: true;
+  executedCases: number;
+  passedCases: number;
+  failedCases: number;
+  caseResults: TestToolCaseResult[];
+  toolFiles: string[];
+  generatedAt?: string;
+}
+
 // ----------------------------------------------------------------------------
 // ⑦ 测试用例集 + 覆盖度报告
 // ----------------------------------------------------------------------------
@@ -889,6 +945,15 @@ export interface AuthoritativeVerification {
   caseResults: CaseResult[];
   /** 场景相关告警（如声明了场景但无路径命中） */
   scenarioWarnings?: string[];
+  /** test-tool 消费记录（阶段 B 证据：本次验证确由生成测试工具执行） */
+  testTool?: {
+    consumed: true;
+    executedCases: number;
+    passedCases: number;
+    failedCases: number;
+    toolFiles: string[];
+    generatedAt?: string;
+  };
 }
 
 export interface CaseResult {
@@ -1480,6 +1545,30 @@ export interface ProtochainConfig {
     apiKey?: string;
     model?: string;
     baseUrl?: string;
+    /**
+     * P3 多模型路由（§7.2）：按步骤角色覆盖 model。
+     * 语义层检查用便宜模型，reason / formalize 用强模型，生成类步骤单独指定；
+     * 未配置某角色时回退到 model。
+     */
+    models?: {
+      /** 语义层检查（check / verify 辅助摘要 / diff / version 分类等） */
+      semantic?: string;
+      /** 推演与形式化（reason / formalize / derive-contracts） */
+      reasoning?: string;
+      /** 生成类步骤（generate-tests / generate-cases） */
+      generation?: string;
+    };
+    /**
+     * P3：生成类步骤（generate-tests / generate-cases）是否启用
+     * "生成 -> 机械预检 -> 修正 -> 重试" loop（默认 false，保持现有确定性路径）。
+     */
+    useForGeneration?: boolean;
+    /** P3：生成 loop 的预算（轮数 / 近似 token / AI 调用次数） */
+    loop?: {
+      maxIterations?: number;
+      maxTokens?: number;
+      maxToolCalls?: number;
+    };
   };
   /** 形式化工具配置（可指定，否则自动选择） */
   formalTool?: 'tla' | 'scxml' | 'alloy' | 'decision-table' | 'auto';
@@ -1499,4 +1588,6 @@ export interface ProtochainConfig {
   };
   /** 接口绑定配置（逻辑接口 → 物理实现映射） */
   bindings?: BindingConfig;
+  /** 独立绑定配置文件路径（相对 protochain.config.yaml；加载后覆盖内联 bindings） */
+  bindingsFile?: string;
 }

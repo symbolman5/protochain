@@ -27,10 +27,13 @@
  */
 
 import { Command } from 'commander';
-import { resolve, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
+import { resolve, join, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline';
 import { initProject, initMultiProject, initRunnerProject } from '../scaffolder/index.js';
+import { executeTask, type ExecTaskInput } from '../exec-task/index.js';
 import { parseProtocolFile } from '../parser/index.js';
 import { parseCompositionFile } from '../composition-parser/index.js';
 import { checkCompleteness } from '../checker/index.js';
@@ -41,7 +44,7 @@ import { checkCrossInvariants } from '../cross-invariant-checker/index.js';
 import { crossFormalize } from '../cross-formalizer/index.js';
 import { deriveCrossContracts } from '../cross-contractor/index.js';
 import { generateCrossCases } from '../cross-casegen/index.js';
-import { createAIAdapter } from '../ai/adapter.js';
+import { createAIRouter } from '../ai/router.js';
 import {
   registerExecutor,
   runPipeline,
@@ -86,6 +89,9 @@ import { specify } from '../specifier/index.js';
 import { resolveBindings, validateBindings, applyBindingEnvironment } from '../binder/index.js';
 import { loadScenarioParams, findScenariosDir } from '../verifier/binding-runner.js';
 import { writeEnvDepsReport, formatEnvDepsWarnings } from '../verifier/env-deps.js';
+import { loadTestTool } from '../testtool/loader.js';
+import { runTestCasesWithTestTool } from '../testtool/runner.js';
+import { buildVerificationReportFromTestTool } from '../verifier/index.js';
 import { readReport, writeReport } from '../orchestrator/index.js';
 import type { StepId, AIAdapter, InterfaceSpec, TestCaseSet, CompositionCompletenessReport } from '../model/types.js';
 
@@ -174,7 +180,8 @@ program
         const config = loadConfig(rootDir);
         if (config.ai) {
           try {
-            const adapter = createAIAdapter(config.ai);
+            // 多模型路由：语义层检查用便宜模型
+            const adapter = createAIRouter(config.ai).get('semantic');
             console.log('执行语义层 AI 检查...');
             const semantic = await checkSemanticCompleteness(model, adapter);
             report.semantic = semantic;
@@ -248,7 +255,8 @@ program
         const config = loadConfig(rootDir);
         if (config.ai) {
           try {
-            const adapter = createAIAdapter(config.ai);
+            // 多模型路由：组合层语义检查用便宜模型
+            const adapter = createAIRouter(config.ai).get('semantic');
             console.log('执行组合层语义层 AI 检查...');
             const semantic = await checkCompositionSemantic(composition, adapter);
             report.semantic = semantic;
@@ -344,7 +352,7 @@ program
         const config = loadConfig(rootDir);
         if (config.ai) {
           try {
-            adapter = createAIAdapter(config.ai);
+            adapter = createAIRouter(config.ai).get('semantic');
           } catch (err) {
             console.warn(
               `AI 适配器初始化失败，仅执行 simple_boolean 检查：${err instanceof Error ? err.message : err}`
@@ -415,7 +423,7 @@ program
         const config = loadConfig(rootDir);
         if (config.ai) {
           try {
-            adapter = createAIAdapter(config.ai);
+            adapter = createAIRouter(config.ai).get('reasoning');
           } catch (err) {
             console.warn(
               `AI 适配器初始化失败，仅生成骨架：${err instanceof Error ? err.message : err}`
@@ -610,6 +618,42 @@ program
   });
 
 // ==========================================================================
+// exec-task（子任务模式：protocol-runner 驱动 protochain 的结构化边界）
+// ==========================================================================
+
+program
+  .command('exec-task <taskFile>')
+  .description('子任务模式：消费结构化 task.json，执行请求步骤并写回结构化 result.json（不执行权威 acceptance）')
+  .option('--result <path>', 'result.json 输出路径（默认 <taskFile>.result.json）')
+  .option('--dir <目录>', 'protochain 项目根（默认取 task.json.projectDir，否则 cwd）')
+  .option('--protocol <Pn>', '多协议项目中的子协议 ID（如 P1；覆盖 task.json.protocolId）')
+  .option('--persist-state', '执行后写 orchestrator-state.yaml（兼容既有 acceptance；默认无状态）')
+  .option('--no-ai', '禁用 AI（覆盖 task.useAI；默认仅当 task.useAI 且配置 ai 时启用）')
+  .action(async (taskFile: string, opts: { result?: string; dir?: string; protocol?: string; persistState?: boolean; ai: boolean }) => {
+    const taskPath = resolve(taskFile);
+    let task: ExecTaskInput;
+    try {
+      task = JSON.parse(readFileSync(taskPath, 'utf8')) as ExecTaskInput;
+    } catch (err) {
+      console.error(`错误：无法读取 task.json ${taskPath}：${err instanceof Error ? err.message : err}`);
+      process.exit(2);
+    }
+    const projectDir = resolve(opts.dir ?? task.projectDir ?? process.cwd());
+    const resultPath = resolve(opts.result ?? `${taskPath}.result.json`);
+    // --no-ai 显式禁用（opts.ai=false）；未传时按 task.useAI 决定
+    const useAI = opts.ai === true && task.useAI === true;
+    const persistState = opts.persistState === true || task.persistState === true;
+    const result = await executeTask(
+      { ...task, useAI, protocolId: opts.protocol ?? task.protocolId },
+      { projectDir, persistState }
+    );
+    writeFileSync(resultPath, JSON.stringify(result, null, 2), 'utf8');
+    console.log(result.summary);
+    console.log(`result 已写入: ${resultPath}`);
+    process.exit(result.status === 'completed' ? 0 : 1);
+  });
+
+// ==========================================================================
 // config
 // ==========================================================================
 
@@ -676,7 +720,7 @@ program
     }
     let aiAdapter: AIAdapter;
     try {
-      aiAdapter = createAIAdapter(config.ai);
+      aiAdapter = createAIRouter(config.ai).get('reasoning');
     } catch (err) {
       console.error(`AI 适配器初始化失败：${err instanceof Error ? err.message : err}`);
       process.exit(2);
@@ -722,7 +766,7 @@ program
     }
     let aiAdapter: AIAdapter;
     try {
-      aiAdapter = createAIAdapter(config.ai);
+      aiAdapter = createAIRouter(config.ai).get('reasoning');
     } catch (err) {
       console.error(`AI 适配器初始化失败：${err instanceof Error ? err.message : err}`);
       process.exit(2);
@@ -785,7 +829,7 @@ program
     let aiAdapter: AIAdapter | undefined = undefined;
     if (opts.ai && config.ai) {
       try {
-        aiAdapter = createAIAdapter(config.ai);
+        aiAdapter = createAIRouter(config.ai).get('reasoning');
       } catch (err) {
         console.warn(
           `AI 适配器初始化失败，跳过 AI 辅助：${err instanceof Error ? err.message : err}`
@@ -826,7 +870,7 @@ program
     let aiAdapter: AIAdapter | undefined = undefined;
     if (config.ai) {
       try {
-        aiAdapter = createAIAdapter(config.ai);
+        aiAdapter = createAIRouter(config.ai).get('generation');
       } catch (err) {
         console.warn(
           `AI 适配器初始化失败，使用纯代码生成：${err instanceof Error ? err.message : err}`
@@ -835,7 +879,7 @@ program
     }
 
     const model = parseProtocolFile(ctx.modelPath);
-    const result = await createTestGenExecutor(aiAdapter).execute({
+    const result = await createTestGenExecutor(aiAdapter, config).execute({
       model,
       rootDir,
       artifacts: {},
@@ -880,8 +924,19 @@ program
       ...(maxPathLength !== undefined ? { maxPathLength } : {}),
     };
 
+    let aiAdapter: AIAdapter | undefined = undefined;
+    if (config.ai?.useForGeneration) {
+      try {
+        aiAdapter = createAIRouter(config.ai).get('generation');
+      } catch (err) {
+        console.warn(
+          `AI 适配器初始化失败，使用确定性路径生成：${err instanceof Error ? err.message : err}`
+        );
+      }
+    }
+
     const model = parseProtocolFile(ctx.modelPath);
-    const result = await createCaseGenExecutor(config).execute({
+    const result = await createCaseGenExecutor(config, aiAdapter).execute({
       model,
       rootDir,
       artifacts: {},
@@ -1019,7 +1074,7 @@ program
     let aiAdapter: AIAdapter | undefined = undefined;
     if (opts.ai && config.ai) {
       try {
-        aiAdapter = createAIAdapter(config.ai);
+        aiAdapter = createAIRouter(config.ai).get('semantic');
       } catch (err) {
         console.warn(
           `AI 适配器初始化失败，跳过 AI 摘要：${err instanceof Error ? err.message : err}`
@@ -1068,6 +1123,72 @@ program
   });
 
 // ==========================================================================
+// test-tool run（阶段 A 可执行入口：编译/import 生成 test-tool 并跑 test-cases）
+// ==========================================================================
+
+const testToolCmd = program
+  .command('test-tool')
+  .description('生成测试工具执行（阶段 A 可执行入口契约）');
+
+testToolCmd
+  .command('run')
+  .description('执行生成测试工具：编译/import derived/test-tool 并按 test-cases.json 跑用例；权威结论来自代码确定性执行')
+  .option('-d, --dir <目录>', '项目根目录', process.cwd())
+  .option('--impl <文件>', '实现模块：默认导出 ProtocolImplementation 对象，或 (path) => impl 工厂（实例层注入真实服务适配器）')
+  .option('--limit <N>', '只跑前 N 条用例（阶段 B 先 dev 跑通一条）')
+  .option('--out <文件>', '把 VerificationReport（含 authoritative.testTool 消费记录）写到指定 JSON 路径')
+  .action(async (opts) => {
+    const ctx = resolveCtx(opts);
+    const rootDir = ctx.protocolRoot;
+    const implFile = opts.impl;
+    if (!implFile) {
+      console.error('test-tool run 需要 --impl <文件>（实现模块）');
+      process.exit(2);
+    }
+    try {
+      const tool = await loadTestTool(rootDir, {
+        nodeModulesDir: resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'node_modules'),
+      });
+      const testCases = readReport<TestCaseSet>(rootDir, 'derived/test-cases.json');
+      if (!testCases) {
+        console.error(`缺少 test-cases.json: ${join(rootDir, 'derived/test-cases.json')}`);
+        process.exit(2);
+      }
+      const implUrl = resolve(implFile);
+      const implModule = (await import(pathToFileURL(implUrl).href)) as { default?: unknown };
+      const implementation = implModule.default as Parameters<typeof runTestCasesWithTestTool>[2];
+      const limit = opts.limit !== undefined ? Number(opts.limit) : undefined;
+      if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+        console.error('--limit 需为正整数');
+        process.exit(2);
+      }
+      const run = await runTestCasesWithTestTool(tool, testCases, implementation, { limit });
+      const report = buildVerificationReportFromTestTool(run);
+
+      console.log(
+        `test-tool 消费：executed=${run.executedCases} passed=${run.passedCases} failed=${run.failedCases}`,
+      );
+      console.log(`test-tool 文件: ${run.toolFiles.join(', ')}`);
+      for (const c of run.caseResults.filter((r) => !r.passed)) {
+        console.error(`  FAIL ${c.pathId}: ${c.error ?? '未通过'}`);
+      }
+      if (opts.out) {
+        if (opts.out.startsWith('/')) {
+          mkdirSync(dirname(opts.out), { recursive: true });
+          writeFileSync(opts.out, JSON.stringify(report, null, 2) + '\n', 'utf8');
+        } else {
+          writeReport(rootDir, opts.out, report);
+        }
+        console.log(`VerificationReport 已写入: ${opts.out}`);
+      }
+      process.exit(report.authoritative.passed ? 0 : 1);
+    } catch (err) {
+      console.error(`错误：${err instanceof Error ? err.message : err}`);
+      process.exit(2);
+    }
+  });
+
+// ==========================================================================
 // diff（差分引擎：比较两个版本的协议模型）
 // ==========================================================================
 
@@ -1085,7 +1206,7 @@ program
     let aiAdapter: AIAdapter | undefined = undefined;
     if (opts.ai && config.ai) {
       try {
-        aiAdapter = createAIAdapter(config.ai);
+        aiAdapter = createAIRouter(config.ai).get('semantic');
       } catch (err) {
         console.warn(`AI 适配器初始化失败：${err instanceof Error ? err.message : err}`);
       }
@@ -1299,7 +1420,7 @@ versionCmd
     let aiAdapter: AIAdapter | undefined = undefined;
     if (opts.ai && config.ai) {
       try {
-        aiAdapter = createAIAdapter(config.ai);
+        aiAdapter = createAIRouter(config.ai).get('semantic');
       } catch (err) {
         console.warn(`AI 适配器初始化失败：${err instanceof Error ? err.message : err}`);
       }
@@ -1359,25 +1480,30 @@ function resolveCtx(
 
 function registerStepExecutors(rootDir: string, useAi: boolean, protocolId?: string, envName?: string): void {
   const config = loadConfig(rootDir);
-  let aiAdapter: AIAdapter | undefined = undefined;
+  let router: import('../ai/router.js').AIRouter | undefined = undefined;
   if (useAi && config.ai) {
     try {
-      aiAdapter = createAIAdapter(config.ai);
+      router = createAIRouter(config.ai);
     } catch (err) {
       console.warn(
         `AI 适配器初始化失败：${err instanceof Error ? err.message : err}`
       );
     }
   }
-  registerExecutor('check', createCheckExecutor(aiAdapter));
-  registerExecutor('reason', createReasonExecutor(aiAdapter));
-  registerExecutor('formalize', createFormalizeExecutor(aiAdapter, config));
+  // 多模型路由：语义层检查用便宜模型，reason/formalize/derive-contracts 用强模型，
+  // 生成类步骤用 generation 模型（与 §7.2 分层一致）。
+  const semanticAdapter = router?.get('semantic');
+  const reasoningAdapter = router?.get('reasoning');
+  const generationAdapter = router?.get('generation');
+  registerExecutor('check', createCheckExecutor(semanticAdapter));
+  registerExecutor('reason', createReasonExecutor(reasoningAdapter));
+  registerExecutor('formalize', createFormalizeExecutor(reasoningAdapter, config));
   registerExecutor('derive-specs', createSpecifyExecutor());
-  registerExecutor('derive-contracts', createContractExecutor(aiAdapter));
-  registerExecutor('generate-tests', createTestGenExecutor(aiAdapter));
-  registerExecutor('generate-cases', createCaseGenExecutor(config));
+  registerExecutor('derive-contracts', createContractExecutor(reasoningAdapter));
+  registerExecutor('generate-tests', createTestGenExecutor(generationAdapter, config));
+  registerExecutor('generate-cases', createCaseGenExecutor(config, generationAdapter));
   registerExecutor('check-impl', createImplCheckExecutor());
-  registerExecutor('verify', createVerifyExecutor(aiAdapter, config, protocolId, envName));
+  registerExecutor('verify', createVerifyExecutor(semanticAdapter, config, protocolId, envName));
 }
 
 function createInteractiveCheckpointHandler() {

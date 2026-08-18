@@ -19,11 +19,24 @@ import type {
   ContractSet,
   TestToolCode,
   AIAdapter,
+  AIPrompt,
 } from '../model/types.js';
+import {
+  runGenerationLoop,
+  type GenerationAttempt,
+  type GenerationLoopOptions,
+} from '../ai/generation-loop.js';
+import {
+  preflightTestToolCode,
+  preflightTypeScript,
+  type MechanicalPreflightResult,
+} from '../ai/preflight.js';
 
 export interface TestGenOptions {
   /** 是否使用 AI 生成（false 时纯代码生成基础骨架） */
   useAI?: boolean;
+  /** AI 生成 loop 的预算（maxIterations / maxTokens / maxToolCalls） */
+  loop?: GenerationLoopOptions;
 }
 
 export async function generateTestTool(
@@ -35,19 +48,20 @@ export async function generateTestTool(
 ): Promise<TestToolCode> {
   const { useAI = false } = options;
 
+  // P3：AI 生成路径走"生成 -> tsc 机械预检 -> 修正 -> 重试"loop；
+  // useAI=false / 无适配器时完全走下面的确定性路径（不回退、不破坏）。
+  if (useAI && aiAdapter) {
+    return generateTestToolWithAI(model, specs, contracts, aiAdapter, options.loop);
+  }
+
   // 1. protocol-model.ts：从 SourceProtocolModel 生成（代码确定性）
   const protocolModel = generateProtocolModelCode(model);
 
   // 2. scenario-loader.ts：场景加载器（代码确定性）
   const scenarioLoader = generateScenarioLoaderCode();
 
-  // 3. protocol-executor.ts：协议执行器（代码确定性骨架，可 AI 增强）
-  let protocolExecutor: string;
-  if (useAI && aiAdapter) {
-    protocolExecutor = await generateExecutorWithAI(model, specs, aiAdapter);
-  } else {
-    protocolExecutor = generateExecutorCode(model, specs);
-  }
+  // 3. protocol-executor.ts：协议执行器（代码确定性骨架）
+  const protocolExecutor = generateExecutorCode(model, specs);
 
   // 4. consistency-asserter.ts：一致性断言器（代码确定性）
   const consistencyAsserter = generateAsserterCode(model);
@@ -58,6 +72,146 @@ export async function generateTestTool(
     consistencyAsserter,
     protocolModel,
     generatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * P3：AI 生成 protocol-executor.ts，并在 loop 内做机械预检：
+ * 1) 结构预检（导出符号齐备）；
+ * 2) 把四个源文件写入临时目录运行 tsc --noEmit；
+ * 编译错误作为 feedback 交给 AI 修正，直到预算耗尽。
+ * protocol-model / scenario-loader / consistency-asserter 仍由代码确定性生成。
+ */
+async function generateTestToolWithAI(
+  model: SourceProtocolModel,
+  specs: InterfaceSpec[],
+  contracts: ContractSet | undefined,
+  aiAdapter: AIAdapter,
+  loopOptions?: GenerationLoopOptions
+): Promise<TestToolCode> {
+  const protocolModel = generateProtocolModelCode(model);
+  const scenarioLoader = generateScenarioLoaderCode();
+  const consistencyAsserter = generateAsserterCode(model);
+  // 确定性参考实现：作为 AI 生成的类型契约锚点（防类型漂移）
+  const referenceExecutor = generateExecutorCode(model, specs);
+
+  const { result: protocolExecutor } = await runGenerationLoop<string>(
+    aiAdapter,
+    {
+      buildPrompt: ({ iteration, previousAttempts }) =>
+        buildExecutorPrompt(model, specs, contracts, iteration, previousAttempts, referenceExecutor),
+      parse: async (content: string) => {
+        const trimmed = content.trim();
+        if (trimmed.length === 0) {
+          throw new Error('AI 返回空源码');
+        }
+        // 容忍 ```ts 代码块包裹
+        return trimmed
+          .replace(/^```(?:ts|typescript)\s*/i, '')
+          .replace(/\s*```\s*$/i, '');
+      },
+      preflight: async (executorCode: string) => {
+        const tool: TestToolCode = {
+          protocolModel,
+          scenarioLoader,
+          protocolExecutor: executorCode,
+          consistencyAsserter,
+          generatedAt: new Date().toISOString(),
+        };
+        const structural = preflightTestToolCode(tool);
+        if (!structural.passed) {
+          return { passed: false, feedback: structural.feedback };
+        }
+        const compiled: MechanicalPreflightResult = await preflightTypeScript({
+          'protocol-model.ts': protocolModel,
+          'scenario-loader.ts': scenarioLoader,
+          'protocol-executor.ts': executorCode,
+          'consistency-asserter.ts': consistencyAsserter,
+        });
+        return { passed: compiled.passed, feedback: compiled.feedback };
+      },
+    },
+    loopOptions
+  );
+
+  return {
+    protocolModel,
+    scenarioLoader,
+    protocolExecutor,
+    consistencyAsserter,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function buildExecutorPrompt(
+  model: SourceProtocolModel,
+  specs: InterfaceSpec[],
+  contracts: ContractSet | undefined,
+  iteration: number,
+  previousAttempts: GenerationAttempt<string>[],
+  referenceExecutor?: string
+): AIPrompt {
+  const context = JSON.stringify(
+    {
+      metadata: model.metadata,
+      derivable: model.derivable,
+      specs: specs.map((s) => ({
+        id: s.id,
+        kind: s.kind,
+        name: s.name,
+        sourceId: s.sourceId,
+        inputs: s.inputs,
+        outputs: s.outputs,
+      })),
+      contracts: contracts
+        ? {
+            parties: contracts.parties,
+            information: contracts.information,
+            timing: contracts.timing,
+          }
+        : undefined,
+      // 确定性参考实现：与 protocol-model/scenario-loader/consistency-asserter
+      // 类型契约一致且可编译；AI 生成必须与之兼容（避免类型漂移）
+      ...(referenceExecutor ? { referenceExecutor } : {}),
+    },
+    null,
+    2
+  );
+
+  const instruction: string[] = [
+    `第 ${iteration} 次生成。请为协议测试工具生成 protocol-executor.ts 的完整 TypeScript 源码。`,
+    '要求（必须全部满足）：',
+    "- 从 './protocol-model.js' 导入 STATES、TRANSITIONS、STATE_BY_ID、TRANSITIONS_BY_FROM、TRANSITION_BY_ACTION、INITIAL_STATE_ID、TERMINAL_STATE_IDS、INVARIANTS；",
+    "- 从 './scenario-loader.js' 导入 loadScenarios 与 Scenario 类型；",
+    "- 从 './consistency-asserter.js' 导入 assertConsistency 与 ConsistencyResult 类型；",
+    '- 导出 ProtocolImplementation 接口（每个 kind=system 的接口一个方法）、ExecutionContext、executeAction、executeScenario、executePath；',
+    '- executeAction 必须校验动作存在、当前状态在 transition.from 中，并校验实现返回的 nextState 与协议预期一致；',
+    '- 类型契约必须与兄弟生成文件一致（参考实现已满足，直接沿用其类型用法）：',
+    '  * TRANSITION_BY_ACTION 是 Record<string, TransitionDef[]>（同名动作多转移为数组，勿按单对象处理）；',
+    '  * Scenario 字段以 scenario-loader 为准（id/name/description/initialFacts/expectedActions/expectedFinalState，没有 initialState/steps）；',
+    '  * ExecutionContext 必须包含 implementation/currentState/history/actionHistory 字段；',
+    '  * 不得重定义或改动 protocol-model 的类型（StateDef/TransitionDef 等），一律 import 使用；',
+    '- 若参考实现存在：在其基础上按本协议动作集调整/补全，保持其导出签名与类型字段不变；',
+    '- 只输出 TypeScript 源码本身，不要输出 markdown 代码块标记或额外解释。',
+  ];
+  const feedbacks = previousAttempts
+    .map((a) => a.preflight.feedback)
+    .filter((f): f is string => Boolean(f));
+  if (feedbacks.length > 0) {
+    instruction.push(
+      '',
+      '上一轮生成的机械预检未通过，请根据以下反馈修正后重新生成完整源码：',
+      feedbacks.map((f) => `---\n${f}`).join('\n')
+    );
+  }
+
+  return {
+    system:
+      '你是协议驱动测试工具代码生成器。你只生成可被 TypeScript 编译器直接通过的协议执行器源码，不添加解释。',
+    context,
+    instruction: instruction.join('\n'),
+    outputFormat: 'TypeScript 源码（protocol-executor.ts 的完整文件内容）',
+    temperature: 0.3,
   };
 }
 
@@ -81,18 +235,40 @@ function generateProtocolModelCode(model: SourceProtocolModel): string {
     '  id: string;',
     '  name: string;',
     '  type: "initial" | "normal" | "terminal" | "error";',
+    '  description?: string;',
+    '  facts?: string[];',
     '  roleIds?: string[];',
+    '  dimensions?: StateDimension[];',
+    '}',
+    '',
+    'export interface StateDimension {',
+    '  name: string;',
+    '  type: string;',
+    '  initial: string | number | boolean;',
+    '  validWhen?: string;',
     '}',
     '',
     'export interface TransitionDef {',
     '  id: string;',
     '  name: string;',
-    '  from: string;',
+    '  from: string[];',
     '  to: string;',
     '  action: string;',
     '  triggerRoleId?: string;',
     '  guard?: string;',
     '  effects?: string[];',
+    '  isException?: boolean;',
+    '  triggerType: "role" | "system" | "external";',
+    '  trigger: string;',
+    '  actionType: "state_transition" | "attribute_update";',
+    '  affectsDimensions: string[];',
+    '  attributeEffects?: AttributeEffect[];',
+    '}',
+    '',
+    'export interface AttributeEffect {',
+    '  field: string;',
+    '  operation: "set" | "increment" | "append" | "remove";',
+    '  value?: string;',
     '}',
     '',
     'export interface InvariantDef {',
@@ -100,6 +276,10 @@ function generateProtocolModelCode(model: SourceProtocolModel): string {
     '  name: string;',
     '  expression: string;',
     '  scopeStateIds?: string[];',
+    '  description?: string;',
+    '  declaredAsRenegotiation?: boolean;',
+    '  declaredBy: string;',
+    '  invariantClass: "intra_protocol" | "cross_protocol" | "cross_instance";',
     '}',
     '',
     `export const STATES: StateDef[] = ${JSON.stringify(derivable.states, null, 2)};`,
@@ -125,9 +305,17 @@ function generateProtocolModelCode(model: SourceProtocolModel): string {
     }),
     '};',
     '',
-    '// 转移索引（按 action 查询）',
-    'export const TRANSITION_BY_ACTION: Record<string, TransitionDef> = {',
-    ...derivable.transitions.map((t) => `  ${JSON.stringify(t.action)}: ${JSON.stringify(t)},`),
+    '// 转移索引（按 action 查询；同名动作多转移以数组存储，避免对象字面量键冲突）',
+    'export const TRANSITION_BY_ACTION: Record<string, TransitionDef[]> = {',
+    ...(() => {
+      const byAction = new Map<string, typeof derivable.transitions>();
+      for (const t of derivable.transitions) {
+        const list = byAction.get(t.action) ?? [];
+        list.push(t);
+        byAction.set(t.action, list);
+      }
+      return [...byAction.entries()].map(([action, ts]) => `  ${JSON.stringify(action)}: ${JSON.stringify(ts)},`);
+    })(),
     '};',
     '',
     '// ============================================================================',
@@ -244,7 +432,14 @@ function generateExecutorCode(
   model: SourceProtocolModel,
   specs: InterfaceSpec[]
 ): string {
-  const systemSpecs = specs.filter((s) => s.kind === 'system');
+  // 同名动作多转移会生成重复 system 接口（如 deregister T5/T6）；接口按名去重
+  const systemSpecs = [
+    ...new Map(
+      specs
+        .filter((s) => s.kind === 'system')
+        .map((s) => [s.name, s] as const),
+    ).values(),
+  ];
   const lines: string[] = [
     '/**',
     ' * 协议执行器（自动生成）',
@@ -280,7 +475,10 @@ function generateExecutorCode(
     '  action: string,',
     '  ...args: any[]',
     '): Promise<{ success: boolean; error?: string }> {',
-    '  const transition = TRANSITION_BY_ACTION[action];',
+    '  const matches = TRANSITION_BY_ACTION[action];',
+    '  const transition = Array.isArray(matches)',
+    '    ? matches.find((t) => t.from.includes(ctx.currentState)) ?? matches[0]',
+    '    : matches;',
     '  if (!transition) {',
     '    return { success: false, error: `未知动作: ${action}` };',
     '  }',
@@ -301,6 +499,39 @@ function generateExecutorCode(
     '    ctx.currentState = result.nextState;',
     '    ctx.history.push(result.nextState);',
     '    ctx.actionHistory.push(action);',
+    '    return { success: true };',
+    '  } catch (err) {',
+    '    return { success: false, error: err instanceof Error ? err.message : String(err) };',
+    '  }',
+    '}',
+    '',
+    '/**',
+    ' * 执行单个转移（按 transitionId 精确解析，绕开 TRANSITION_BY_ACTION 对同名动作丢键的问题）',
+    ' */',
+    'export async function executeTransition(',
+    '  ctx: ExecutionContext,',
+    '  transitionId: string,',
+    '): Promise<{ success: boolean; error?: string }> {',
+    '  const transition = TRANSITIONS.find((t) => t.id === transitionId);',
+    '  if (!transition) {',
+    '    return { success: false, error: `未知转移: ${transitionId}` };',
+    '  }',
+    '  if (!transition.from.includes(ctx.currentState)) {',
+    '    const expectedFrom = transition.from.join("/");',
+    '    return { success: false, error: `当前状态 ${ctx.currentState} 不允许执行转移 ${transitionId}（${transition.action}，需 ${expectedFrom}）` };',
+    '  }',
+    '  const impl = (ctx.implementation as any)[transition.action];',
+    '  if (!impl) {',
+    '    return { success: false, error: `实现未提供动作 ${transition.action}` };',
+    '  }',
+    '  try {',
+    '    const result = await impl(ctx.currentState);',
+    '    if (result.nextState !== transition.to) {',
+    '      return { success: false, error: `实现返回状态 ${result.nextState} 与协议预期 ${transition.to} 不一致` };',
+    '    }',
+    '    ctx.currentState = result.nextState;',
+    '    ctx.history.push(result.nextState);',
+    '    ctx.actionHistory.push(transition.action);',
     '    return { success: true };',
     '  } catch (err) {',
     '    return { success: false, error: err instanceof Error ? err.message : String(err) };',
@@ -352,34 +583,20 @@ function generateExecutorCode(
     '  };',
     '',
     '  for (const tid of transitionIds) {',
-    '    const transition = TRANSITIONS.find((t) => t.id === tid);',
-    '    if (!transition) {',
-    '      return { passed: false, error: `未知转移: ${tid}`, finalState: ctx.currentState };',
-    '    }',
-    '    const result = await executeAction(ctx, transition.action);',
+    '    const result = await executeTransition(ctx, tid);',
     '    if (!result.success) {',
     '      return {',
     '        passed: false,',
-    '        error: `转移 ${tid}（${transition.action}）执行失败: ${result.error}`,',
+    '        error: `转移 ${tid} 执行失败: ${result.error}`,',
     '        finalState: ctx.currentState,',
     '      };',
     '    }',
     '  }',
     '',
-    '  return assertConsistency(ctx, { id: "path", expectedActions: [], expectedFinalState: "" });',
+    '  return assertConsistency(ctx, { id: "path", name: "path", expectedActions: [], expectedFinalState: "" });',
     '}',
   ];
   return lines.join('\n');
-}
-
-async function generateExecutorWithAI(
-  model: SourceProtocolModel,
-  specs: InterfaceSpec[],
-  aiAdapter: AIAdapter
-): Promise<string> {
-  // P3 阶段：AI 增强为可选项，默认仍用代码生成
-  // 完整 AI 生成需 P5 阶段打磨
-  return generateExecutorCode(model, specs);
 }
 
 // ============================================================================
