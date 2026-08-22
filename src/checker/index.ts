@@ -24,6 +24,7 @@ import type {
   CompletenessReport,
   PendingCrossProtocolRef,
 } from '../model/types.js';
+import { decomposeStateMachines } from '../model/state-machines.js';
 
 export function checkCompleteness(
   model: SourceProtocolModel
@@ -136,20 +137,42 @@ function checkStructuralCompleteness(
     );
   }
 
-  // 初始状态必须存在且唯一
+  // 初始状态：每个状态机（连通分量）内必须存在且唯一。
+  // 多实体协议（聚合 + 附属实体）允许每台子状态机各有入口 initial（如 P7 US1/PS1/PI1）；
+  // 同一状态机内多 initial、或无入口的孤儿组件（既无 initial 也无创建转移目标）仍是建模错误。
   const initialStates = derivable.states.filter((s) => s.type === 'initial');
   if (initialStates.length === 0) {
     issues.push(
       errorIssue('缺少初始状态（type=initial 的状态）', 'derivable.states')
     );
-  } else if (initialStates.length > 1) {
-    issues.push(
-      errorIssue(
-        `存在 ${initialStates.length} 个初始状态，初始状态必须唯一`,
-        'derivable.states',
-        initialStates[0].id
-      )
+  } else {
+    const { main, subMachines, orphanComponents } = decomposeStateMachines(
+      derivable.states,
+      derivable.transitions,
+      derivable.initialStateId
     );
+    for (const machine of [main, ...subMachines, ...orphanComponents]) {
+      if (!machine) continue;
+      const initials = machine.states.filter((s) => s.type === 'initial');
+      if (initials.length > 1) {
+        issues.push(
+          errorIssue(
+            `存在 ${initials.length} 个初始状态，同一状态机内初始状态必须唯一`,
+            'derivable.states',
+            initials[0].id
+          )
+        );
+      }
+    }
+    for (const orphan of orphanComponents) {
+      issues.push(
+        errorIssue(
+          `存在无入口状态（既无初始状态也无创建转移可达）：${orphan.states.map((s) => s.id).join(', ')}`,
+          'derivable.states',
+          orphan.states[0]?.id
+        )
+      );
+    }
   }
 
   // 终态至少一个

@@ -34,7 +34,7 @@ import type {
   StepId,
 } from '../model/types.js';
 import { parseProtocolFile } from '../parser/index.js';
-import { specify } from '../specifier/index.js';
+import { specify, specsFromEnvelope } from '../specifier/index.js';
 import { deriveContracts } from '../contractor/index.js';
 import { createCheckExecutor } from '../steps/check.js';
 import { createReasonExecutor } from '../steps/reason.js';
@@ -406,7 +406,7 @@ async function seedDeterministicDerivation(
 ): Promise<string[]> {
   const written: string[] = [];
   if (!artifacts.specs) {
-    artifacts.specs = specify(model, { degradedAIAssist: true });
+    artifacts.specs = specsFromEnvelope(specify(model, { degradedAIAssist: true }));
     written.push(relative(projectDir, writeReport(projectDir, 'derived/specs.json', artifacts.specs)));
   }
   if (!artifacts.contracts) {

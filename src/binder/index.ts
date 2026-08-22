@@ -8,6 +8,9 @@
  * - protocolId 未提供（单协议项目）→ 使用全部绑定条目
  * - protocolId 提供 → 保留 protocol 命中或未打标的条目，剔除其他协议的条目；
  *   同 action 多命中时 protocol 命中优先于未打标兜底（解决 P2/P3 同名 action 冲突）
+ *
+ * E3 扩展：mergeBindings(skeleton, manual) —— 把 derive-bindings 产物（机械骨架）与
+ * 人工编辑的 bindings.yaml 合并。合并结果等价于「完整 BindingConfig」。
  */
 
 import type {
@@ -18,6 +21,65 @@ import type {
   InterfaceBinding,
   RoleBinding,
 } from '../model/types.js';
+
+/**
+ * 合并骨架与人工 bindings。
+ *
+ * 合并规则（按优先级 manual > skeleton）：
+ * 1. roles：manual.roles 浅合并 skeleton.roles（人工填的 baseUrl/headers/auth 覆盖默认）
+ * 2. interfaces：按 action 合并
+ *    - action 在 manual 中存在 → 用 manual（人工可改 method/path/transport）
+ *    - action 在 manual 中不存在 + 在 skeleton 中存在 → 保留 skeleton（新增接口自动绑定）
+ *    - action 在 skeleton 中不存在 + 在 manual 中存在 → 保留 manual（向后兼容：旧 bindings 有 skeleton 未推导的接口）
+ * 3. stateMap：manual.stateMap 浅合并 skeleton.stateMap（人工确认的系统词优先）
+ * 4. 顺序：interfaces 中「manual 条目排前 + skeleton-only 条目在后」（保持可读性）
+ * 5. 其他字段（defaultEnv / environments / crossProtocolObservations）：取 manual；manual 缺省则取 skeleton
+ *
+ * 边界：
+ * - 同一 action 在 skeleton 和 manual 中都存在，但 transport.type 不同（HTTP vs Kafka）
+ *   → 不强制要求一致，仅 warning（允许人工为某接口选 Kafka 而 skeleton 默认 HTTP）
+ *   → 当前实现：直接用 manual.transport（人工已显式覆盖，不算偏差）
+ */
+export function mergeBindings(
+  skeleton: BindingConfig,
+  manual: BindingConfig
+): BindingConfig {
+  // 1. roles 合并：manual 浅覆盖 skeleton 同名条目，未在 manual 出现的 skeleton 角色保留
+  const mergedRoles: Record<string, RoleBinding> = { ...(skeleton.roles ?? {}) };
+  for (const [rid, r] of Object.entries(manual.roles ?? {})) {
+    mergedRoles[rid] = { ...mergedRoles[rid], ...r };
+  }
+
+  // 2. interfaces 合并：保留全部 manual 条目（向后兼容）+ skeleton 中 manual 未覆盖的条目
+  const manualActions = new Set((manual.interfaces ?? []).map((b) => b.action));
+  const skeletonOnly = (skeleton.interfaces ?? []).filter(
+    (b) => !manualActions.has(b.action)
+  );
+  // 顺序：manual 在前（人工编辑的重点），skeleton-only 在后
+  const mergedInterfaces: InterfaceBinding[] = [
+    ...(manual.interfaces ?? []),
+    ...skeletonOnly,
+  ];
+
+  // 3. stateMap 合并：manual 覆盖 skeleton 同 key
+  const mergedStateMap: Record<string, string> = { ...(skeleton.stateMap ?? {}) };
+  for (const [k, v] of Object.entries(manual.stateMap ?? {})) {
+    mergedStateMap[k] = v;
+  }
+
+  // 4. 其他字段：manual 优先；manual 缺省则回退 skeleton
+  const merged: BindingConfig = {
+    roles: mergedRoles,
+    interfaces: mergedInterfaces,
+    stateMap: Object.keys(mergedStateMap).length > 0 ? mergedStateMap : undefined,
+    defaultEnv: manual.defaultEnv ?? skeleton.defaultEnv,
+    environments:
+      manual.environments ?? (skeleton as { environments?: BindingConfig['environments'] }).environments,
+    crossProtocolObservations:
+      manual.crossProtocolObservations ?? skeleton.crossProtocolObservations,
+  };
+  return merged;
+}
 
 /**
  * 按协议过滤绑定条目。

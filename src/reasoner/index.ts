@@ -20,7 +20,8 @@
 import type {
   AIAdapter,
   SourceProtocolModel,
-  DerivableLayer,
+  StateDef,
+  TransitionDef,
   ReasoningReport,
   ReachabilityResult,
   DeadlockResult,
@@ -29,6 +30,11 @@ import type {
   LivenessMode,
 } from '../model/types.js';
 import { parseAIJson } from '../ai/adapter.js';
+import {
+  decomposeStateMachines,
+  isCreationTransition,
+  type StateMachine,
+} from '../model/state-machines.js';
 
 export interface ReasonOptions {
   /** 是否启用代码预判（默认 true，退化模式关闭） */
@@ -52,25 +58,54 @@ export async function reason(
     return reasonDegraded(model, adapter, livenessMode);
   }
 
-  // 正常模式：代码预判 + AI 推演
+  // 状态机分解（附属实体隔离）：主状态机 + 附属实体子状态机 + 孤儿组件。
+  // 多实体协议（如 P7 US×PS×PI、P1 Mapping+TempMapping SE1）的子状态机各有独立入口，
+  // 不参与主状态机的可达性判定（否则从主初始态 BFS 会把子状态机误判为"不可达"）。
+  const { main, subMachines, orphanComponents } = decomposeStateMachines(
+    derivable.states,
+    derivable.transitions,
+    derivable.initialStateId
+  );
+
+  // 主分析集合 = 主状态机 + 孤儿组件（孤儿无入口必然不可达，按建模错误参与主判定）。
+  // 无初始状态（main=null）时回退到全量状态空间，保持既有"无初始状态"失败语义。
+  const mainStates = main
+    ? [...main.states, ...orphanComponents.flatMap((o) => o.states)]
+    : derivable.states;
+  const mainTransitions = main
+    ? [...main.transitions, ...orphanComponents.flatMap((o) => o.transitions)]
+    : derivable.transitions;
+  const mainTerminalIds = main
+    ? [...main.terminalStateIds, ...orphanComponents.flatMap((o) => o.terminalStateIds)]
+    : derivable.terminalStateIds;
+  const initialId = derivable.initialStateId ?? mainStates.find((s) => s.type === 'initial')?.id;
+
+  // 正常模式：代码预判 + AI 推演（仅针对主状态机）
   const reachability = useCodePrecheck
-    ? codeCheckReachability(derivable)
+    ? codeCheckReachability(mainStates, mainTransitions, initialId)
     : emptyReachability();
 
   const deadlock = useCodePrecheck
-    ? codeCheckDeadlock(derivable)
+    ? codeCheckDeadlock(mainStates, mainTransitions, mainTerminalIds)
     : emptyDeadlock();
 
   // 活性：代码确定性判定（弱/强），AI 仅复核
   const liveness = useCodePrecheck
-    ? codeCheckLiveness(derivable, livenessMode)
+    ? codeCheckLiveness(mainStates, mainTransitions, mainTerminalIds, initialId, livenessMode)
     : { passed: false, violations: [], notes: '未做代码预判', mode: livenessMode };
+
+  // 附属实体子状态机独立分析（advisory，不阻断主状态机结论）
+  const subEntitySummary = analyzeSubMachines(subMachines, livenessMode);
 
   // AI 推演：复核代码预判（含活性），并判断一致性
   const aiResult = await reasonWithAI(model, adapter, {
     reachability,
     deadlock,
     liveness,
+    mainStateIds: new Set(mainStates.map((s) => s.id)),
+    mainTransitionIds: new Set(mainTransitions.map((t) => t.id)),
+    machines: { main, subMachines, orphanComponents },
+    subEntitySummary,
   });
 
   return aiResult;
@@ -114,15 +149,16 @@ function scanLivenessFromProse(prose: string): LivenessMode | undefined {
 /**
  * 可达性预判：从初始状态 BFS 遍历，标记不可达状态与转移
  */
-function codeCheckReachability(derivable: DerivableLayer): ReachabilityResult {
-  const states = derivable.states;
-  const transitions = derivable.transitions;
-
+function codeCheckReachability(
+  states: StateDef[],
+  transitions: TransitionDef[],
+  initialStateId?: string
+): ReachabilityResult {
   if (states.length === 0) {
     return { passed: false, unreachableStates: [], unreachableTransitions: [], notes: '状态空间为空' };
   }
 
-  const initialId = derivable.initialStateId ?? states.find((s) => s.type === 'initial')?.id;
+  const initialId = initialStateId ?? states.find((s) => s.type === 'initial')?.id;
   if (!initialId) {
     return {
       passed: false,
@@ -146,7 +182,9 @@ function codeCheckReachability(derivable: DerivableLayer): ReachabilityResult {
   }
 
   const unreachableStates = states.filter((s) => !reachable.has(s.id)).map((s) => s.id);
+  // 创建转移（from='-'/空，外部入口）不参与"从初始态不可达"判定——它不从任何状态触发
   const unreachableTransitions = transitions
+    .filter((t) => !isCreationTransition(t))
     .filter((t) => t.from.some((f) => !reachable.has(f)))
     .map((t) => t.id);
 
@@ -165,14 +203,18 @@ function emptyReachability(): ReachabilityResult {
 /**
  * 死锁检测：无出边的非终态视为死锁
  */
-function codeCheckDeadlock(derivable: DerivableLayer): DeadlockResult {
-  const terminalIds = new Set(derivable.terminalStateIds);
+function codeCheckDeadlock(
+  states: StateDef[],
+  transitions: TransitionDef[],
+  terminalStateIds: string[]
+): DeadlockResult {
+  const terminalIds = new Set(terminalStateIds);
   const hasOutgoing = new Set<string>();
-  for (const t of derivable.transitions) {
+  for (const t of transitions) {
     for (const f of t.from) hasOutgoing.add(f);
   }
 
-  const deadlockStates = derivable.states
+  const deadlockStates = states
     .filter((s) => !terminalIds.has(s.id) && !hasOutgoing.has(s.id) && s.type !== 'terminal')
     .map((s) => s.id);
 
@@ -194,12 +236,16 @@ function emptyDeadlock(): DeadlockResult {
  *
  * 带循环（如停用/启用环）的模型：弱活性通常满足（环能经出口到终态），强活性不满足（可无限循环）。
  */
-function codeCheckLiveness(derivable: DerivableLayer, mode: LivenessMode): LivenessResult {
-  const states = derivable.states;
-  const transitions = derivable.transitions;
-  const terminalIds = new Set(derivable.terminalStateIds);
+function codeCheckLiveness(
+  states: StateDef[],
+  transitions: TransitionDef[],
+  terminalStateIds: string[],
+  initialStateId: string | undefined,
+  mode: LivenessMode
+): LivenessResult {
+  const terminalIds = new Set(terminalStateIds);
 
-  const initialId = derivable.initialStateId ?? states.find((s) => s.type === 'initial')?.id;
+  const initialId = initialStateId ?? states.find((s) => s.type === 'initial')?.id;
   if (!initialId) {
     return { passed: false, violations: ['无初始状态，无法做活性分析'], notes: '无初始状态', mode };
   }
@@ -342,6 +388,18 @@ interface PrecheckContext {
   reachability: ReachabilityResult;
   deadlock: DeadlockResult;
   liveness: LivenessResult;
+  /** 主分析集合（主状态机 + 孤儿组件）的状态 ID——AI 报告的不可达/死锁清单按此过滤 */
+  mainStateIds: Set<string>;
+  /** 主分析集合的转移 ID */
+  mainTransitionIds: Set<string>;
+  /** 状态机分解（供提示词描述附属实体隔离） */
+  machines?: {
+    main: StateMachine | null;
+    subMachines: StateMachine[];
+    orphanComponents: StateMachine[];
+  };
+  /** 附属实体子状态机独立分析摘要（advisory） */
+  subEntitySummary?: string[];
 }
 
 async function reasonWithAI(
@@ -363,25 +421,45 @@ async function reasonWithAI(
     return buildFailedReport(precheck, 'AI 输出无法解析为 JSON');
   }
 
-  // 合并代码预判与 AI 推演结果
+  // 合并代码预判与 AI 推演结果。
+  // 附属实体子状态机由代码独立分析（advisory），AI 报告若混入子状态机状态/转移
+  // （提示词已要求不报，此处防御性过滤），只保留主分析集合内的判定——
+  // 子状态机与主初始态不连通是设计使然，不能据此判主状态机不可达。
+  const aiUnreachableStates = (aiJudgment.reachability?.unreachableStates ?? []).filter((id) =>
+    precheck.mainStateIds.has(id)
+  );
+  const aiUnreachableTransitions = (aiJudgment.reachability?.unreachableTransitions ?? []).filter((id) =>
+    precheck.mainTransitionIds.has(id)
+  );
+  const subNotes = precheck.subEntitySummary?.length
+    ? `附属实体子状态机独立判定（advisory）：${precheck.subEntitySummary.join('；')}`
+    : '';
   const reachability: ReachabilityResult = {
-    passed: precheck.reachability.passed && (aiJudgment.reachability?.passed ?? true),
+    passed:
+      precheck.reachability.passed &&
+      aiUnreachableStates.length === 0 &&
+      aiUnreachableTransitions.length === 0,
     unreachableStates: unique([
       ...precheck.reachability.unreachableStates,
-      ...(aiJudgment.reachability?.unreachableStates ?? []),
+      ...aiUnreachableStates,
     ]),
     unreachableTransitions: unique([
       ...precheck.reachability.unreachableTransitions,
-      ...(aiJudgment.reachability?.unreachableTransitions ?? []),
+      ...aiUnreachableTransitions,
     ]),
-    notes: aiJudgment.reachability?.notes ?? precheck.reachability.notes,
+    notes: [aiJudgment.reachability?.notes ?? precheck.reachability.notes, subNotes]
+      .filter(Boolean)
+      .join('；'),
   };
 
+  const aiDeadlockStates = (aiJudgment.deadlock?.deadlockStates ?? []).filter((id) =>
+    precheck.mainStateIds.has(id)
+  );
   const deadlock: DeadlockResult = {
-    passed: precheck.deadlock.passed && (aiJudgment.deadlock?.passed ?? true),
+    passed: precheck.deadlock.passed && aiDeadlockStates.length === 0,
     deadlockStates: unique([
       ...precheck.deadlock.deadlockStates,
-      ...(aiJudgment.deadlock?.deadlockStates ?? []),
+      ...aiDeadlockStates,
     ]),
     notes: aiJudgment.deadlock?.notes ?? precheck.deadlock.notes,
   };
@@ -416,6 +494,31 @@ async function reasonWithAI(
   };
 }
 
+/**
+ * 附属实体子状态机独立分析（advisory，不阻断主状态机结论）。
+ * 每台子状态机按自身入口（initial 或创建转移目标）做可达/死锁/活性判定，
+ * 汇总为摘要文本并入主报告 notes；子状态机问题记录但不参与 reason.passed 硬门。
+ */
+function analyzeSubMachines(subMachines: StateMachine[], mode: LivenessMode): string[] {
+  const notes: string[] = [];
+  for (const sm of subMachines) {
+    const entry = sm.entryStateIds[0];
+    const reach = codeCheckReachability(sm.states, sm.transitions, entry);
+    const dead = codeCheckDeadlock(sm.states, sm.transitions, sm.terminalStateIds);
+    const live = codeCheckLiveness(sm.states, sm.transitions, sm.terminalStateIds, entry, mode);
+    const issues: string[] = [];
+    if (!reach.passed) issues.push(`不可达状态 ${reach.unreachableStates.join(', ')}`);
+    if (!dead.passed) issues.push(`死锁状态 ${dead.deadlockStates.join(', ')}`);
+    if (!live.passed) issues.push(`活性违反：${live.violations.join('；')}`);
+    notes.push(
+      issues.length === 0
+        ? `[${sm.id}] 可达/死锁/活性均通过`
+        : `[${sm.id}] ${issues.join('；')}`
+    );
+  }
+  return notes;
+}
+
 interface AIReasoningOutput {
   reachability?: {
     passed: boolean;
@@ -445,6 +548,27 @@ function buildReasoningPrompt(
   precheck: PrecheckContext
 ): { system: string; context: string; instruction: string; outputFormat: string; temperature: number } {
   const mode = precheck.liveness.mode ?? 'weak';
+  const machines = precheck.machines;
+  const stateMachines = machines
+    ? {
+        main: machines.main
+          ? {
+              states: machines.main.states.map((s) => s.id),
+              transitions: machines.main.transitions.map((t) => t.id),
+              initialStateId: machines.main.entryStateIds[0] ?? null,
+              terminalStateIds: machines.main.terminalStateIds,
+            }
+          : null,
+        subEntities: machines.subMachines.map((m) => ({
+          id: m.id,
+          states: m.states.map((s) => s.id),
+          transitions: m.transitions.map((t) => t.id),
+          entryStateIds: m.entryStateIds,
+          terminalStateIds: m.terminalStateIds,
+        })),
+        orphanStateIds: machines.orphanComponents.flatMap((o) => o.states.map((s) => s.id)),
+      }
+    : null;
   const context = JSON.stringify(
     {
       metadata: {
@@ -463,6 +587,8 @@ function buildReasoningPrompt(
         initialStateId: model.derivable.initialStateId,
         terminalStateIds: model.derivable.terminalStateIds,
       },
+      // 状态机分解：主状态机 + 附属实体子状态机（各有独立入口，非主状态机的"不可达"）
+      stateMachines,
       livenessMode: mode,
       codePrecheck: precheck,
     },
@@ -470,6 +596,7 @@ function buildReasoningPrompt(
     2
   );
 
+  const hasSubEntities = !!machines && machines.subMachines.length > 0;
   const livenessInstruction =
     mode === 'weak'
       ? '3. 活性（弱活性/终态可达）：从每个可达状态出发，是否都存在一条到达某终态的路径？代码已按此标准判定（见 codePrecheck.liveness），请复核其结论。若发现可达状态无法到达任何终态，列出违反点'
@@ -479,18 +606,24 @@ function buildReasoningPrompt(
     system:
       '你是协议推演专家。基于给定的协议状态空间与活性语义声明，判断活性与一致性。' +
       `本次活性判定模式：${mode === 'weak' ? '弱活性（终态可达）' : '强活性（所有路径终达终态）'}。` +
-      '代码已做可达性、死锁、活性的确定性预判，你需要复核代码预判，并判断一致性（不变量是否在所有路径成立）。' +
+      '代码已做可达性、死锁、活性的确定性预判（针对主状态机），你需要复核代码预判，并判断一致性（不变量是否在所有路径成立）。' +
       '输出严格 JSON，不附加解释文字。活性以代码判定为准，你仅复核；若不确定一致性，passed 设为 false 并在 violations 中说明。',
     context,
     instruction: [
       '请对上述协议做四类推演：',
-      '1. 可达性：复核代码预判，是否还有遗漏的不可达状态/转移',
-      '2. 死锁：复核代码预判，是否还有遗漏的死锁状态',
+      `1. 可达性：复核代码预判（针对主状态机 stateMachines.main），是否还有遗漏的主状态机不可达状态/转移${hasSubEntities ? '（附属实体子状态机除外）' : ''}`,
+      `2. 死锁：复核代码预判（针对主状态机），是否还有遗漏的死锁状态${hasSubEntities ? '（附属实体子状态机除外）' : ''}`,
       livenessInstruction,
       '4. 一致性：不变量在所有可达状态上是否都成立？若存在违反，列出具体不变量与违反场景',
       '',
       '注意：',
       '- 代码预判已标记的不可达状态/死锁状态应保留在你的输出中',
+      ...(hasSubEntities
+        ? [
+            '- 本协议含附属实体子状态机（stateMachines.subEntities，如临时映射/配件维度等）：它们有独立入口（initial 或创建转移），由代码独立分析（advisory，见 codePrecheck 的 notes / subEntitySummary）',
+            '- 子状态机与主初始态不连通是设计使然：不要把子状态机的状态/转移计入主状态机的不可达或死锁清单，也不要因子状态机不可达而判定主状态机不可达',
+          ]
+        : []),
       '- 活性已由代码按声明的模式确定性判定，你仅复核代码结论（不要自行改用其他活性标准）',
       '- 一致性是代码无法判定的，需你基于状态空间推演',
       '- 时序约束不在本次推演范围（由形式化验证步骤处理）',

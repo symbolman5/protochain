@@ -678,6 +678,54 @@ export interface InterfaceSpec {
   affectsDimensions?: string[];                            // 扩展
   /** 资源池可用性观测接口 */
   observesResourcePoolId?: string;
+  // -----------------------------------------------------------------------------
+  // E2 (specs.json 升级到 JSON Schema) 扩展字段
+  // -----------------------------------------------------------------------------
+  /** 请求参数 JSON Schema（可被 ajv 编译）。缺省视为 description-only，标记 legacy-stub */
+  requestSchema?: JSONSchema;
+  /** 响应体 JSON Schema（可被 ajv 编译） */
+  responseSchema?: JSONSchema;
+  /** 结构化前置条件表达式（每项 kind='json-schema'|'legacy-stub'|'description-only'） */
+  preconditions?: SchemaExpression[];
+  /** 结构化后置条件表达式（effects 投影） */
+  postconditionExpressions?: SchemaExpression[];
+  /** 结构化副作用表达式（与 postconditions 等价，便于消费方识别） */
+  sideEffects?: SchemaExpression[];
+  /** schema 完整度分类 */
+  schemaKind?: 'structured' | 'legacy-stub' | 'description-only';
+  /** 降级理由列表（如 'guard 自然语言未机械提取'） */
+  schemaDegradedReasons?: string[];
+}
+
+// ============================================================================
+// JSON Schema 子集（E2 新增；不复用社区类型以避免重型依赖）
+// 与 ajv 8 兼容：type/properties/required/items/enum/description/format/default
+// ============================================================================
+
+export interface JSONSchema {
+  type?: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null';
+  properties?: Record<string, JSONSchema>;
+  required?: string[];
+  items?: JSONSchema;
+  enum?: unknown[];
+  description?: string;
+  format?: string;
+  default?: unknown;
+  additionalProperties?: boolean | JSONSchema;
+  /** 数组场景下的最小/最大元素数（约束次数） */
+  minItems?: number;
+  maxItems?: number;
+}
+
+/**
+ * 结构化表达式 —— guard/effects/precondition/postcondition 统一形态（E2）
+ */
+export interface SchemaExpression {
+  kind: 'json-schema' | 'description-only' | 'legacy-stub';
+  /** 自然语言说明；任何 kind 下都保留，作为人读入口 */
+  description?: string;
+  /** 结构化子文档；kind='json-schema' 时填 */
+  schema?: JSONSchema;
 }
 
 export interface FieldSpec {
@@ -982,13 +1030,20 @@ export interface Deviation {
   /** 实际值 */
   actual: string;
   /** 偏差类型 */
-  kind: 'state_mismatch' | 'invariant_violation' | 'timing_violation' | 'missing_action';
+  kind: 'state_mismatch' | 'invariant_violation' | 'timing_violation' | 'missing_action' | 'field_mismatch';
   /** 路径内失败步骤索引（0-based；setup 阶段为 -1） */
   stepIndex?: number;
   /** 传输层状态码（HTTP 等） */
   httpStatus?: number;
   /** 响应体摘要（超长截断） */
   responseBody?: unknown;
+  // ── E2 字段级偏差扩展 ──
+  /** 业务字段路径（如 "response.approver_id"）；field_mismatch 时填 */
+  field?: string;
+  /** 协议侧（legacy）字段值（来自 specs.json responseSchema 描述） */
+  legacy?: string;
+  /** impl 侧字段值（来自实际响应） */
+  impl?: string;
 }
 
 export interface AuxiliarySummary {

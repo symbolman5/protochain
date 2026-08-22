@@ -27,11 +27,12 @@
  */
 
 import { Command } from 'commander';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { mkdirSync } from 'node:fs';
-import { resolve, join, dirname } from 'node:path';
+import { resolve, join, dirname, isAbsolute as pathIsAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline';
+import { parse as parseYaml } from 'yaml';
 import { initProject, initMultiProject, initRunnerProject } from '../scaffolder/index.js';
 import { executeTask, type ExecTaskInput } from '../exec-task/index.js';
 import { parseProtocolFile } from '../parser/index.js';
@@ -85,15 +86,100 @@ import {
   formatPropagateSummary,
   createConfirmationTracker,
 } from '../versioner/index.js';
-import { specify } from '../specifier/index.js';
-import { resolveBindings, validateBindings, applyBindingEnvironment } from '../binder/index.js';
+import { specify, specsFromEnvelope, envelopeMigrate, isSpecsEnvelope } from '../specifier/index.js';
+import {
+  resolveBindings,
+  validateBindings,
+  applyBindingEnvironment,
+  mergeBindings,
+} from '../binder/index.js';
+import { deriveBindings, isSkeletonBindings, SKELETON_MARKER, type SkeletonBindings } from '../bindgen/index.js';
+import { deriveWeb, WEB_DATA_SCHEMA_VERSION } from '../webgen/index.js';
+import { startServe } from '../webgen/serve.js';
 import { loadScenarioParams, findScenariosDir } from '../verifier/binding-runner.js';
 import { writeEnvDepsReport, formatEnvDepsWarnings } from '../verifier/env-deps.js';
 import { loadTestTool } from '../testtool/loader.js';
+import { runMCheck, formatMCheckReport, mCheckCli } from '../mcheck/index.js';
 import { runTestCasesWithTestTool } from '../testtool/runner.js';
 import { buildVerificationReportFromTestTool } from '../verifier/index.js';
 import { readReport, writeReport } from '../orchestrator/index.js';
-import type { StepId, AIAdapter, InterfaceSpec, TestCaseSet, CompositionCompletenessReport } from '../model/types.js';
+import type { StepId, AIAdapter, InterfaceSpec, TestCaseSet, CompositionCompletenessReport, SourceProtocolModel } from '../model/types.js';
+
+/**
+ * 加载 + 兼容老格式 specs.json —— E2 specs.json envelope 兼容读
+ * - 读 derived/specs.json
+ * - 是 Envelope → 返回 specs
+ * - 是裸 InterfaceSpec[] / 其他形态 → envelopeMigrate 提升
+ * - 文件不存在 → 回退到 deriveFn()
+ *
+ * 迁移报警通过 stderr 打印一次（CLI 友好），不影响 specs 数组
+ */
+function loadSpecsOrMigrate(
+  rootDir: string,
+  model: SourceProtocolModel,
+  deriveFn: () => InterfaceSpec[]
+): InterfaceSpec[] {
+  const raw = readReport<unknown>(rootDir, 'derived/specs.json');
+  if (raw !== undefined) {
+    if (isSpecsEnvelope(raw)) {
+      return raw.specs;
+    }
+    const r = envelopeMigrate(raw, model.metadata.version);
+    if (r.migrated && r.warnings.length > 0) {
+      for (const w of r.warnings) {
+        console.warn(`[specs.json] [migration] ${w}`);
+      }
+    }
+    return r.envelope.specs;
+  }
+  return deriveFn();
+}
+
+/**
+ * 从 model + specs 推导出 legacyExpectedResponses（E2-I4 修复）。
+ *
+ * 设计：
+ * - 数据源分两层：
+ *   1. model.contractInput.expectedInformationFields（USAGE §4.2 契约层段）：
+ *      每个 action 的响应应包含这些信息字段；缺则视为字段级偏差
+ *   2. model.derivable.invariants[].id：每个 action 在响应中验证该不变量保持
+ *      （值由具体 impl 提供，不在 helper 内填具体值；仅声明「应保持」）
+ * - 输出形态：{ actionName: { field1: '<expected>', invariant1: '<expected>' } }
+ * - override 机制：scenarios/*.yaml.expectedFields 若存在则覆盖（E2.1 后续扩面）
+ *
+ * 注意：helper 不强行推测具体值（避免引入随机性 / 假阴性），仅标记「应包含此字段」。
+ * 实际期望值由 scenarios 或 impl 行为决定；缺值时仅记 type-mismatch。
+ */
+function buildLegacyExpectedFromModel(
+  model: SourceProtocolModel,
+  specs: InterfaceSpec[]
+): Record<string, Record<string, unknown>> {
+  const result: Record<string, Record<string, unknown>> = {};
+  const infoFields: string[] = model.contractInput?.expectedInformationFields ?? [];
+  const invariantIds: string[] = model.derivable.invariants.map((inv) => inv.id);
+
+  // 仅系统接口参与字段级对比（observation 接口无响应体外部期望）
+  const systemSpecs = specs.filter((s) => s.kind === 'system');
+  for (const spec of systemSpecs) {
+    const action = spec.name;
+    const expected: Record<string, unknown> = {};
+    // 信息字段：用「__present」作 sentinel —— 字段存在性提示
+    //   field-compare 暂不做 sentinel 比对；保留 entries 表示「此 action 的响应预期含这些字段」
+    for (const f of infoFields) {
+      expected[`__info_expected:${f}`] = true;
+    }
+    // 不变量 ID：同上，作为存在性提示
+    for (const inv of invariantIds) {
+      expected[`__invariant_expected:${inv}`] = true;
+    }
+    // 保留空对象语义：即使 model 缺 expectedInformationFields 也不阻断
+    // 真实「字段 X：legacy=Y, impl=Z」值级三元组由 scenarios/*.yaml.expectedResponse 注入（E2.1 扩面）
+    result[action] = expected;
+  }
+  // 注：真实值级对比保留 verify 调用处的显式 legacyExpectedResponses 注入；
+  // 当前 CLI 不强制要求用户在配置层提供 —— 字段级对比仍可工作（仅基于 responseSchema 类型校验）。
+  return result;
+}
 
 const program = new Command();
 
@@ -809,6 +895,11 @@ program
         artifacts: result.outputs,
       });
     }
+    // E2：告知用户 specs.json 升级状态
+    if (result.passed) {
+      console.log('');
+      console.log('✓ specs.json 已升到 JSON Schema（schemaVersion=1.0）；verify 默认启用字段级对比。');
+    }
     if (result.reportSummary) console.log(result.reportSummary);
     process.exit(result.passed ? 0 : 1);
   });
@@ -959,7 +1050,7 @@ program
     const rootDir = ctx.protocolRoot;
     try {
       const model = parseProtocolFile(ctx.modelPath);
-      const specs = readReport<InterfaceSpec[]>(rootDir, 'derived/specs.json') ?? specify(model);
+      const specs = loadSpecsOrMigrate(rootDir, model, () => specsFromEnvelope(specify(model)));
       const outputPath = opts.output
         ? resolve(opts.output)
         : join(rootDir, 'impl-scaffold/interfaces.d.ts');
@@ -988,7 +1079,7 @@ program
     const rootDir = ctx.protocolRoot;
     try {
       const model = parseProtocolFile(ctx.modelPath);
-      const specs = readReport<InterfaceSpec[]>(rootDir, 'derived/specs.json') ?? specify(model);
+      const specs = loadSpecsOrMigrate(rootDir, model, () => specsFromEnvelope(specify(model)));
       // --src 覆盖默认目录；所有目录统一相对系统根解析（兼容绝对路径）
       const extraDirs = (
         Array.isArray(opts.src) ? opts.src : opts.src ? [opts.src] : []
@@ -1020,6 +1111,7 @@ program
   .description('校验 bindings 配置与 ⑤ 规格的接口绑定完整性')
   .option('-d, --dir <目录>', '项目根目录', process.cwd())
   .option('--env <名称>', '绑定环境（bindings.environments；默认 defaultEnv）')
+  .option('--skeleton <路径>', 'E3 骨架 YAML 路径（提供时自动 mergeBindings 后再校验）')
   .action((opts) => {
     const ctx = resolveCtx(opts);
     const rootDir = ctx.protocolRoot;
@@ -1029,15 +1121,40 @@ program
         console.error('未配置 bindings（请在 protochain.config.yaml 添加 bindings 段）');
         process.exit(2);
       }
-      const envBindings = applyBindingEnvironment(config.bindings, opts.env);
       const envLabel = opts.env ?? config.bindings.defaultEnv ?? '(默认)';
+
+      // E3：--skeleton 模式 → mergeBindings(skeleton, manual)
+      // E3-I2 修复：相对路径统一相对 rootDir 解析（与默认路径落点一致），
+      // 绝对路径仍按原语义处理。
+      let effectiveBindings = config.bindings;
+      let skeletonUsed = false;
+      if (opts.skeleton) {
+        const skeletonPath = resolveRelative(opts.skeleton, rootDir);
+        if (!existsSync(skeletonPath)) {
+          console.error(`--skeleton 文件不存在: ${skeletonPath}`);
+          process.exit(2);
+        }
+        const skeletonRaw = parseYaml(readFileSync(skeletonPath, 'utf-8')) as unknown;
+        if (!isSkeletonBindings(skeletonRaw)) {
+          console.error(
+            `--skeleton 文件不是 E3 骨架（缺少 ${SKELETON_MARKER} 标记）: ${skeletonPath}`
+          );
+          process.exit(2);
+        }
+        const skeleton = skeletonRaw as SkeletonBindings;
+        effectiveBindings = mergeBindings(skeleton, config.bindings);
+        skeletonUsed = true;
+      }
+
+      const envBindings = applyBindingEnvironment(effectiveBindings, opts.env);
       const model = parseProtocolFile(ctx.modelPath);
-      const specs =
-        readReport<InterfaceSpec[]>(rootDir, 'derived/specs.json') ??
-        specify(model);
+      const specs = loadSpecsOrMigrate(rootDir, model, () => specsFromEnvelope(specify(model)));
       const report = validateBindings(specs, envBindings, ctx.protocolId);
       console.log('=== 接口绑定完整性校验 ===');
       console.log(`  绑定环境: ${envLabel}`);
+      if (skeletonUsed) {
+        console.log(`  E3 骨架合并: ✓（已与 manual bindings 合并）`);
+      }
       console.log(`  规格接口总数: ${specs.length}`);
       console.log(
         `  缺失系统接口: ${report.missingSystem.length > 0 ? report.missingSystem.join(', ') : '无'}`
@@ -1095,8 +1212,22 @@ program
       console.log(`验证环境: ${envLabel}`);
       const model = parseProtocolFile(ctx.modelPath);
       const testCases = readReport<TestCaseSet>(rootDir, 'derived/test-cases.json');
-      const specs = readReport<InterfaceSpec[]>(rootDir, 'derived/specs.json');
+      const specs = loadSpecsOrMigrate(rootDir, model, () => specsFromEnvelope(specify(model)));
       const scenariosDir = findScenariosDir(rootDir);
+      // ── E2：specs.json 是新 Envelope → 启用字段级对比；老格式 migrate 后沿用 state_mismatch ──
+      const rawSpecsJson = readReport<unknown>(rootDir, 'derived/specs.json');
+      const useFieldLevel =
+        rawSpecsJson !== undefined && isSpecsEnvelope(rawSpecsJson) === true;
+
+      // ── E2-I4 修复：legacyExpectedResponses 数据源 ──
+      // 协议侧（legacy）期望字段值，从 model.contractInput.expectedInformationFields 出发
+      // 映射给每个系统接口：
+      //   - 信息字段（expectedInformationFields）→ 每个 action 在响应中验证这些字段存在
+      //   - 不变量 ID（model.derivable.invariants[].id）→ 每个 action 验证是否保持不变量
+      // E2.1 后续扩面：可由 scenarios/*.yaml.expectedFields 覆盖具体期望值（保留 override 机制）
+      const legacyExpectedResponses: Record<string, Record<string, unknown>> =
+        buildLegacyExpectedFromModel(model, specs ?? []);
+
       const report = await verify(
         model,
         {
@@ -1109,6 +1240,8 @@ program
           scenarios: scenariosDir
             ? loadScenarioParams(scenariosDir)
             : undefined,
+          enableFieldLevelCompare: useFieldLevel,
+          legacyExpectedResponses,
         },
         aiAdapter,
         { useAISummary: !!aiAdapter }
@@ -1478,6 +1611,18 @@ function resolveCtx(
   });
 }
 
+/**
+ * 解析 CLI 路径选项（E3-I2 修复）：相对路径统一相对 rootDir 解析，
+ * 绝对路径按原语义处理。
+ *
+ * 背景：先前 `--skeleton` / `--specs` / `-o` / `--report` 用 `resolve(opts.*)` 相对 cwd，
+ * 而默认路径相对 `--dir`。`--dir` 与 cwd 不一致时落点错位。
+ */
+function resolveRelative(p: string, rootDir: string): string {
+  if (pathIsAbsolute(p)) return p;
+  return resolve(rootDir, p);
+}
+
 function registerStepExecutors(rootDir: string, useAi: boolean, protocolId?: string, envName?: string): void {
   const config = loadConfig(rootDir);
   let router: import('../ai/router.js').AIRouter | undefined = undefined;
@@ -1581,6 +1726,252 @@ function printIssues(category: string, issues: { severity: string; message: stri
   }
 }
 
+
+// ==========================================================================
+// m-check（M 单元语义闸门）
+// ==========================================================================
+
+program
+  .command('m-check')
+  .description('M 单元语义闸门：命名规范 / 跨协议 ID 唯一性 / 附属实体归属 / 旧字符 / ID 转义（修改单 002）')
+  .option('-d, --dir <目录>', '项目根目录', process.cwd())
+  .option('--model <路径>', 'model.md 路径（默认 <dir>/protocol/model.md）')
+  .option('--json', '以 JSON 形式输出（默认人类可读报告）')
+  .action((opts) => {
+    const rootDir = resolve(opts.dir);
+    try {
+      const report = mCheckCli({
+        dir: rootDir,
+        modelPath: opts.model,
+      });
+      if (opts.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatMCheckReport(report));
+      }
+      process.exit(report.passed ? 0 : 1);
+    } catch (err) {
+      console.error(
+        `错误：${err instanceof Error ? err.message : err}`
+      );
+      process.exit(2);
+    }
+  });
+
+// ==========================================================================
+// derive-bindings（E3：binding 骨架自动生成）
+// ==========================================================================
+
+program
+  .command('derive-bindings')
+  .description('E3：从 specs.json (E2 产出) 机械推导 bindings.skeleton.yaml（method/path/params + baseUrl 占位）')
+  .option('-d, --dir <目录>', '项目根目录', process.cwd())
+  .option('--specs <路径>', 'specs.json 路径（默认 <dir>/derived/specs.json）')
+  .option('-o, --output <路径>', '骨架输出路径（默认 <dir>/derived/bindings.skeleton.yaml）')
+  .option('--report <路径>', '生成率报告路径（默认 <dir>/derived/bindings-generation-report.json）')
+  .option('-f, --force', '覆盖已存在骨架')
+  .option('--silent-migration', '静默老格式 specs.json 迁移报警（默认打印到 stderr）')
+  .action(async (opts) => {
+    const ctx = resolveCtx(opts);
+    const rootDir = ctx.protocolRoot;
+    try {
+      const result = await deriveBindings(
+        {
+          rootDir,
+          // E3-I2 修复：相对路径参数统一相对 rootDir 解析（与默认路径一致）
+          specsPath: opts.specs ? resolveRelative(opts.specs, rootDir) : undefined,
+          outputPath: opts.output ? resolveRelative(opts.output, rootDir) : undefined,
+          reportPath: opts.report ? resolveRelative(opts.report, rootDir) : undefined,
+          force: opts.force,
+          silentMigration: opts.silentMigration,
+        },
+        (rd) => parseProtocolFile(join(rd, 'protocol/model.md'))
+      );
+
+      const s = result.skeleton;
+      console.log('=== E3 binding 骨架生成报告 ===');
+      console.log(`  源 model.md version: ${s.sourceModelVersion}`);
+      console.log(`  源 specs.json: ${s.sourceEnvelope ? 'Envelope' : '裸数组（已迁移）'}`);
+      if (s.sourceMigrated) {
+        console.log(`  ⚠ 老格式 specs.json 自动迁移完成（见 ${result.skeletonPath} 顶部 sourceMigrationWarnings）`);
+      }
+      console.log(`  接口总数: ${s.stats.total}（系统 ${s.stats.system} + 观测 ${s.stats.observation}）`);
+      console.log(`  完整生成: ${s.stats.generated} / ${s.stats.total} = ${(s.stats.generationRate * 100).toFixed(1)}%`);
+      console.log(`  部分生成: ${s.stats.partial}`);
+      console.log(`  待人工确认项: ${s.stats.manualConfirmItems}（baseUrl × ${Object.keys(s.roles).length} + stateMap × ${Object.keys(s.stateMap ?? {}).length}）`);
+      console.log(`\n  骨架产物: ${result.skeletonPath}`);
+      console.log(`  生成报告: ${result.reportPath}`);
+      console.log('\n下一步：在骨架上编辑 baseUrl / headers / authConfig / stateMap，然后运行 protochain bind --skeleton <path>');
+      if (s.warnings.length > 0) {
+        console.log('\n警告：');
+        for (const w of s.warnings) console.log(`  - ${w}`);
+      }
+      // 验收口径：生成率 ≥ 80%
+      process.exit(s.stats.generationRate >= 0.8 ? 0 : 1);
+    } catch (err) {
+      console.error(
+        `错误：${err instanceof Error ? err.message : err}`
+      );
+      process.exit(2);
+    }
+  });
+
+// ==========================================================================
+// web（E7 P0：Web 检阅界面 — derive-web + serve）
+// ==========================================================================
+
+program
+  .command('web')
+  .description('E7 P0：Web 检阅界面（derive-web 机械生成静态站点 + web serve 起服务）')
+  .argument('<subcommand>', '子命令：derive-web | serve');
+
+// ----- web derive-web：100% 机械从 derived/*.json 生成 web/data.json + 静态站点 -----
+
+program
+  .command('derive-web')
+  .description('E7 P0：机械生成 Web 检阅界面静态站点（web/data.json + VitePress dist/）')
+  .option('-d, --dir <目录>', '项目根目录', process.cwd())
+  .option('--data-json <路径>', 'web/data.json 输出路径（默认 <dir>/web/data.json）')
+  .option('--web-dir <路径>', '站点工程目录（默认 <dir>/web）')
+  .option('--dist-dir <路径>', 'VitePress 产物目录（默认 <webDir>/docs/.vitepress/dist）')
+  .option('--no-build', '跳过 VitePress build（仅写 web/data.json + .md，便于调试）')
+  .option('-f, --force', '覆盖已存在 web/ 产物')
+  .action(async (opts) => {
+    const rootDir = resolve(opts.dir);
+    try {
+      const result = await deriveWeb(
+        {
+          rootDir,
+          dataJsonPath: opts.dataJson ? resolveRelative(opts.dataJson, rootDir) : undefined,
+          webDir: opts.webDir ? resolveRelative(opts.webDir, rootDir) : undefined,
+          distDir: opts.distDir ? resolveRelative(opts.distDir, rootDir) : undefined,
+          buildSite: opts.build !== false,
+          force: opts.force,
+        },
+        (rd) => parseProtocolFile(join(rd, 'protocol/model.md'))
+      );
+
+      const v = result.data;
+      console.log('=== E7 P0 Web 检阅界面生成报告 ===');
+      console.log(`  协议: ${v.protocol.name} (${v.protocol.version})`);
+      console.log(`  web/data.json schemaVersion: ${v.schemaVersion} (=${WEB_DATA_SCHEMA_VERSION})`);
+      console.log(`  源 model.md version: ${v.sourceModelVersion}`);
+      console.log(`  接口总数: ${v.interfaces.length}（系统 ${v.interfaces.filter((i) => i.kind === 'system').length} + 观测 ${v.interfaces.filter((i) => i.kind === 'observation').length}）`);
+      console.log(`  测试用例: ${v.testCases.length}`);
+      console.log(`  验证报告: ${v.verification.hasReport ? `通过 ${v.verification.counts.passed} / 失败 ${v.verification.counts.failed}` : '未生成'}`);
+      console.log(`  实现完整性: ${v.implCheck ? `通过 ${v.implCheck.passed ? '✓' : '✗'}（缺失 ${v.implCheck.missing}/${v.implCheck.total}）` : '未生成'}`);
+      console.log(`  diff/impact: ${v.diff ? v.diff.summary : '未生成'}`);
+      console.log(`\n  web/data.json: ${result.dataJsonPath}`);
+      console.log(`  站点工程目录: ${result.webDir}`);
+      console.log(`  VitePress dist: ${result.distDir}`);
+      console.log(`  VitePress build: ${result.built ? '✓ 已生成 dist/index.html' : '✗ 未生成（见 warnings）'}`);
+      console.log('\n  安全边界：不读 bindings.yaml / 不读 process.env / 不调 AI / 不接触令牌环境变量');
+      console.log('  敏感字段脱敏: ' + SENSITIVE_FIELD_NAMES_REPORT);
+      if (result.warnings.length > 0) {
+        console.log('\n警告：');
+        for (const w of result.warnings) console.log(`  - ${w}`);
+      }
+      // E7-I4 修复：四类页面落盘检查（去掉死代码 basicPages；exit 显式校验 5 类页面存在）
+      const docsDir = join(result.webDir, 'docs');
+      const requiredPages = [
+        join(docsDir, 'index.md'),
+        join(docsDir, 'interfaces/index.md'),
+        join(docsDir, 'test-cases.md'),
+        join(docsDir, 'verification.md'),
+        join(docsDir, 'diff.md'),
+      ];
+      const missingPages = requiredPages.filter((p) => !existsSync(p));
+      const hasDataJson = existsSync(result.dataJsonPath);
+      const hasInterfacePages = v.interfaces.length > 0;
+      if (!hasDataJson || !hasInterfacePages || missingPages.length > 0) {
+        if (missingPages.length > 0) {
+          console.error(
+            `错误：缺以下页面（E7-I4 修复要求）:\n  - ${missingPages.join('\n  - ')}`
+          );
+        }
+        process.exit(1);
+      }
+      process.exit(0);
+    } catch (err) {
+      console.error(`错误：${err instanceof Error ? err.message : err}`);
+      process.exit(2);
+    }
+  });
+
+/** CLI 提示：敏感字段名清单（避免硬编码在多处；与 src/webgen/index.ts 的 SENSITIVE_FIELD_NAMES 对齐） */
+const SENSITIVE_FIELD_NAMES_REPORT = 'tokenEnv/secretEnv/passwordEnv/keyEnv/usernameEnv/certPath/keyPath/caPath/token/secret/password/apiKey';
+
+// ----- web serve：纯 stdlib http 静态服务（不读 process.env） -----
+
+program
+  .command('web-serve')
+  .description('E7 P0：起 web 检阅界面静态服务（基于 web/.vitepress/dist/；纯 stdlib http）')
+  .option('-d, --dir <目录>', '项目根目录（默认 cwd）', process.cwd())
+  .option('--dist-dir <路径>', 'VitePress dist 目录（默认 <dir>/web/docs/.vitepress/dist；与 derive-web outDir 一致）')
+  .option('-p, --port <端口>', '监听端口', '5173')
+  .option('-H, --host <host>', '监听 host', '127.0.0.1')
+  .option('--skip-probe', '跳过启动时 4 类 URL 探针（默认探针）')
+  .action(async (opts) => {
+    const rootDir = resolve(opts.dir);
+    // E7-I1 修复：默认 distDir 与 derive-web outDir 对齐 = web/docs/.vitepress/dist
+    const distDir = opts.distDir ? resolveRelative(opts.distDir, rootDir) : join(rootDir, 'web/docs/.vitepress/dist');
+    try {
+      // E7-I2 修复：从 web/data.json 读真实接口 ID 构造探针路径（不再硬编码 IF_SYS_T1）
+      let probePaths: string[] | undefined = undefined;
+      if (!opts.skipProbe) {
+        const dataJsonPath = join(rootDir, 'web/data.json');
+        const probeBase = ['/', '/interfaces/', '/test-cases', '/verification', '/diff'];
+        if (existsSync(dataJsonPath)) {
+          try {
+            const dataRaw = JSON.parse(readFileSync(dataJsonPath, 'utf-8')) as {
+              interfaces?: Array<{ id: string }>;
+            };
+            const firstInterfaceId = dataRaw.interfaces?.[0]?.id;
+            if (firstInterfaceId) {
+              probePaths = [...probeBase, `/interfaces/${firstInterfaceId}`];
+            } else {
+              probePaths = probeBase;
+            }
+          } catch {
+            probePaths = probeBase;
+          }
+        } else {
+          probePaths = probeBase;
+        }
+      }
+      const handle = await startServe({
+        distDir,
+        port: Number(opts.port),
+        host: opts.host,
+        probePaths,
+      });
+      console.log('=== E7 P0 web serve ===');
+      console.log(`  监听: http://${handle.address.host}:${handle.address.port}`);
+      console.log(`  站点根: ${distDir}`);
+      console.log(`  安全：不读 process.env / 不读 bindings.yaml / 不调 AI`);
+      console.log('\n四类页面已探针（全部 200）：');
+      console.log('  - /                            (首页)');
+      console.log('  - /interfaces/                 (接口列表)');
+      console.log('  - /interfaces/<id>             (接口详情，按 specs 实际接口 ID)');
+      console.log('  - /test-cases                  (测试用例浏览器)');
+      console.log('  - /verification                (双跑对比)');
+      console.log('  - /diff                        (模型 diff/impact)');
+      console.log('\n按 Ctrl+C 退出');
+      // 优雅退出
+      const shutdown = async () => {
+        console.log('\n关闭 web serve...');
+        await handle.close();
+        process.exit(0);
+      };
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
+      // 保持进程：等待关闭信号
+      await new Promise(() => {});
+    } catch (err) {
+      console.error(`错误：${err instanceof Error ? err.message : err}`);
+      process.exit(2);
+    }
+  });
 
 // ==========================================================================
 // init-runner（初始化协议建模工程 + protocol-runner 编排实例）

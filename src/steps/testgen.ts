@@ -21,7 +21,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import type { AIAdapter, InterfaceSpec, ContractSet, TestToolCode } from '../model/types.js';
 import type { ProtochainConfig } from '../model/types.js';
 import { generateTestTool } from '../testgen/index.js';
-import { specify } from '../specifier/index.js';
+import { specify, specsFromEnvelope } from '../specifier/index.js';
 import { deriveContracts } from '../contractor/index.js';
 import type { StepExecutor } from '../orchestrator/index.js';
 import { writeReport } from '../orchestrator/index.js';
@@ -39,7 +39,7 @@ export function createTestGenExecutor(
         // 取得规格与契约：优先从 artifacts，否则重新推导
         let specs: InterfaceSpec[] | undefined = ctx.artifacts.specs;
         if (!specs) {
-          specs = specify(model, { degradedAIAssist: true });
+          specs = specsFromEnvelope(specify(model, { degradedAIAssist: true }));
           ctx.artifacts.specs = specs;
         }
 

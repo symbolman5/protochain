@@ -16,7 +16,7 @@
 
 import type { AIAdapter, ContractSet, InterfaceSpec } from '../model/types.js';
 import { deriveContracts } from '../contractor/index.js';
-import { specify } from '../specifier/index.js';
+import { specify, specsFromEnvelope } from '../specifier/index.js';
 import type { StepExecutor } from '../orchestrator/index.js';
 import { writeReport } from '../orchestrator/index.js';
 
@@ -30,7 +30,7 @@ export function createContractExecutor(aiAdapter?: AIAdapter): StepExecutor {
         // 取得规格：优先从 artifacts，否则重新推导
         let specs: InterfaceSpec[] | undefined = ctx.artifacts.specs;
         if (!specs) {
-          specs = specify(model, { degradedAIAssist: true });
+          specs = specsFromEnvelope(specify(model, { degradedAIAssist: true }));
           ctx.artifacts.specs = specs;
         }
 

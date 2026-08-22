@@ -80,6 +80,11 @@ export interface VerifyContext {
   compositionModel?: CompositionModel;
   /** test-tool 消费报告（阶段 A/B：由生成测试工具执行的用例结果，作为权威层来源） */
   testToolRun?: TestToolRunReport;
+  // ── E2 ──
+  /** 协议侧（legacy）期望响应字段值，按 action 索引；用于字段级偏差对比 */
+  legacyExpectedResponses?: Record<string, Record<string, unknown>>;
+  /** 显式启用 E2 字段级对比；默认 false（保持原行为），新格式 specs.json 通过 derive-specs 触发后由 CLI 设为 true */
+  enableFieldLevelCompare?: boolean;
 }
 
 /**
@@ -133,6 +138,8 @@ export async function verify(
             pollTimeoutMs: ctx.pollTimeoutMs,
             pollIntervalMs: ctx.pollIntervalMs,
             scenarios: ctx.scenarios,
+            legacyExpectedResponses: ctx.legacyExpectedResponses,
+            enableFieldLevelCompare: ctx.enableFieldLevelCompare === true,
           }
         )
       : await runTestCases(model, testCases, ctx.implementation);
@@ -254,12 +261,12 @@ function loadTestCases(rootDir: string): TestCaseSet | undefined {
 }
 
 function loadSpecs(rootDir: string): InterfaceSpec[] | undefined {
-  const path = join(rootDir, 'derived/specs.json');
-  if (!existsSync(path)) return undefined;
+  // E2-I1 修复：走公共 helper（自动解 Envelope + 兼容裸数组迁移）
+  const { loadSpecsEnvelope } = require('../specifier/load.js') as typeof import('../specifier/load.js');
   try {
-    const raw = readFileSync(path, 'utf-8');
-    return JSON.parse(raw) as InterfaceSpec[];
-  } catch {
+    return loadSpecsEnvelope(rootDir)?.specs;
+  } catch (err) {
+    console.warn(`[verifier.loadSpecs] specs.json 解析失败：${err instanceof Error ? err.message : err}`);
     return undefined;
   }
 }
@@ -279,6 +286,9 @@ async function runTestCasesBinding(
     pollTimeoutMs?: number;
     pollIntervalMs?: number;
     scenarios?: ScenarioParamSource[];
+    // ── E2 字段级偏差对比 ──
+    legacyExpectedResponses?: Record<string, Record<string, unknown>>;
+    enableFieldLevelCompare?: boolean;
   } = {}
 ): Promise<AuthoritativeVerification> {
   // 规格缺失时无法解析绑定：如实走"接口未绑定"偏差，而不是静默跳过
@@ -315,6 +325,9 @@ async function runTestCasesBinding(
         stateMap: bindings.stateMap,
         scenarios: options.scenarios,
         setupBindings,
+        // ── E2 字段级偏差对比 ──
+        legacyExpectedResponses: options.legacyExpectedResponses,
+        enableFieldLevelCompare: options.enableFieldLevelCompare === true,
       }
     );
     caseResults.push(result);
@@ -706,9 +719,16 @@ export function formatVerificationSummary(report: VerificationReport): string {
     lines.push('  失败用例（前5个）：');
     for (const c of failed.slice(0, 5)) {
       const firstDev = c.deviations?.[0];
-      lines.push(
-        `    - ${c.pathId}: ${firstDev?.kind ?? '未知'} @ ${firstDev?.action ?? ''}（期望 ${firstDev?.expected ?? ''}，实际 ${firstDev?.actual ?? ''}）`
-      );
+      // ── E2 字段级偏差更详细：含 field/legacy/impl 三元组 ──
+      if (firstDev?.kind === 'field_mismatch' && firstDev.field) {
+        lines.push(
+          `    - ${c.pathId}: ${firstDev.kind} @ ${firstDev.action} 字段 ${firstDev.field}：legacy=${firstDev.legacy ?? ''}, impl=${firstDev.impl ?? ''}`
+        );
+      } else {
+        lines.push(
+          `    - ${c.pathId}: ${firstDev?.kind ?? '未知'} @ ${firstDev?.action ?? ''}（期望 ${firstDev?.expected ?? ''}，实际 ${firstDev?.actual ?? ''}）`
+        );
+      }
     }
     if (failed.length > 5) {
       lines.push(`    ... 还有 ${failed.length - 5} 个失败用例`);

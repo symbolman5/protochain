@@ -236,7 +236,12 @@ export interface Section {
 }
 
 /**
- * 按一级标题切分 section。
+ * 按一级标题切分 section（协议 model.md 主分节）。
+ *
+ * 协议模型格式契约：正文小节一律使用一级标题（# 状态空间 / # 转移规则 / ...）。
+ * 新增内容应"完整修改协议"（并入既有小节），而非另起 H2 追加小节——
+ * H2 会并入上一 H1 小节，造成内容静默丢失或误判（见修改单 001 关联分析）。
+ * composition.md 的 H3 条目（如 ### CI1）依赖本函数保留在父 H1 小节内。
  * 顶级节点不在任何标题下时忽略。
  */
 export function splitByHeadings(root: MdastNode): Section[] {

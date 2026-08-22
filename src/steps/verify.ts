@@ -15,6 +15,7 @@ import { verify, formatVerificationSummary, type ProtocolImplementationStub } fr
 import { loadScenarioParams, findScenariosDir } from '../verifier/binding-runner.js';
 import { writeEnvDepsReport, formatEnvDepsWarnings } from '../verifier/env-deps.js';
 import { applyBindingEnvironment } from '../binder/index.js';
+import { loadSpecsEnvelope } from '../specifier/load.js'; // E2-I1 修复：走公共 helper 解 Envelope
 import { readReport } from '../orchestrator/index.js';
 import type { StepExecutor } from '../orchestrator/index.js';
 import { writeReport } from '../orchestrator/index.js';
@@ -35,9 +36,15 @@ export function createVerifyExecutor(
         const testCases = ctx.artifacts.testCases as TestCaseSet | undefined ??
           readReport<TestCaseSet>(rootDir, 'derived/test-cases.json');
 
-        // 绑定驱动验证：读取 ⑤ 规格 + bindings 配置 + 场景参数；
-        // 未配置 bindings 时保持原行为（无运行时实现 → 路径用例跳过）
-        const specs = readReport<InterfaceSpec[]>(rootDir, 'derived/specs.json');
+        // ── E2-I1 修复：specs 加载走公共 helper（自动解 Envelope + 兼容裸数组） ──
+        // 优先 ctx.artifacts.specs（specify 步骤已推导），否则从 derived/specs.json 读
+        let specs: InterfaceSpec[] | undefined = ctx.artifacts.specs as InterfaceSpec[] | undefined;
+        if (!specs || specs.length === 0) {
+          const loaded = loadSpecsEnvelope(rootDir, model.metadata.version, (w) =>
+            console.warn(`[specs.json] [migration] ${w}`)
+          );
+          specs = loaded?.specs;
+        }
         const scenariosDir = findScenariosDir(rootDir);
 
         // 绑定环境解析（--env / defaultEnv）+ 前置环境变量扫描与告警（不阻断）
@@ -50,6 +57,7 @@ export function createVerifyExecutor(
           if (warning) console.warn(`\n[verify] ${warning}\n`);
         }
 
+        // ── E2-I1 修复：管线 verify 步骤透传字段级开关 ──
         const report = await verify(
           model,
           {
@@ -62,6 +70,10 @@ export function createVerifyExecutor(
             scenarios: scenariosDir
               ? loadScenarioParams(scenariosDir)
               : undefined,
+            // E2 字段级对比：specs 是 envelope 时启用；老格式 array-migrated 时仍可启用（兼容）
+            enableFieldLevelCompare: specs !== undefined && specs.length > 0,
+            // legacyExpectedResponses 由 caller/CLI 注入；管线默认空对象（E2-I4 数据源后续 E2.1）
+            legacyExpectedResponses: {},
           },
           aiAdapter,
           { useAISummary: !!aiAdapter }

@@ -15,7 +15,7 @@
 
 import type { InterfaceSpec } from '../model/types.js';
 import { checkImplementation, formatImplCheckSummary } from '../implcheck/index.js';
-import { specify } from '../specifier/index.js';
+import { specify, specsFromEnvelope, envelopeMigrate, isSpecsEnvelope } from '../specifier/index.js';
 import { readReport } from '../orchestrator/index.js';
 import type { StepExecutor } from '../orchestrator/index.js';
 import { writeReport } from '../orchestrator/index.js';
@@ -27,13 +27,21 @@ export function createImplCheckExecutor(): StepExecutor {
       const now = new Date().toISOString();
 
       try {
-        // 取得规格：优先从 artifacts，否则从 derived/specs.json 读取，最后重新推导
+        // 取得规格：优先从 artifacts，否则从 derived/specs.json 读取（自动迁移老格式），最后重新推导
         let specs: InterfaceSpec[] | undefined = ctx.artifacts.specs;
         if (!specs) {
-          specs = readReport<InterfaceSpec[]>(rootDir, 'derived/specs.json');
+          const raw = readReport<unknown>(rootDir, 'derived/specs.json');
+          if (raw !== undefined) {
+            if (isSpecsEnvelope(raw)) {
+              specs = raw.specs;
+            } else {
+              const r = envelopeMigrate(raw, model.metadata.version);
+              specs = r.envelope.specs;
+            }
+          }
         }
         if (!specs) {
-          specs = specify(model, { degradedAIAssist: true });
+          specs = specsFromEnvelope(specify(model, { degradedAIAssist: true }));
           ctx.artifacts.specs = specs;
         }
 

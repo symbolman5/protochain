@@ -382,9 +382,14 @@ function generateTLASkeleton(model: DerivableLayer): string {
   for (const t of model.transitions) {
     // 注意：`/\\ ` 必须是双反斜杠 —— 模板字符串里 `\ `（反斜杠+空格）会被 JS 当作转义吃掉反斜杠
     // 多源转移 → 源状态析取；`from: -`（无源入口转移）→ 恒真
+    // 多源 from 拼接：必须加括号，避免与后面的 guard `/\\ ...` 拼接时产生
+    // `/\ state = "PS2" \/ state = "PS3" /\ TRUE` 这种 `\lor` 与 `\land` 优先级冲突
+    // （TLC SANY 会报 `Precedence conflict between ops \lor and \land`）。
+    // 例：T9 from=[PS2,PS3,PS4] → `(state = "PS2" \/ state = "PS3" \/ state = "PS4")`
     const fromConditions = t.from
       .map((f) => (f === '-' || f === '' ? 'TRUE' : `${variableName} = "${f}"`))
       .join(' \\/ ');
+    const fromConditionsExpr = t.from.length > 1 ? `(${fromConditions})` : fromConditions;
     // 守卫翻译：命中声明的转移用 guardExpr；其余自然语言守卫降级为 TRUE（语义保留于模型文档与 verify 层）
     const gt = injected.get(t.id);
     const guard = gt ? `/\\ ${gt.guardExpr}` : (t.guard ? '/\\ TRUE' : '');
@@ -393,7 +398,7 @@ function generateTLASkeleton(model: DerivableLayer): string {
     nextCases.push(
       `(* ${asciiSafe(t.name)}: ${t.from.join('/')} -> ${t.to} *)` +
       (t.guard ? ` (* guard: ${asciiSafe(t.guard)} *)` : '') +
-      `\n  /\\ ${fromConditions}${guard}\n  /\\ ${variableName}' = "${t.to}"\n${stutterNext}`
+      `\n  /\\ ${fromConditionsExpr}${guard}\n  /\\ ${variableName}' = "${t.to}"\n${stutterNext}`
     );
   }
   // 守卫翻译附加析取项（抽象动作，如模拟跨协议映射增删）
@@ -421,8 +426,12 @@ function generateTLASkeleton(model: DerivableLayer): string {
     const note = degraded
       ? ' (degraded: data-level, not TLA+ expressible; real guarantee via guards/storage per model.md)'
       : '';
-    lines.push(`(* Invariant: ${asciiSafe(inv.name)}${note} *)`);
-    lines.push(`${inv.id} == ${expr}`);
+    // 注释保留原 ID（可读性 + 与 model.md 对照），TLA+ 标识符必须 ASCII-safe：
+    // 非字母数字字符（如 `INV-PS1` 中的 `-`）会被 TLC 当作二元运算符，
+    // 解析为 `INV - PS1 == TRUE`（Unknown operator）。
+    // 例：`INV-PS1` → `INV_PS1`，注释里写 `Invariant: 名字 (id=INV-PS1)`。
+    lines.push(`(* Invariant: ${asciiSafe(inv.name)} (id=${asciiSafe(inv.id)})${note} *)`);
+    lines.push(`${asciiSafeId(inv.id)} == ${expr}`);
     lines.push('');
   }
 
@@ -430,7 +439,7 @@ function generateTLASkeleton(model: DerivableLayer): string {
   for (const gt of activeGts) {
     for (const inv of gt.invariants) {
       lines.push(`(* Guard invariant: ${asciiSafe(gt.id)} ${asciiSafe(inv.id)} *)`);
-      lines.push(`${inv.id} == ${inv.expression}`);
+      lines.push(`${asciiSafeId(inv.id)} == ${inv.expression}`);
       lines.push('');
     }
   }
@@ -454,10 +463,10 @@ function generateTLASkeleton(model: DerivableLayer): string {
   lines.push(`Spec == Init /\\ [][Next]_${stutterVars}`);
   lines.push('');
 
-  // 聚合不变量
-  const allInvIds = model.invariants.map((i) => i.id);
+  // 聚合不变量（id 与上面不变量定义保持一致地走 asciiSafeId，保证 TLC 引用一致）
+  const allInvIds = [...model.invariants.map((i) => asciiSafeId(i.id))];
   for (const gt of activeGts) {
-    for (const inv of gt.invariants) allInvIds.push(inv.id);
+    for (const inv of gt.invariants) allInvIds.push(asciiSafeId(inv.id));
   }
   if (allInvIds.length > 0) {
     lines.push('(* Aggregate invariants *)');
@@ -472,6 +481,17 @@ function generateTLASkeleton(model: DerivableLayer): string {
 /** 移除文本中的非 ASCII 字符（TLA+ 注释/标识符仅支持 ASCII） */
 function asciiSafe(str: string): string {
   return String(str ?? '').replace(/[^\x00-\x7F]/g, '');
+}
+
+/**
+ * TLA+ 标识符 ASCII-safe 化：保留 `[A-Za-z0-9_]`，其余字符（含 `-`、`.`、`-`、空格等）替换为 `_`。
+ *
+ * 背景：TLA+ 标识符（操作符/变量名）词法上是连续的字母数字下划线，`-` 被当作二元减号，
+ * 故 `INV-PS1 == TRUE` 会被 TLC 解析为 `INV - PS1 == TRUE`（Unknown operator: `PS1'`）。
+ * 注释可保留原 ID，仅把出现在 TLA+ 表达式位置的标识符做此规范化。
+ */
+export function asciiSafeId(id: string): string {
+  return String(id ?? '').replace(/[^A-Za-z0-9_]/g, '_');
 }
 
 /** 不变量表达式 ASCII 化：含非 ASCII 字符时降级为 TRUE（避免 SANY 词法错误） */

@@ -70,6 +70,15 @@ export interface BindingVerifyOptions {
   scenarios?: ScenarioParamSource[];
   /** setup 动作绑定索引：action → 绑定（不经 specs，直接从 bindings.interfaces 解析） */
   setupBindings?: Map<string, ResolvedBinding>;
+  // ── E2 字段级偏差对比 ──
+  /**
+   * 协议侧（legacy）期望响应字段值，用于字段级偏差对比。
+   * key: action（与 spec.name 一致），value: 字段期望值字典
+   * 例如: { approve: { approver_id: "alice", result: "approved" } }
+   */
+  legacyExpectedResponses?: Record<string, Record<string, unknown>>;
+  /** 启用 E2 字段级比对（默认 false；老格式 specs.json 自动降级到 state_mismatch） */
+  enableFieldLevelCompare?: boolean;
 }
 
 /** 保留字段：不注入 runtimeParams（避免污染路径变量/请求体） */
@@ -296,6 +305,34 @@ export async function runBindingPathCase(
 
     runtimeParams['currentState'] = currentState;
     const result = await safeTransport(transport, actionBinding, runtimeParams);
+    // ── E2 字段级对比：仅在 enableFieldLevelCompare=true 且响应为对象时跑 ──
+    if (
+      options.enableFieldLevelCompare === true &&
+      result.ok &&
+      result.data &&
+      typeof result.data === 'object'
+    ) {
+      const legacy = options.legacyExpectedResponses?.[t.action];
+      // 找 spec 用于 responseSchema
+      const spec = actionBinding.spec;
+      if (spec && spec.responseSchema?.properties) {
+        const { compareFields } = await import('./field-compare.js');
+        const fieldDevs = compareFields({
+          spec,
+          action: t.action,
+          state: currentState,
+          stepIndex: stepIdx,
+          implResponse: result.data as Record<string, unknown>,
+          legacyExpected: legacy,
+          httpStatus: result.status,
+        });
+        deviations.push(...fieldDevs);
+        // 当且仅当字段级偏差单独命中（state 没差）仍可继续执行；若全部偏差均非 state_mismatch，跳过 break
+        if (fieldDevs.length > 0) {
+          // 字段级偏差不影响状态机主流程（按业务分离），所以不 break，继续观测/状态判定
+        }
+      }
+    }
     if (!result.ok) {
       deviations.push({
         action: t.action,

@@ -19,6 +19,11 @@ import type {
   CoverageDetail,
   UncoveredDisposition,
 } from '../model/types.js';
+import {
+  decomposeStateMachines,
+  isCreationTransition,
+  type StateMachine,
+} from '../model/state-machines.js';
 
 /**
  * 生成跨协议测试用例
@@ -70,13 +75,33 @@ function buildCrossProtocolPaths(
     const segments: PathSegment[] = [];
 
     // from 协议的片段
+    // 修改单 003：跨协议依赖边对应的 transfer IDs 应覆盖主状态机从初始态 BFS 可达的转移，
+    // 同时附属实体子状态机若有入口也应纳入（其状态/转移同样属于本协议的合法状态空间）。
+    // 旧实现只以 initialStateId 单一 BFS，对 P7 US×PS×PI 这类多子状态机模型会把 PS/PI 维度漏掉。
     const fromModel = modelById.get(edge.from);
     if (fromModel) {
+      const machines = decomposeStateMachines(
+        fromModel.derivable.states,
+        fromModel.derivable.transitions,
+        fromModel.derivable.initialStateId ??
+          fromModel.derivable.states.find((s) => s.type === 'initial')?.id
+      );
+      const allMachines: StateMachine[] = [
+        ...(machines.main ? [machines.main] : []),
+        ...machines.subMachines,
+      ];
+      const reachableTransferIds = collectReachableTransferIds(allMachines);
+      const transitionIds = fromModel.derivable.transitions
+        .filter(
+          (t) =>
+            reachableTransferIds.has(t.id) ||
+            // 旧语义保留：state 依赖类型下，把所有 transition 纳入（跨协议路径覆盖意图）
+            edge.dependencyType === 'state'
+        )
+        .map((t) => t.id);
       segments.push({
         protocolId: edge.from,
-        transitionIds: fromModel.derivable.transitions
-          .filter((t) => (fromModel.derivable.initialStateId != null && t.from.includes(fromModel.derivable.initialStateId)) || edge.dependencyType === 'state')
-          .map((t) => t.id),
+        transitionIds,
         stateIds: fromModel.derivable.states.map((s) => s.id),
       });
     } else {
@@ -91,9 +116,23 @@ function buildCrossProtocolPaths(
     // to 协议的片段
     const toModel = modelById.get(edge.to);
     if (toModel) {
+      const machines = decomposeStateMachines(
+        toModel.derivable.states,
+        toModel.derivable.transitions,
+        toModel.derivable.initialStateId ??
+          toModel.derivable.states.find((s) => s.type === 'initial')?.id
+      );
+      const allMachines: StateMachine[] = [
+        ...(machines.main ? [machines.main] : []),
+        ...machines.subMachines,
+      ];
+      const reachableTransferIds = collectReachableTransferIds(allMachines);
+      const transitionIds = toModel.derivable.transitions
+        .filter((t) => reachableTransferIds.has(t.id))
+        .map((t) => t.id);
       segments.push({
         protocolId: edge.to,
-        transitionIds: toModel.derivable.transitions.map((t) => t.id),
+        transitionIds,
         stateIds: toModel.derivable.states.map((s) => s.id),
       });
     } else {
@@ -113,6 +152,38 @@ function buildCrossProtocolPaths(
 
     return path;
   });
+}
+
+/**
+ * 收集所有状态机（主 + 附属）从各自入口出发 BFS 可达的转移 ID。
+ * 修改单 003：替代旧"以 deriable.initialStateId BFS"逻辑，把附属实体子状态机也纳入。
+ */
+function collectReachableTransferIds(machines: StateMachine[]): Set<string> {
+  const ids = new Set<string>();
+  for (const m of machines) {
+    const entry = m.entryStateIds[0];
+    if (!entry) continue;
+    const reachable = new Set<string>([entry]);
+    const queue: string[] = [entry];
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      for (const t of m.transitions) {
+        if (t.from.includes(cur) && !reachable.has(t.to)) {
+          reachable.add(t.to);
+          queue.push(t.to);
+        }
+      }
+    }
+    for (const t of m.transitions) {
+      const reachableFromMachine = t.from.some((f) => reachable.has(f)) || t.to === entry;
+      if (reachableFromMachine) ids.add(t.id);
+    }
+    // 创建转移（from='-'/空）归属本机即纳入
+    for (const t of m.transitions) {
+      if (isCreationTransition(t) && m.entryStateIds.includes(t.to)) ids.add(t.id);
+    }
+  }
+  return ids;
 }
 
 // ============================================================================
