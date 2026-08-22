@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import type { SourceProtocolModel, InterfaceSpec } from '../../src/model/types.js';
 
 const FIXTURES = join(process.cwd(), 'tests/fixtures');
@@ -19,7 +19,7 @@ function loadP2Model(): SourceProtocolModel {
 
 describe('specifier 扩展推导', () => {
   const model = loadP2Model();
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
 
   describe('attribute_update 接口', () => {
     test('T2 (receive_traffic) 生成 attribute_update 接口 IF_SYS_ATTR_T2', () => {
@@ -96,7 +96,7 @@ roles:
       }
       return s;
     });
-    const multiSpecs = specify(multiModel);
+    const multiSpecs = specsFromEnvelope(specify(multiModel));
 
     test('含 dimensions 的状态 → 生成 IF_OBS_MULTI_* 接口', () => {
       const multiObs = multiSpecs.find((s) => s.id === 'IF_OBS_MULTI_S2');

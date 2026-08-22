@@ -12,7 +12,7 @@ import { parseProtocolContent } from '../../src/parser/index.js';
 import { checkCompleteness } from '../../src/checker/index.js';
 import { reason } from '../../src/reasoner/index.js';
 import { formalize } from '../../src/formalizer/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { deriveContracts } from '../../src/contractor/index.js';
 import type { AIAdapter, AIPrompt, AIResponse } from '../../src/model/types.js';
 
@@ -120,7 +120,7 @@ describe('单协议端到端集成（approval-flow.md）', () => {
   // ⑤ specify（规格推导）
   // ----------------------------------------------------------------
   describe('⑤ specify（规格推导）', () => {
-    let specs = specify(model);
+    let specs = specsFromEnvelope(specify(model));
 
     test('生成了系统接口', () => {
       const systemSpecs = specs.filter((s) => s.kind === 'system');
@@ -157,7 +157,7 @@ describe('单协议端到端集成（approval-flow.md）', () => {
   // ④ contract（契约推导，依赖 ⑤ 的规格）
   // ----------------------------------------------------------------
   describe('④ contract（契约推导）', () => {
-    let specs = specify(model);
+    let specs = specsFromEnvelope(specify(model));
 
     test('信息契约非空', async () => {
       const result = await deriveContracts(model, specs);
@@ -195,7 +195,7 @@ describe('单协议端到端集成（approval-flow.md）', () => {
   // ----------------------------------------------------------------
   describe('数据流一致性：specs ↔ contracts', () => {
     test('系统接口的动作名出现在信息契约流中', async () => {
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const result = await deriveContracts(model, specs);
       const systemSpecs = specs.filter((s) => s.kind === 'system');
       const flowActions = result.contracts.information.flows
@@ -213,14 +213,14 @@ describe('单协议端到端集成（approval-flow.md）', () => {
     });
 
     test('契约方与规格中角色衍生一致', async () => {
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const result = await deriveContracts(model, specs);
       const roles = model.metadata.roles.map((r) => r.id);
       expect(result.contracts.parties.sort()).toEqual(roles.sort());
     });
 
     test('specs（规格）的 sourceId 与 contracts 的字段名存在关联', () => {
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const systemSpecs = specs.filter((s) => s.kind === 'system');
       const specActionNames = systemSpecs.map((s) => s.name);
       // 规约接口名包含动作相关的描述

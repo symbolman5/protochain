@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { generateTestTool } from '../../src/testgen/index.js';
 
 const FIXTURES = join(process.cwd(), 'tests/fixtures');
@@ -12,7 +12,7 @@ function readFixture(name: string): string {
 describe('testgen', () => {
   describe('protocol-model.ts 生成', () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const testTool = generateTestTool(model, specs, undefined, undefined, {});
 
     test('导出协议元数据常量', async () => {
@@ -59,7 +59,7 @@ describe('testgen', () => {
 
   describe('scenario-loader.ts 生成', () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const testTool = generateTestTool(model, specs, undefined, undefined, {});
 
     test('导出 Scenario 接口', async () => {
@@ -85,7 +85,7 @@ describe('testgen', () => {
 
   describe('protocol-executor.ts 生成', () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const testTool = generateTestTool(model, specs, undefined, undefined, {});
 
     test('导出 ProtocolImplementation 接口', async () => {
@@ -123,7 +123,7 @@ describe('testgen', () => {
 
   describe('consistency-asserter.ts 生成', () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const testTool = generateTestTool(model, specs, undefined, undefined, {});
 
     test('导出 ConsistencyResult 接口', async () => {
@@ -153,7 +153,7 @@ describe('testgen', () => {
   describe('生成代码的有效性', () => {
     test('生成的代码是合法 TypeScript 语法（基本结构）', async () => {
       const model = parseProtocolContent(readFixture('approval-flow.md'));
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const testTool = await generateTestTool(model, specs, undefined, undefined, {});
       // 检查基本结构特征
       expect(testTool.protocolModel).toMatch(/export const/);
@@ -164,7 +164,7 @@ describe('testgen', () => {
 
     test('生成时间戳存在', async () => {
       const model = parseProtocolContent(readFixture('approval-flow.md'));
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const testTool = await generateTestTool(model, specs, undefined, undefined, {});
       expect(testTool.generatedAt).toBeTruthy();
       // ISO 时间戳格式
@@ -175,7 +175,7 @@ describe('testgen', () => {
   describe('退化模式生成', () => {
     test('退化协议仍可生成测试工具', async () => {
       const model = parseProtocolContent(readFixture('degraded-protocol.md'));
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const testTool = await generateTestTool(model, specs, undefined, undefined, {});
       expect(testTool.protocolModel).toContain('PROTOCOL_NAME');
       // 退化协议只有 1 个状态 S1

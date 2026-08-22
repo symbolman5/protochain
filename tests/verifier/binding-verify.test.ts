@@ -11,7 +11,7 @@
  */
 
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { generateCases } from '../../src/casegen/index.js';
 import { validateBindings } from '../../src/binder/index.js';
 import { verify, type VerifyContext } from '../../src/verifier/index.js';
@@ -60,7 +60,7 @@ async function runBindingVerify(
   bindings: BindingConfig,
   transport: TransportExecutorFn
 ): Promise<{ report: Awaited<ReturnType<typeof verify>> }> {
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
   const testCases = generateCases(model, { criterion: 'state' });
   const ctx: VerifyContext = {
     rootDir: '.',
@@ -325,7 +325,7 @@ roles:
         return calls >= 2 ? ok({ currentState: 'S2' }) : ok({ currentState: 'S1' });
       },
     });
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const testCases = generateCases(model, { criterion: 'state' });
     const report = await verify(model, {
       rootDir: '.',
@@ -347,7 +347,7 @@ roles:
       fire: () => ok({ sent: true, pollMode: true }),
       observe_终态: () => ok({ currentState: 'S1' }), // 永远不收敛
     });
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const testCases = generateCases(model, { criterion: 'state' });
     const report = await verify(model, {
       rootDir: '.',
@@ -413,7 +413,7 @@ roles:
 | T1 | 添加 | S0 | S1 | add |
 | T6 | 退役 | S1 | S4 | retire |
 `);
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
   const testCases = generateCases(model, { criterion: 'state' });
 
   function makeBindings(): BindingConfig {
@@ -585,7 +585,7 @@ roles:
     const report = await verify(m, {
       rootDir: '.',
       testCases: generateCases(m, { criterion: 'state' }),
-      specs: specify(m),
+      specs: specsFromEnvelope(specify(m)),
       bindings: { ...bindings, stateMap: { S2: 'online' } },
       transportExecutor: transport,
     });
@@ -628,7 +628,7 @@ roles:
     const report = await verify(m, {
       rootDir: '.',
       testCases: generateCases(m, { criterion: 'state' }),
-      specs: specify(m),
+      specs: specsFromEnvelope(specify(m)),
       bindings: { ...bindings, stateMap: { S2: 'online' } },
       transportExecutor: transport,
     });
@@ -666,7 +666,7 @@ roles:
 |---|---|---|---|---|
 | T1 | 操作 | S1 | S2 | enable |
 `);
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
   const testCases = generateCases(model, { criterion: 'state' });
 
   function http(path: string): BindingConfig['interfaces'][number]['transport'] {
@@ -833,7 +833,7 @@ roles:
 | T5 | 下线 | S2 | S1 | go_offline |
 | T6 | 退役 | S1 | S4 | retire |
 `);
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
   const testCases = generateCases(model, { criterion: 'state' });
   const allBindings: NonNullable<BindingConfig['interfaces']> = [
     { action: 'add', roleId: 'R', transport: { type: 'http', method: 'POST', path: '/add', params: [] } },

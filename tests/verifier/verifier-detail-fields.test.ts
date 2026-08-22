@@ -8,7 +8,7 @@
  */
 
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { generateCases } from '../../src/casegen/index.js';
 import { verify, type VerifyContext } from '../../src/verifier/index.js';
 import type { ScenarioParamSource, TransportExecutorFn } from '../../src/verifier/binding-runner.js';
@@ -74,7 +74,7 @@ async function runVerify(
   transport: TransportExecutorFn,
   scenarios?: ScenarioParamSource[]
 ) {
-  const specs = specify(MODEL);
+  const specs = specsFromEnvelope(specify(MODEL));
   const testCases = generateCases(MODEL, { criterion: 'state' });
   const ctx: VerifyContext = {
     rootDir: '.',

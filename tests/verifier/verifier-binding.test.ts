@@ -10,7 +10,7 @@
  */
 
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { resolveBindings } from '../../src/binder/index.js';
 import type {
   InterfaceSpec,
@@ -99,7 +99,7 @@ roles:
 |---|---|---|---|---|---|
 | T1 | 走 | S1 | S2 | go | user |
 `);
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
   const { transitionsById, initialStateId } = extractDerivable(model);
 
   // 配置完整的 HTTP 绑定
@@ -191,7 +191,7 @@ roles:
 | T1 | 第一步 | S1 | S2 | step1 | user |
 | T2 | 第二步 | S2 | S3 | step2 | user |
 `);
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
   const transitionsById = new Map(model.derivable.transitions.map((t) => [t.id, t]));
 
   // 为系统接口 + 所有观测接口绑定
@@ -453,7 +453,7 @@ roles:
 | T2 | 通过 | S2 | S3 | approve | approver |
 | T3 | 驳回 | S2 | S4 | reject | approver |
 `);
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
   const transitionsById = new Map(model.derivable.transitions.map((t) => [t.id, t]));
   const initialStateId = model.derivable.states.find((s) => s.type === 'initial')!.id;
 

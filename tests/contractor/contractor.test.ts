@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { deriveContracts } from '../../src/contractor/index.js';
 import type { AIAdapter, AIPrompt, AIResponse } from '../../src/model/types.js';
 
@@ -21,7 +21,7 @@ class MockAIAdapter implements AIAdapter {
 describe('contractor', () => {
   describe('信息契约推导', () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const result = deriveContracts(model, specs, undefined, {
       useAIForInvariantRelevance: false,
     });
@@ -76,7 +76,7 @@ describe('contractor', () => {
 
   describe('时序契约推导', () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const result = deriveContracts(model, specs, undefined, {
       useAIForInvariantRelevance: false,
     });
@@ -108,7 +108,7 @@ describe('contractor', () => {
 
   describe('约束契约推导', () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const result = deriveContracts(model, specs, undefined, {
       useAIForInvariantRelevance: false,
     });
@@ -142,7 +142,7 @@ describe('contractor', () => {
   describe('不变量契约推导', () => {
     test('无 AI 时使用代码预判相关性', async () => {
       const model = parseProtocolContent(readFixture('approval-flow.md'));
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const r = await deriveContracts(model, specs, undefined, {
         useAIForInvariantRelevance: false,
       });
@@ -159,7 +159,7 @@ describe('contractor', () => {
 
     test('AI 辅助判断不变量相关性', async () => {
       const model = parseProtocolContent(readFixture('approval-flow.md'));
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const aiResponse = JSON.stringify({
         results: [
           {
@@ -189,7 +189,7 @@ describe('contractor', () => {
 
     test('AI 调用失败时回退到代码预判', async () => {
       const model = parseProtocolContent(readFixture('approval-flow.md'));
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const adapter = new MockAIAdapter('', false);
       const r = await deriveContracts(model, specs, adapter, {
         useAIForInvariantRelevance: true,
@@ -204,7 +204,7 @@ describe('contractor', () => {
 
     test('AI 输出无法解析时回退到代码预判', async () => {
       const model = parseProtocolContent(readFixture('approval-flow.md'));
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const adapter = new MockAIAdapter('不是 JSON');
       const r = await deriveContracts(model, specs, adapter, {
         useAIForInvariantRelevance: true,
@@ -253,7 +253,7 @@ roles:
 |---|---|---|---|
 | INV1 | 处理中不变量 | x > 0 | S2 |
 `);
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const r = await deriveContracts(model, specs, undefined, {
         useAIForInvariantRelevance: false,
       });
@@ -269,7 +269,7 @@ roles:
   describe('退化模式', () => {
     test('退化模式正常推导（不变量相关性无 AI 时回退）', async () => {
       const model = parseProtocolContent(readFixture('degraded-protocol.md'));
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const r = await deriveContracts(model, specs, undefined, {
         useAIForInvariantRelevance: false,
       });

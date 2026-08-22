@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import type { SourceProtocolModel } from '../../src/model/types.js';
 
 const FIXTURES = join(process.cwd(), 'tests/fixtures');
@@ -12,7 +12,7 @@ function readFixture(name: string): string {
 describe('specifier', () => {
   describe('正常模式推导', () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model)); // E2-I6 修复：specs 走 .specs 提取
 
     test('为每个转移生成系统接口', () => {
       const systemSpecs = specs.filter((s) => s.kind === 'system');
@@ -37,11 +37,15 @@ describe('specifier', () => {
       expect(currentStateInput!.required).toBe(true);
     });
 
-    test('系统接口投影 guard 为 precondition', () => {
+    test('系统接口投影 guard 为 precondition（E2-I2 修复：单标识符 guard 标 legacy-stub，不入 requestSchema 必填）', () => {
       const submitSpec = specs.find((s) => s.sourceId === 'submit')!;
       expect(submitSpec.precondition).toBe('form_valid');
-      // guard 参数被提取为输入
-      expect(submitSpec.inputs.some((i) => i.name === 'form_valid')).toBe(true);
+      // E2-I2 修复：form_valid 是单标识符谓词，不应作为请求输入字段
+      // （谓词本身就是 guard 表达式，不是请求参数）
+      expect(submitSpec.inputs.some((i) => i.name === 'form_valid')).toBe(false);
+      // 但 precondition 仍记为 description，含原 guard 文本
+      expect(submitSpec.preconditions?.[0]?.kind).toBe('legacy-stub');
+      expect(submitSpec.preconditions?.[0]?.description).toContain('form_valid');
     });
 
     test('系统接口投影 effects 为 postconditions', () => {
@@ -85,18 +89,18 @@ describe('specifier', () => {
     expect(model.derivable.degraded).toBe(true);
 
     test('退化模式下标注 degradedAssist', () => {
-      const specs = specify(model, { degradedAIAssist: true });
+      const specs = specsFromEnvelope(specify(model, { degradedAIAssist: true }));
       // 至少有一个被标注
       expect(specs.some((s) => s.degradedAssist === true)).toBe(true);
     });
 
     test('退化模式下不开启 AI 辅助时不标注', () => {
-      const specs = specify(model, { degradedAIAssist: false });
+      const specs = specsFromEnvelope(specify(model, { degradedAIAssist: false }));
       expect(specs.every((s) => !s.degradedAssist)).toBe(true);
     });
 
     test('TLA+ 形式化规格中的 ACTIONS 被提取为系统接口', () => {
-      const specs = specify(model, { degradedAIAssist: true });
+      const specs = specsFromEnvelope(specify(model, { degradedAIAssist: true }));
       // TLA+ 规格中存在 Next 等动作定义，应被提取（除非已在 transitions 中）
       // degraded-protocol.md 的 TLA+ 中包含 Init/Next 等保留名（被排除）
       // 验证提取不会重复已有的接口
@@ -136,7 +140,7 @@ roles:
 |---|---|---|---|---|---|---|
 | T1 | 转移 | S1 | S2 | doSomething | r1 | user_id > 0 and role == "admin" |
 `);
-      const specs = specify(model);
+      const specs = specsFromEnvelope(specify(model));
       const sysSpec = specs.find((s) => s.kind === 'system')!;
       // 应提取出 user_id 与 role（关键字 and 被排除）
       const inputNames = sysSpec.inputs.map((i) => i.name);

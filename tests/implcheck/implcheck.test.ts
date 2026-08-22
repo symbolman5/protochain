@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { checkImplementation, formatImplCheckSummary } from '../../src/implcheck/index.js';
 
 const FIXTURES = join(process.cwd(), 'tests/fixtures');
@@ -20,7 +20,7 @@ function makeTempDir(): string {
 describe('implcheck', () => {
   describe('接口存在性检查', () => {
     const model = parseProtocolContent(readFixture('approval-flow.md'));
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
 
     test('无任何实现时所有接口缺失', () => {
       const rootDir = makeTempDir();
@@ -114,7 +114,7 @@ const timeout_return = (s) => ({ nextState: 'S1' });`;
         writeFileSync(join(rootDir, 'src/real.ts'), `export const submit = () => {};`, 'utf-8');
 
         const model = parseProtocolContent(readFixture('approval-flow.md'));
-        const specs = specify(model);
+        const specs = specsFromEnvelope(specify(model));
         const report = checkImplementation(specs, rootDir);
         // submit 在 src/real.ts 中找到
         const submitCheck = report.interfaceChecks.find((c) => c.interfaceName === 'submit');
@@ -132,7 +132,7 @@ const timeout_return = (s) => ({ nextState: 'S1' });`;
         writeFileSync(join(rootDir, 'derived/test-tool/generated.ts'), content, 'utf-8');
 
         const model = parseProtocolContent(readFixture('approval-flow.md'));
-        const specs = specify(model);
+        const specs = specsFromEnvelope(specify(model));
         // sourceDirs 默认为 ['src', 'impl']，不含 derived/
         const report = checkImplementation(specs, rootDir);
         // submit 在 derived/test-tool 中，应不被扫描
@@ -150,7 +150,7 @@ const timeout_return = (s) => ({ nextState: 'S1' });`;
         writeFileSync(join(rootDir, 'src/impl.py'), `def submit(state): pass`, 'utf-8');
 
         const model = parseProtocolContent(readFixture('approval-flow.md'));
-        const specs = specify(model);
+        const specs = specsFromEnvelope(specify(model));
         const report = checkImplementation(specs, rootDir, {
           extensions: ['.py'],
         });
@@ -167,7 +167,7 @@ const timeout_return = (s) => ({ nextState: 'S1' });`;
       const rootDir = makeTempDir();
       try {
         const model = parseProtocolContent(readFixture('approval-flow.md'));
-        const specs = specify(model);
+        const specs = specsFromEnvelope(specify(model));
         const report = checkImplementation(specs, rootDir);
         const summary = formatImplCheckSummary(report);
         expect(summary).toContain('实现完整性检查');
@@ -183,7 +183,7 @@ const timeout_return = (s) => ({ nextState: 'S1' });`;
       const rootDir = makeTempDir();
       try {
         const model = parseProtocolContent(readFixture('approval-flow.md'));
-        const specs = specify(model);
+        const specs = specsFromEnvelope(specify(model));
         const report = checkImplementation(specs, rootDir);
         const summary = formatImplCheckSummary(report);
         expect(summary).toContain('缺失接口');
@@ -198,7 +198,7 @@ const timeout_return = (s) => ({ nextState: 'S1' });`;
       const rootDir = makeTempDir();
       try {
         const model = parseProtocolContent(readFixture('approval-flow.md'));
-        const specs = specify(model);
+        const specs = specsFromEnvelope(specify(model));
         const report = checkImplementation(specs, rootDir);
         expect(report.checkedAt).toBeTruthy();
         expect(report.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);

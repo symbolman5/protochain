@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { generateTestTool } from '../../src/testgen/index.js';
 import { GenerationLoopError } from '../../src/ai/generation-loop.js';
 import type { AIAdapter, AIPrompt, AIResponse, TestToolCode } from '../../src/model/types.js';
@@ -32,7 +32,7 @@ class ScriptedAdapter implements AIAdapter {
 
 describe('testgen AI 生成 loop', () => {
   const model = parseProtocolContent(readFileSync(join(FIXTURES, 'approval-flow.md'), 'utf-8'));
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
 
   test('机械预检（tsc --noEmit）失败后能触发一次修正并成功', async () => {
     // 确定性生成结果作为"正确"答案

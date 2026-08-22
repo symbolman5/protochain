@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { generateTestTool } from '../../src/testgen/index.js';
 import { generateCases } from '../../src/casegen/index.js';
 import { loadTestTool, TestToolContractError } from '../../src/testtool/loader.js';
@@ -29,7 +29,7 @@ async function writeGeneratedProject(): Promise<{
   testCases: TestCaseSet;
 }> {
   const model = parseProtocolContent(readFixture('approval-flow.md'));
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
   const testTool: TestToolCode = await generateTestTool(model, specs, undefined, undefined, {});
   const testCases = generateCases(model, { criterion: 'state' });
 

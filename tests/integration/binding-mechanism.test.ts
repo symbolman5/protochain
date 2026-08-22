@@ -17,7 +17,7 @@ import * as http from 'node:http';
 import { AddressInfo } from 'node:net';
 
 import { parseProtocolContent } from '../../src/parser/index.js';
-import { specify } from '../../src/specifier/index.js';
+import { specify, specsFromEnvelope } from '../../src/specifier/index.js';
 import { resolveBindings, validateBindings, findBinding } from '../../src/binder/index.js';
 import { executeTransport } from '../../src/transport/index.js';
 import type {
@@ -110,7 +110,7 @@ async function runBindingPipeline(
   resolved: ResolvedBinding[];
 }> {
   const model = parseProtocolContent(modelContent);
-  const specs = specify(model);
+  const specs = specsFromEnvelope(specify(model));
   const resolved = resolveBindings(specs, config);
 
   // 执行系统接口动作
@@ -364,7 +364,7 @@ roles:
 
     // 构建观测接口双向索引
     const model = parseProtocolContent(modelContent);
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
     const resolved = resolveBindings(specs, config);
 
     // Step 1: 执行 submit（S1 → S2）
@@ -426,7 +426,7 @@ roles:
 `;
 
     const model = parseProtocolContent(modelContent);
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
 
     // 只绑定系统接口，不绑定观测接口
     const partialConfig = createBindingConfig('http://test', [
@@ -577,7 +577,7 @@ roles:
 `;
 
     const model = parseProtocolContent(modelContent);
-    const specs = specify(model);
+    const specs = specsFromEnvelope(specify(model));
 
     const config = createBindingConfig('http://test', [
       { action: 'go', roleId: 'R', transport: { type: 'http', method: 'POST', path: '/go', params: [] } },
