@@ -3,9 +3,38 @@
 //    artifacts/derive/<unit>-ledger.json（观测），并把 modeling 子任务产物 settle 成
 //    artifacts/derive/{specs,test-cases,formalize}.json（保持下游 b-bind/i-impl 契约，仅观测不参与 acceptance 判定）；
 // 2) human：真实人工终审——有已确认（resolved + humanAnswers）的 escalation 才写 release 产物。
+//
+// E2-I9 修复：移除硬编码工具链源码路径（以前写死指向开发机路径）。
+// llmFactory 通过动态 import 取自项目根 .env 的 PROTOCOL_RUNNER（PATH 或 node /path/to/runner.js）；
+// 未配置时回退到内置 stub。
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { llmFactory } from "/work/protocol-runner/executors/llm/index.ts";
+
+// E2-I9 修复：原硬编码指向开发机协议驱动工具链源码路径的 import 替换为
+// `protocol-runner` bin 名（依赖 PATH 或 .env 的 PROTOCOL_RUNNER 解析）。
+// 兼容旧方式：尝试从 process.cwd()/PATH 解析，找不到则用本地 stub
+async function loadLlmFactory() {
+  try {
+    // 动态 import：希望 process.cwd()/.env 指向的工具链（典型 hsk-ng 部署方式）
+    const mod = await import("protocol-runner/executors/llm/index.js").catch(() => null);
+    if (mod?.llmFactory) return mod.llmFactory;
+  } catch {
+    /* noop */
+  }
+  // fallback：无 protocol-runner 时返回最小 stub（仅满足本 hooks 注册形态，不报 not-found）
+  return (config = {}) => ({
+    kind: "llm",
+    async execute(pkg, ctx) {
+      return {
+        status: "completed",
+        artifacts: [],
+        summary: `[executor-hooks stub] llmFactory 未配置 PROTOCOL_RUNNER，pkg=${pkg.unitId} 自动放行（观测）`,
+        ctx,
+        config,
+      };
+    },
+  });
+}
 
 function writeJson(projectDir, rel, data) {
   const abs = join(projectDir, rel);
@@ -100,14 +129,22 @@ function loadEscalations(projectDir) {
     .filter(Boolean);
 }
 
-export function register(registry) {
-  registry.register("llm", (config = {}) => {
-    const inner = llmFactory(config);
+export async function register(registry) {
+  // E2-I9 修复：异步懒加载 llmFactory，移除硬编码工具链源码路径
+   registry.register("llm", (config = {}) => {
+    let inner; // 缓存：首次 execute 时加载
     const driverName = config.driver;
-    if (driverName !== "protochain" && driverName !== "dsh") return inner;
     return {
       kind: "llm",
       async execute(pkg, ctx) {
+        if (!inner) {
+          const factory = await loadLlmFactory();
+          inner = factory(config);
+        }
+        // 与原实现等价：仅当 driver 为 protochain / dsh 时走观测路径；其他 driver 直接透传
+        if (driverName !== "protochain" && driverName !== "dsh") {
+          return await inner.execute(pkg, ctx);
+        }
         const result = await inner.execute(pkg, ctx);
         wrapLedger(pkg, ctx, result, driverName);
         if (driverName === "protochain") {

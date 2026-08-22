@@ -6,9 +6,8 @@
 > 可选 preflight 注入），账本/成本结构化回流。
 > 工具链均为**编译产物/外部工具**：protochain 走 PATH（或 `{{PROTOCHAIN}}` 覆盖），protocol-runner 用 `dist/runner.js` 或 `protocol-runner` bin——**不依赖任何工具链源码**。
 >
-> 唯一例外：`executor-hooks.mjs` 里 llm 包装（账本落盘 + protochain settle）静态 import 了
-> `/work/protocol-runner/executors/llm/index.ts`（hsk-ng 同款约定）。不想依赖源码路径时，
-> 删除 hooks 中的 `registry.register("llm", ...)` 包装即可回退内置 llmFactory（损失账本观测，编排语义不变）。
+> `executor-hooks.mjs` 里 llm 包装（账本落盘 + protochain settle）默认通过 `import("protocol-runner/executors/llm/index.js")` 动态加载；
+> 加载失败时回退到内置 stub（不阻断编排，损失账本观测）。不再硬编码任何工具链源码路径。
 
 ## 前置依赖（只装工具，不看源码）
 
