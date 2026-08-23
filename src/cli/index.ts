@@ -151,6 +151,48 @@ function loadSpecsOrMigrate(
 }
 
 /**
+ * 收集多协议项目各子协议 specs.errorResponses 声明的错误码。
+ *
+ * 用途（B6.3）：bind --protocol <Pn> 校验 errorMap 时，把「其他子协议声明的码」
+ * 归类为跨协议共享 errorMap（预期保留），避免误报"可能残留"。
+ * - 组合层（ctx.systemRoot）读 protocol/composition.md + 各子协议 derived/specs.json；
+ * - 单协议项目或组合层文件缺失 → 返回 undefined（binder 回退到旧行为：全量警告）。
+ */
+function collectProjectProtocolErrorCodes(
+  ctx: ProjectContext
+): Record<string, string[]> | undefined {
+  if (ctx.mode !== 'multi') return undefined;
+  const compositionPath = join(ctx.systemRoot, 'protocol/composition.md');
+  if (!existsSync(compositionPath)) return undefined;
+  const out: Record<string, string[]> = {};
+  try {
+    const composition = parseCompositionFile(compositionPath);
+    for (const sub of composition.subProtocols) {
+      const codes: string[] = [];
+      try {
+        const raw = readReport<unknown>(ctx.systemRoot, `protocol/${sub.protocolId}/derived/specs.json`);
+        if (raw !== undefined) {
+          const specs = isSpecsEnvelope(raw)
+            ? raw.specs
+            : (Array.isArray(raw) ? envelopeMigrate(raw, sub.version).envelope.specs : []);
+          for (const sp of specs) {
+            for (const er of sp.errorResponses ?? []) {
+              if (er.errorCode) codes.push(er.errorCode);
+            }
+          }
+        }
+      } catch {
+        // 子协议 specs 缺失/损坏不阻断：该协议码无法归类 → binder 按残留处理
+      }
+      out[sub.protocolId] = codes;
+    }
+    return out;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * 从 model + specs 推导出 legacyExpectedResponses（E2-I4 修复 + E2.1 扩面）。
  *
  * 设计：
@@ -1235,7 +1277,16 @@ program
       const envBindings = applyBindingEnvironment(effectiveBindings, opts.env);
       const model = parseProtocolFile(ctx.modelPath);
       const specs = loadSpecsOrMigrate(rootDir, model, () => specsFromEnvelope(specify(model)));
-      const report = validateBindings(specs, envBindings, ctx.protocolId);
+      // E11 B6.3：多协议项目按协议过滤 errorMap——
+      // 组合层 bindings.yaml 为全量 errorMap，bind --protocol <Pn> 只对照当前协议 specs；
+      // 其他子协议声明的码归类为「跨协议共享（预期保留）」，避免误报"可能残留"。
+      const exceptionPathErrorCodes = (model.derivable.exceptions ?? [])
+        .map((e) => e.errorCode)
+        .filter((c): c is string => Boolean(c));
+      const report = validateBindings(specs, envBindings, ctx.protocolId, {
+        exceptionPathErrorCodes,
+        protocolErrorCodes: collectProjectProtocolErrorCodes(ctx),
+      });
       console.log('=== 接口绑定完整性校验 ===');
       console.log(`  绑定环境: ${envLabel}`);
       if (skeletonUsed) {
@@ -1251,6 +1302,10 @@ program
       if (report.warnings.length > 0) {
         console.log('  警告:');
         for (const w of report.warnings) console.log(`    - ${w}`);
+      }
+      if (report.crossProtocolErrorCodes && report.crossProtocolErrorCodes.length > 0) {
+        console.log('  跨协议共享错误码（预期保留，非残留）:');
+        console.log(`    - ${report.crossProtocolErrorCodes.join(', ')}`);
       }
       console.log(`\n总体：${report.valid ? '✓ 通过' : '✗ 未通过'}`);
       process.exit(report.valid ? 0 : 1);

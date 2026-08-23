@@ -1803,6 +1803,11 @@ export interface BindingValidationReport {
   unmappedErrorCodes?: string[];
   /** E11：errorMap 中声明但 specs/异常路径未声明的 errorCode 列表（warning） */
   extraErrorCodes?: string[];
+  /**
+   * E11：errorMap 中声明但属于其他子协议的 errorCode 列表（多协议项目跨协议共享
+   * errorMap；`bind --protocol <Pn>` 按协议校验时的预期保留项，非残留）
+   */
+  crossProtocolErrorCodes?: string[];
 }
 
 // ============================================================================

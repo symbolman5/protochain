@@ -1503,6 +1503,8 @@ export async function deriveProjectWeb(
           bindings: bindingView?.hasBindings
             ? (redactSensitiveFields(bindingsRaw ?? {}) as BindingConfig)
             : undefined,
+          // B6.3：组合层 errorMap 为全量，传全项目错误码并集，跨协议共享码不误报"残留"
+          allProjectErrorCodes: collectProjectErrorCodes(allSpecs),
         });
         const subDataRedacted = redactSensitiveFields(subData) as typeof subData;
         writeText(join(protoDir, 'test-cases.md'), renderTestCasesPage(subDataRedacted));
@@ -1588,10 +1590,27 @@ export async function deriveProjectWeb(
 // ============================================================================
 // 辅助：被父目录 utils 引用的子路径工具（避免外部 import 时找不到 basename）
 // ============================================================================
-
 /** 子协议 specs.json 路径（暴露给测试使用） */
-export function specsPathFor(rootDir: string, protocolId: string): string {
+export function subProtocolSpecsPath(
+  rootDir: string,
+  protocolId: string
+): string {
   return join(rootDir, 'protocol', protocolId, 'derived', 'specs.json');
+}
+
+/**
+ * B6.3：全项目错误码并集（各子协议 specs.errorResponses 的 errorCode）。
+ * 用于 buildBindingView 把「其他子协议声明的码」归类为跨协议共享（预期保留），
+ * 不误报"可能是残留"。
+ */
+export function collectProjectErrorCodes(allSpecs: InterfaceSpec[]): string[] {
+  const codes = new Set<string>();
+  for (const s of allSpecs) {
+    for (const er of s.errorResponses ?? []) {
+      if (er.errorCode) codes.add(er.errorCode);
+    }
+  }
+  return [...codes];
 }
 
 /** 文件名 basename（re-export for convenience） */

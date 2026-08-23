@@ -487,7 +487,8 @@ export function buildInterfaceViews(specs: InterfaceSpec[]): WebInterfaceView[] 
  */
 export function buildBindingView(
   bindings: BindingConfig | undefined,
-  specs: InterfaceSpec[]
+  specs: InterfaceSpec[],
+  options?: { allProjectErrorCodes?: string[] }
 ): WebBindingView {
   if (!bindings) {
     return { roles: [], interfaces: [], warnings: [], hasBindings: false };
@@ -533,9 +534,12 @@ export function buildBindingView(
     for (const code of declared) {
       if (!(code in bindings.errorMap)) unmappedErrorCodes.push(code);
     }
-    // 额外的 errorCode（errorMap 里有但 specs/异常路径没声明）
+    // 额外的 errorCode（errorMap 里有但 specs/异常路径没声明）：
+    // 多协议项目 errorMap 为组合层全量，其他子协议声明的码归为跨协议共享（预期保留），
+    // 不误报"可能是残留"。
+    const allProject = new Set(options?.allProjectErrorCodes ?? []);
     for (const code of Object.keys(bindings.errorMap)) {
-      if (!declared.has(code)) {
+      if (!declared.has(code) && !allProject.has(code)) {
         warnings.push(
           `errorMap 中的错误码 "${code}" 未在 specs.errorResponses / 异常路径声明（可能是残留）`
         );
@@ -777,6 +781,12 @@ export interface DeriveWebInputs {
    * 未提供 → binding 视图标记 hasBindings=false。
    */
   bindings?: BindingConfig;
+  /**
+   * B6.3：多协议项目全量错误码（各子协议 specs.errorResponses 的并集）。
+   * 传递后 buildBindingView 把「其他子协议声明的码」归类为跨协议共享（预期保留），
+   * 不误报"可能是残留"。单协议项目不传。
+   */
+  allProjectErrorCodes?: string[];
 }
 
 /** 由 inputs 构造 WebDataJson（pure function） */
@@ -790,6 +800,7 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
     diff,
     impact,
     bindings,
+    allProjectErrorCodes,
   } = inputs;
   const specs = specsEnvelope.specs;
   const interfaces = buildInterfaceViews(specs);
@@ -798,7 +809,7 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
   const diffView = buildDiffView(diff);
   const impactView = buildImpactView(impact, diff);
   const implCheckView = buildImplCheckView(implCheck);
-  const bindingView = buildBindingView(bindings, specs);
+  const bindingView = buildBindingView(bindings, specs, { allProjectErrorCodes });
   const exceptionPaths = (model.derivable.exceptions ?? []).map((e) => {
     const out: { id: string; name: string; errorCode?: string } = {
       id: e.id,

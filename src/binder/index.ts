@@ -159,10 +159,25 @@ export function resolveBindings(
   });
 }
 
+/**
+ * E11 bind 校验上下文（多协议项目按协议过滤 errorMap 所需）
+ *
+ * - exceptionPathErrorCodes：当前协议 model.md 异常路径声明的错误码
+ *   （并入"已声明"集合——option a：只校验当前协议 specs 声明的码 + 该协议异常路径码）
+ * - protocolErrorCodes：全项目各子协议声明的错误码（protocolId → codes）。
+ *   bind --protocol <Pn> 时用于把 errorMap 中「属于其他子协议」的码归类为
+ *   跨协议共享（预期保留），避免误报"可能是残留"。
+ */
+export interface BindValidationOptions {
+  exceptionPathErrorCodes?: string[];
+  protocolErrorCodes?: Record<string, string[]>;
+}
+
 export function validateBindings(
   specs: InterfaceSpec[],
   config: BindingConfig,
-  protocolId?: string
+  protocolId?: string,
+  options: BindValidationOptions = {}
 ): BindingValidationReport {
   const missingSystem: string[] = [];
   const missingObservation: string[] = [];
@@ -247,17 +262,39 @@ export function validateBindings(
     }
   }
 
+  // option a：当前协议异常路径声明的错误码并入"已声明"集合
+  // （异常路径错误码属于当前协议自身契约范围，不视为 errorMap 多余码）
+  for (const code of options.exceptionPathErrorCodes ?? []) {
+    if (code) declaredErrorCodes.add(code);
+  }
+
   // errorMap 中多余的 errorCode（不在 specs/异常路径中）→ warning（可能残留）
+  // 多协议项目：errorMap 为组合层全量（含 P1-P4 所有码），bind --protocol <Pn>
+  // 只对照当前协议 specs → 其他协议的码会误报"未声明"。按协议过滤：
+  // 属于其他子协议声明的码归类为跨协议共享（预期保留，非残留）。
   let extraErrorCodes: string[] | undefined;
+  const crossProtocolErrorCodes: string[] = [];
   if (config.errorMap) {
-    extras: for (const code of Object.keys(config.errorMap)) {
-      if (!declaredErrorCodes.has(code)) {
-        if (!extraErrorCodes) extraErrorCodes = [];
-        extraErrorCodes.push(code);
-        warnings.push(
-          `errorMap 中的错误码 "${code}" 未在 specs.errorResponses 中声明（可能是残留）`
-        );
+    // 其他子协议声明的码集合（排除当前协议自身）
+    const otherProtocolCodes = new Set<string>();
+    if (protocolId && options.protocolErrorCodes) {
+      for (const [pid, codes] of Object.entries(options.protocolErrorCodes)) {
+        if (pid === protocolId) continue;
+        for (const c of codes) otherProtocolCodes.add(c);
       }
+    }
+    for (const code of Object.keys(config.errorMap)) {
+      if (declaredErrorCodes.has(code)) continue;
+      if (otherProtocolCodes.has(code)) {
+        // 跨协议共享 errorMap：该码由其他子协议 specs 声明 → 预期保留
+        crossProtocolErrorCodes.push(code);
+        continue;
+      }
+      if (!extraErrorCodes) extraErrorCodes = [];
+      extraErrorCodes.push(code);
+      warnings.push(
+        `errorMap 中的错误码 "${code}" 未在 specs.errorResponses 中声明（可能是残留）`
+      );
     }
   }
   if (unmappedErrorCodes.length > 0) {
@@ -279,6 +316,8 @@ export function validateBindings(
     warnings,
     unmappedErrorCodes: unmappedErrorCodes.length > 0 ? Array.from(new Set(unmappedErrorCodes)) : undefined,
     extraErrorCodes,
+    crossProtocolErrorCodes:
+      crossProtocolErrorCodes.length > 0 ? crossProtocolErrorCodes : undefined,
   };
 }
 

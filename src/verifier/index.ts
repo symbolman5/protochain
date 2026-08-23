@@ -235,12 +235,9 @@ export async function verify(
     auxiliary,
     sqlInvariantCheck,
     byDesignNotTestedByToolchain,
-    // E11：仅当 errorMap 生效时挂 errorSummary（兼容老协议）
-    errorSummary: errorSummary && (
-      Object.keys(errorSummary.matched).length > 0 ||
-      errorSummary.unmapped.length > 0 ||
-      errorSummary.systemFault > 0
-    ) ? errorSummary : undefined,
+    // E11：errorMap 配置即挂 errorSummary（含全零；干净运行如实展示 0 计数）。
+    // 兼容老协议：未配置 errorMap 时 errorSummary 为 undefined，不挂字段。
+    errorSummary: errorSummary ? errorSummary : undefined,
     verifiedAt,
   };
 }
