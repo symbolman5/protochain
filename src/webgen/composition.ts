@@ -42,6 +42,7 @@
 import { readFileSync, existsSync, rmSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { parseCompositionFile } from '../composition-parser/index.js';
+import { parseProtocolFile } from '../parser/index.js';
 import {
   envelopeMigrate,
   isSpecsEnvelope,
@@ -53,14 +54,31 @@ import type {
   DependencyEdge,
   CrossInvariantDef,
 } from '../model/types.js';
-import type { InterfaceSpec, FieldSpec, ErrorResponseDef } from '../model/types.js';
+import type {
+  InterfaceSpec,
+  FieldSpec,
+  ErrorResponseDef,
+  SourceProtocolModel,
+  BindingConfig,
+  TestCaseSet,
+  VerificationReport,
+  ImplCheckReport,
+  ModelDiff,
+  ImpactAnalysis,
+} from '../model/types.js';
 import {
   redactSensitiveFields,
   writeJson,
   writeText,
   ensureVitepressInstalled,
   readBindingsFileSafely,
+  readOptionalJson,
   buildBindingView,
+  buildWebData,
+  renderTestCasesPage,
+  renderVerificationPage,
+  renderDiffPage,
+  renderBindingViewPage,
   type WebBindingView,
 } from './index.js';
 
@@ -1459,6 +1477,44 @@ export async function deriveProjectWeb(
       writeText(
         join(protoDir, `${encodeURIComponent(iface.id)}.md`),
         renderProjectInterfaceDetailPage(proto, iface, data.crossRefs, bindingView)
+      );
+    }
+
+    // 单协议具体信息页（test-cases/verification/diff/bindings）：
+    // 复用单协议 webgen 渲染函数，机械生成该子协议视图并写入组合层
+    // protocols/<id>/（替代人工复制单协议产物）。缺 derived 产物/解析失败时
+    // 降级为 warnings，不阻断组合层生成。
+    try {
+      const subRoot = join(rootDir, 'protocol', proto.id);
+      const envelope = subEnvelopes.get(proto.id);
+      if (envelope) {
+        const model: SourceProtocolModel = parseProtocolFile(
+          join(subRoot, 'model.md'),
+          { allowDegraded: true }
+        );
+        const subData = buildWebData({
+          specsEnvelope: envelope,
+          model,
+          testCases: readOptionalJson<TestCaseSet>(join(subRoot, 'derived/test-cases.json')),
+          verification: readOptionalJson<VerificationReport>(join(subRoot, 'derived/verification/verification-report.json')),
+          implCheck: readOptionalJson<ImplCheckReport>(join(subRoot, 'derived/impl-check/impl-check-report.json')),
+          diff: readOptionalJson<ModelDiff>(join(subRoot, 'derived/diff/model-diff.json')),
+          impact: readOptionalJson<ImpactAnalysis>(join(subRoot, 'derived/impact-analysis.json')),
+          bindings: bindingView?.hasBindings
+            ? (redactSensitiveFields(bindingsRaw ?? {}) as BindingConfig)
+            : undefined,
+        });
+        const subDataRedacted = redactSensitiveFields(subData) as typeof subData;
+        writeText(join(protoDir, 'test-cases.md'), renderTestCasesPage(subDataRedacted));
+        writeText(join(protoDir, 'verification.md'), renderVerificationPage(subDataRedacted));
+        writeText(join(protoDir, 'diff.md'), renderDiffPage(subDataRedacted));
+        writeText(join(protoDir, 'bindings.md'), renderBindingViewPage(subDataRedacted));
+      } else {
+        allWarnings.push(`[${proto.id}] specs.json 不可读，跳过单协议具体信息页生成`);
+      }
+    } catch (err) {
+      allWarnings.push(
+        `[${proto.id}] 单协议具体信息页生成失败：${err instanceof Error ? err.message : String(err)}`
       );
     }
   }

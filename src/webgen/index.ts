@@ -1249,8 +1249,11 @@ function renderErrorResponsesTable(errors: ErrorResponseDef[]): string {
 }
 
 /** 生成 bindings.md（E11：绑定视图——错误响应/传输绑定表/错误映射表） */
-function renderBindingViewPage(data: WebDataJson): string {
+export function renderBindingViewPage(data: WebDataJson): string {
   const b = data.binding;
+  // 脱敏说明（运行时拼接，避免 `${...}` 字面残留被 VitePress 的 vue 编译误解析）
+  const redactionNotice =
+    REDACTION_NOTICE_LINES.length > 0 ? `（${REDACTION_NOTICE_LINES[0]}）` : '';
   if (!b || !b.hasBindings) {
     return `# 绑定视图（E11）
 
@@ -1295,7 +1298,7 @@ function renderBindingViewPage(data: WebDataJson): string {
   return `# 绑定视图（E11）
 
 > 安全边界：仅展示非敏感投影子集（roles baseUrl/headers + interfaces transport + errorMap）。
-> authConfig/tls 密钥段不读取。\${REDACTION_NOTICE_LINES.length > 0 ? '（' + REDACTION_NOTICE_LINES[0] + '）' : ''}
+> authConfig/tls 密钥段不读取。${redactionNotice}
 
 ## 角色绑定
 
@@ -1344,8 +1347,8 @@ ${
 `;
 }
 
-/** 生成 test-cases.md */
-function renderTestCasesPage(data: WebDataJson): string {
+/** 生成 test-cases.md（导出：组合层复用生成子协议具体信息页） */
+export function renderTestCasesPage(data: WebDataJson): string {
   const rows = data.testCases.map((tc) => {
     const passed = tc.verificationPassed === true ? '✓' : tc.verificationPassed === false ? '✗' : '?';
     const skipped = tc.verificationSkipped ? '(跳过)' : '';
@@ -1385,7 +1388,7 @@ ${data.testCases
 }
 
 /** 生成 verification.md */
-function renderVerificationPage(data: WebDataJson): string {
+export function renderVerificationPage(data: WebDataJson): string {
   const v = data.verification;
   const s = v.deviationSummary;
   const rows: string[][] = [];
@@ -1456,7 +1459,7 @@ function renderErrorSummarySection(s: NonNullable<WebVerificationView['errorSumm
 }
 
 /** 生成 diff.md */
-function renderDiffPage(data: WebDataJson): string {
+export function renderDiffPage(data: WebDataJson): string {
   const d = data.diff;
   const i = data.impact;
   if (!d) {
