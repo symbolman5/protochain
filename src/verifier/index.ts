@@ -39,6 +39,8 @@ import type {
   BindingConfig,
   ResolvedBinding,
   TestToolRunReport,
+  ByDesignNotTestedItem,
+  ErrorSummary,
 } from '../model/types.js';
 import { parseAIJson } from '../ai/adapter.js';
 import { resolveBindings, filterInterfaces } from '../binder/index.js';
@@ -85,6 +87,26 @@ export interface VerifyContext {
   legacyExpectedResponses?: Record<string, Record<string, unknown>>;
   /** 显式启用 E2 字段级对比；默认 false（保持原行为），新格式 specs.json 通过 derive-specs 触发后由 CLI 设为 true */
   enableFieldLevelCompare?: boolean;
+  // ── E4 ──
+  /**
+   * E4：跳过 SQL 校验路径（--skip-sql-check）。true 时 verify 不连 storage，
+   * 但报告仍写明"已跳过"，归入 `by-design-not-tested-by-toolchain` 段的项
+   * 仍然可见（不静默）。
+   */
+  skipSqlCheck?: boolean;
+  /**
+   * E4：注入的 SQL 校验结果（CLI 层读 env 组装 SqlCheckConfig 后调用 sqlcheck
+   * 引擎，verifier 仅消费其结果；便于单测时直接传 mock）。
+   */
+  sqlInvariantCheck?: import('../model/types.js').SqlInvariantCheckReport;
+  /**
+   * E6：mock 模式标记。true 时 verifier 跳过真实 impl 调用，但要求
+   *   - testCases 来自 derived/test-cases.json；
+   *   - 实现对象由 mock runner 提供（test-tool mock + spy）；
+   *   - 通过 deterministic 路径校验"模型层契约一致性"。
+   * 两次连续 verify 报告 sha256 应一致。
+   */
+  mockMode?: boolean;
 }
 
 /**
@@ -123,6 +145,16 @@ export async function verify(
     };
   }
 
+  // E11：错误计数累加器（多个 runBindingPathCase 调用共享 → 聚合到单一 ErrorSummary）
+  const errorSummary: ErrorSummary | undefined = ctx.bindings?.errorMap
+    ? {
+        matched: {},
+        unmapped: [],
+        systemFault: 0,
+        expected: {},
+      }
+    : undefined;
+
   // 2. 执行单协议测试用例（test-tool 消费优先；绑定模式次之；stub 模式兜底）
   const authoritative = ctx.testToolRun
     ? authoritativeFromTestTool(ctx.testToolRun)
@@ -140,6 +172,9 @@ export async function verify(
             scenarios: ctx.scenarios,
             legacyExpectedResponses: ctx.legacyExpectedResponses,
             enableFieldLevelCompare: ctx.enableFieldLevelCompare === true,
+            // E11：错误判定上下文（errorMap + 共享累加器）
+            errorMap: ctx.bindings.errorMap,
+            errorSummary,
           }
         )
       : await runTestCases(model, testCases, ctx.implementation);
@@ -184,6 +219,11 @@ export async function verify(
   // 5. 重新计算总体通过状态
   authoritative.passed = authoritative.counts.failed === 0;
 
+  // 5b. E4：数据级不变量 SQL 校验段 + by-design 段（不参与 authoritative.passed；
+  //     报告中显式列出，不静默）
+  const sqlInvariantCheck = ctx.sqlInvariantCheck;
+  const byDesignNotTestedByToolchain = collectByDesignItems(model);
+
   // 6. 可选 AI 摘要
   let auxiliary: AuxiliarySummary | undefined;
   if (options.useAISummary && aiAdapter) {
@@ -193,6 +233,14 @@ export async function verify(
   return {
     authoritative,
     auxiliary,
+    sqlInvariantCheck,
+    byDesignNotTestedByToolchain,
+    // E11：仅当 errorMap 生效时挂 errorSummary（兼容老协议）
+    errorSummary: errorSummary && (
+      Object.keys(errorSummary.matched).length > 0 ||
+      errorSummary.unmapped.length > 0 ||
+      errorSummary.systemFault > 0
+    ) ? errorSummary : undefined,
     verifiedAt,
   };
 }
@@ -289,6 +337,9 @@ async function runTestCasesBinding(
     // ── E2 字段级偏差对比 ──
     legacyExpectedResponses?: Record<string, Record<string, unknown>>;
     enableFieldLevelCompare?: boolean;
+    // ── E11 错误判定 ──
+    errorMap?: Record<string, import('../model/types.js').ErrorMapEntry>;
+    errorSummary?: ErrorSummary;
   } = {}
 ): Promise<AuthoritativeVerification> {
   // 规格缺失时无法解析绑定：如实走"接口未绑定"偏差，而不是静默跳过
@@ -328,6 +379,9 @@ async function runTestCasesBinding(
         // ── E2 字段级偏差对比 ──
         legacyExpectedResponses: options.legacyExpectedResponses,
         enableFieldLevelCompare: options.enableFieldLevelCompare === true,
+        // ── E11 错误判定 ──
+        errorMap: options.errorMap,
+        errorSummary: options.errorSummary,
       }
     );
     caseResults.push(result);
@@ -760,5 +814,104 @@ export function formatVerificationSummary(report: VerificationReport): string {
     }
   }
 
+  // ── E4：SQL 校验 + by-design 段（独立展示，不参与 passed/failed） ──
+  if (report.sqlInvariantCheck) {
+    const s = report.sqlInvariantCheck;
+    if (s.ran) {
+      const pass = s.items.filter((i) => i.passed).length;
+      const fail = s.items.length - pass;
+      lines.push(`  SQL 校验（E4）: ${s.connection ? `${s.connection.driver}@${s.connection.host}:${s.connection.port}/${s.connection.database}` : '(driver=?)'} 通过 ${pass} / 失败 ${fail}（共 ${s.items.length}）`);
+      for (const it of s.items) {
+        if (it.passed) {
+          lines.push(`    ✓ ${it.invariantId}: ${truncateSql(it.sql)}`);
+        } else {
+          lines.push(`    ✗ ${it.invariantId}: ${it.failureReason ?? '未知'}（${truncateSql(it.sql)}）`);
+        }
+      }
+    } else {
+      lines.push(`  SQL 校验（E4）: 已跳过（${s.skippedReason ?? '未配置 storage'}）`);
+    }
+  }
+
+  if (report.byDesignNotTestedByToolchain && report.byDesignNotTestedByToolchain.length > 0) {
+    lines.push(`  by-design-not-tested-by-toolchain（${report.byDesignNotTestedByToolchain.length} 项）— 由 impl 守卫保证，工具链不可消除：`);
+    for (const b of report.byDesignNotTestedByToolchain) {
+      const loc = b.guardLocation ? ` @ ${b.guardLocation}` : '';
+      lines.push(`    - ${b.invariantId}${loc}: ${b.reason}`);
+    }
+  }
+
+  // ── E11：错误契约验证汇总 ──
+  if (report.errorSummary) {
+    const s = report.errorSummary;
+    const matchedCount = Object.values(s.matched).reduce((a, b) => a + b, 0);
+    lines.push(`  错误契约验证（E11）: matched=${matchedCount} unmapped=${s.unmapped.length} systemFault=${s.systemFault}`);
+    for (const [code, count] of Object.entries(s.matched)) {
+      const expected = s.expected?.[code] ?? 0;
+      const expectedSuffix = expected > 0 ? `（expected=${expected}）` : '';
+      lines.push(`    ✓ ${code}: ${count} 次${expectedSuffix}`);
+    }
+    for (const u of s.unmapped) {
+      lines.push(
+        `    ✗ unmapped: ${u.action}${u.protocolErrorCode ? ` code=${u.protocolErrorCode}` : ''} (status=${u.httpStatus})`
+      );
+    }
+  }
+
   return lines.join('\n');
+}
+
+/** SQL 文本摘要（避免长 SELECT 占满日志） */
+function truncateSql(sql: string): string {
+  if (!sql) return '(无 SQL)';
+  if (sql.length <= 80) return sql;
+  return sql.slice(0, 77) + '...';
+}
+
+// ============================================================================
+// E4：by-design 段收集
+// ============================================================================
+
+/**
+ * 从 SourceProtocolModel 收集"由 impl 守卫保证、工具链不可消除"的不变量：
+ * - level=data && source=guard → 显式 by-design
+ * - level=data && source=storage 但缺 storageRef → 兜底 by-design（缺引用，
+ *   工具链无法生成 SQL）
+ * 描述末段 [guard:<loc>] 解析为 guardLocation；其余部分归入 reason。
+ */
+export function collectByDesignItems(model: SourceProtocolModel): ByDesignNotTestedItem[] {
+  const out: ByDesignNotTestedItem[] = [];
+  for (const inv of model.derivable.invariants) {
+    if (inv.level !== 'data') continue;
+    if (inv.source === 'guard') {
+      const { reason, guardLocation } = splitGuardMarker(inv.description);
+      out.push({
+        invariantId: inv.id,
+        expression: inv.expression,
+        reason: reason || '由 impl 守卫保证（model.md 显式 source=guard）',
+        guardLocation,
+      });
+      continue;
+    }
+    // source=storage 但缺 storageRef：兜底 by-design
+    if (!inv.storageRef) {
+      const { reason, guardLocation } = splitGuardMarker(inv.description);
+      out.push({
+        invariantId: inv.id,
+        expression: inv.expression,
+        reason: reason || 'level=data 且 source=storage 但缺 storageRef，工具链无法生成 SQL',
+        guardLocation,
+      });
+    }
+  }
+  return out;
+}
+
+/** 把 description 末段 [guard:<loc>] 拆出，剩余文本作为 reason */
+function splitGuardMarker(description: string | undefined): { reason: string; guardLocation?: string } {
+  if (!description) return { reason: '' };
+  const match = description.match(/\[guard:([^\]]+)\]\s*$/);
+  if (!match) return { reason: description.trim() };
+  const reason = description.slice(0, match.index).trim();
+  return { reason, guardLocation: match[1].trim() };
 }

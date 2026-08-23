@@ -1,0 +1,83 @@
+# hskNG —— 项目总览
+
+> 版本：**0.7.0** | 变更类型：`protocol_extend` | 检阅时间：2026-08-22T16:23:45.105Z
+
+## 子协议概览
+
+| ID | 名称 | 版本 | 接口数 | 系统+观测 | schema 形态 | 迁移状态 |
+| --- | --- | --- | --- | --- | --- | --- |
+| P1 | 转发服务器管理 | 0.7.0 | 17 | 7+10 | structured=0 / legacy-stub=0 / description-only=17 | ✓（老格式迁移） |
+| P2 | 用户管理 | 0.7.0 | 14 | 6+8 | structured=0 / legacy-stub=0 / description-only=14 | ✓（老格式迁移） |
+| P3 | 内网映射域 | 0.7.0 | 17 | 4+13 | structured=0 / legacy-stub=0 / description-only=17 | ✓（老格式迁移） |
+| P4 | 文件托管域 | 0.7.0 | 17 | 5+12 | structured=0 / legacy-stub=0 / description-only=17 | ✓（老格式迁移） |
+
+## 子协议快速跳转
+
+- [P1 转发服务器管理](protocols/P1) — 17 个接口
+- [P2 用户管理](protocols/P2) — 14 个接口
+- [P3 内网映射域](protocols/P3) — 17 个接口
+- [P4 文件托管域](protocols/P4) — 17 个接口
+
+## 依赖图（mermaid）
+
+```mermaid
+graph LR
+  P1[转发服务器管理]
+  P2[用户管理]
+  P3[内网映射域]
+  P4[文件托管域]
+  P2 -.公共基础协议.-> P1
+  P2 -.公共基础协议.-> P3
+  P2 -.公共基础协议.-> P4
+  P1 -.入口宿主.-> P3
+  P3 -.域名基质共享.-> P4
+  P1 -.证书池语义复用.-> P4
+```
+
+> 复制上述 mermaid 段落到 <https://mermaid.live> 可渲染。
+
+### 依赖边清单（结构化，工具消费权威源）
+
+| From | To | Type | 说明 |
+| --- | --- | --- | --- |
+| P2 | P1 | state | P1 所有写操作（注册/上线/停用/注销）的守卫依赖 P2 账户处于活跃态且存在有效会话；P2 为公共基础协议 |
+| P2 | P3 | state | P3 所有写操作（域名 claim/映射创建与管理/端点管理/绑定/install secret 轮换）的守卫依赖 P2 账户处于活跃态且存在有效会话 |
+| P1 | P3 | state | P3 映射入口复用 P1 管理的节点（server，S2+ 在线）与网卡入口（公网 IP 作为 entry_ip）；server 注销前置检查 P3 非删除态映射引用 |
+| P2 | P4 | state | P4 全部管理操作（站点创建/上传签名/commit/停用/启用/删除/列表/详情/测试清理）的守卫依赖 P2 账户处于活跃态且存在有效会话（无 register 式机器面例外）；P2 为公共基础协议 |
+| P3 | P4 | state | P4 站点域名绑定复用 P3 域名基质（domain_pool/user_domains）并共享 fqdn_registry 统一 FQDN 台账——同一 FQDN 只能属于映射或托管站点之一（互斥）；P4 解绑删台账释放 FQDN，P4 软删保留台账行不复用；P3 随机二级域名分配保留，P4 在迭代 24 移除随机分配不影响 P3 |
+| P1 | P4 | state | P4 站点公开读 TLS 复用 P1 证书池导入仓库语义——站点域名（含通配 *.root）证书由管理员经 POST /v1/certs/import 导入登记；P4 不依赖 P1 节点/网卡（对象存储网关承载入口） |
+
+## 跨协议引用汇总
+
+- 跨协议引用总数：**31**
+- `guard` 类引用：**25**
+- `shared` 类引用：**6**
+
+完整清单见 [cross-refs.md](cross-refs)（关联矩阵 + 共享台账 + 双向引用表）。
+
+## 跨协议不变量覆盖
+
+- 跨协议不变量数：**8**
+- `CI1` P1写操作会话守卫（span: P1, P2；关联接口 0）
+- `CI2` 网卡IP入口归属唯一账户（span: P1, P2；关联接口 0）
+- `CI3` FQDN全局唯一（span: P3, P4；关联接口 0）
+- `CI4` 域名http/https入口唯一（span: P3；关联接口 0）
+- `CI5` 入口端口跨域名唯一（span: P3；关联接口 0）
+- ... 详见 [cross-refs.md](cross-refs)
+
+## 安全边界
+
+- 本产物由 protochain derive-web --project 机械生成
+- 不读 process.env / 不读 bindings.yaml / 不调 AI
+- 敏感字段（tokenEnv/secretEnv/passwordEnv 等）已在 specs.json envelope 阶段脱敏
+
+## 警告（数据采集阶段）
+
+- [envelopeMigrate] 老格式 specs.json 自动迁移：检测到 17 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。
+- [envelopeMigrate] 17 个接口标记为 description-only（无 I/O 字段，仅名字可读）。
+- [envelopeMigrate] 老格式 specs.json 自动迁移：检测到 14 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。
+- [envelopeMigrate] 14 个接口标记为 description-only（无 I/O 字段，仅名字可读）。
+- [envelopeMigrate] 老格式 specs.json 自动迁移：检测到 17 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。
+- [envelopeMigrate] 17 个接口标记为 description-only（无 I/O 字段，仅名字可读）。
+- [envelopeMigrate] 老格式 specs.json 自动迁移：检测到 17 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。
+- [envelopeMigrate] 17 个接口标记为 description-only（无 I/O 字段，仅名字可读）。

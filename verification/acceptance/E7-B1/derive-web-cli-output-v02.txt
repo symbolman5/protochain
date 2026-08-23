@@ -1,0 +1,20 @@
+=== E7-B1 组合层 Web 检阅界面生成报告 ===
+  项目: hskNG (0.7.0)
+  变更类型: protocol_extend
+  子协议数: 4
+    - P1 转发服务器管理 (v0.7.0)：17 接口 [老格式迁移]
+    - P2 用户管理 (v0.7.0)：14 接口 [老格式迁移]
+    - P3 内网映射域 (v0.7.0)：17 接口 [老格式迁移]
+    - P4 文件托管域 (v0.7.0)：17 接口 [老格式迁移]
+  依赖边: 6
+  跨协议引用: 31
+  跨协议不变量: 8
+  共享实体: 0
+  跨协议观测接口: 0
+
+  web/data.json: /work/hsk-ng/modeling/web/data.json
+  站点工程目录: /work/hsk-ng/modeling/web
+  VitePress dist: /work/hsk-ng/modeling/web/docs/.vitepress/dist
+  VitePress build: ✗ 未生成（见 warnings）
+
+  安全边界：不读 bindings.yaml / 不读 process.env / 不调 AI / 不接触令牌环境变量

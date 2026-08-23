@@ -1,0 +1,136 @@
+__protochain_skeleton__: true
+generatedAt: 2026-08-22T12:39:35.000Z
+sourceModelVersion: 1.0.0
+sourceEnvelope: false
+sourceMigrated: true
+sourceMigrationWarnings:
+  - 老格式 specs.json 自动迁移：检测到 12 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。
+  - 5 个接口标记为 legacy-stub（缺 JSON Schema 仅 name/type/description 三件套，请回到 model.md 增补契约层段）。
+  - 7 个接口维持 structured（recompute by classifySchemaKind）。
+defaultEnv: default
+roles:
+  applicant:
+    roleId: applicant
+    baseUrl: https://TODO.example.com
+    auth: none
+    headers: {}
+  approver:
+    roleId: approver
+    baseUrl: https://TODO.example.com
+    auth: none
+    headers: {}
+  system:
+    roleId: system
+    baseUrl: https://TODO.example.com
+    auth: none
+    headers: {}
+interfaces:
+  - action: submit
+    roleId: applicant
+    transport:
+      type: http
+      method: POST
+      path: /submit
+      params:
+        - logicalName: currentState
+          in: body
+  - action: approve
+    roleId: applicant
+    transport:
+      type: http
+      method: POST
+      path: /approve
+      params:
+        - logicalName: currentState
+          in: body
+  - action: reject
+    roleId: applicant
+    transport:
+      type: http
+      method: POST
+      path: /reject
+      params:
+        - logicalName: currentState
+          in: body
+  - action: withdraw
+    roleId: applicant
+    transport:
+      type: http
+      method: POST
+      path: /withdraw
+      params:
+        - logicalName: currentState
+          in: body
+  - action: timeout_return
+    roleId: applicant
+    transport:
+      type: http
+      method: POST
+      path: /timeout_return
+      params:
+        - logicalName: currentState
+          in: body
+  - action: observe_草稿
+    roleId: applicant
+    transport:
+      type: http
+      method: GET
+      path: /observe_草稿
+      params: []
+  - action: observe_待审批
+    roleId: applicant
+    transport:
+      type: http
+      method: GET
+      path: /observe_待审批
+      params: []
+  - action: observe_已通过
+    roleId: applicant
+    transport:
+      type: http
+      method: GET
+      path: /observe_已通过
+      params: []
+  - action: observe_已驳回
+    roleId: applicant
+    transport:
+      type: http
+      method: GET
+      path: /observe_已驳回
+      params: []
+  - action: observe_已撤回
+    roleId: applicant
+    transport:
+      type: http
+      method: GET
+      path: /observe_已撤回
+      params: []
+  - action: observe_INV1
+    roleId: applicant
+    transport:
+      type: http
+      method: GET
+      path: /observe_inv1
+      params: []
+  - action: observe_INV2
+    roleId: applicant
+    transport:
+      type: http
+      method: GET
+      path: /observe_inv2
+      params: []
+stateMap:
+  S1: 草稿
+  S2: 待审批
+  S3: 已通过
+  S4: 已驳回
+  S5: 已撤回
+stats:
+  total: 12
+  system: 5
+  observation: 7
+  generated: 12
+  partial: 0
+  generationRate: 1
+  manualConfirmItems: 8
+warnings: []

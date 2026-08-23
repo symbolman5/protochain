@@ -37,6 +37,8 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import * as yamlModule from 'yaml';
+import { findConfigPath } from '../project/context.js';
 import type {
   SourceProtocolModel,
   InterfaceSpec,
@@ -48,6 +50,9 @@ import type {
   FieldSpec,
   SchemaExpression,
   JSONSchema,
+  ErrorResponseDef,
+  BindingConfig,
+  ErrorMapEntry,
 } from '../model/types.js';
 import {
   envelopeMigrate,
@@ -82,6 +87,19 @@ export interface WebDataJson {
   implCheck: WebImplCheckView | null;
   stateMachine: { mermaid: string };
   redactionNotice: string[];
+  /**
+   * E11：绑定视图（bindings.yaml 非敏感投影子集）。
+   * - 不读取 authConfig / tls 密钥段
+   * - 用于接口详情"传输绑定"表 + "错误映射"表
+   * 缺省表示未读取 bindings.yaml（deriver-web 仅 P0 数据生成）。
+   */
+  binding?: WebBindingView;
+  /** E11：异常路径条目（用于接口详情"绑定视图"页的上下文） */
+  exceptionPaths?: Array<{
+    id: string;
+    name: string;
+    errorCode?: string;
+  }>;
 }
 
 /** 接口详情视图（人读） */
@@ -106,6 +124,11 @@ export interface WebInterfaceView {
   observesResourcePoolId?: string;
   /** 触发角色 ID（来自 metadata.roles + transitions.trigger） */
   triggerRoleId?: string;
+  /**
+   * E11：接口错误响应契约（来自 InterfaceSpec.errorResponses 投影）。
+   * 每个错误响应含 id/errorCode/httpStatus/bodySchema——绑定后展示"错误响应"表。
+   */
+  errorResponses?: ErrorResponseDef[];
 }
 
 /** 测试用例浏览器视图 */
@@ -142,6 +165,8 @@ export interface WebVerificationView {
     missingAction: number;
     invariantViolation: number;
     timingViolation: number;
+    errorMismatch: number;
+    unexpectedError: number;
     other: number;
   };
   /** 双跑对账（legacy vs impl 并排） */
@@ -153,6 +178,63 @@ export interface WebVerificationView {
     impl: string;
     matched: boolean;
   }>;
+  /**
+   * E11：错误契约验证汇总段（按 errorCode → 命中次数 / 未命中 / 系统故障）。
+   * - matched：errorCode → 命中 errorMap 次数
+   * - unmapped：未命中列表（含 action/httpStatus/protocolErrorCode/systemCode）
+   * - systemFault：5xx/504 计数
+   * - expected：场景层 expectedError 命中数（errorCode → 次数）
+   * 缺省视为兼容老协议（无 errorMap 验证）。
+   */
+  errorSummary?: {
+    matched: Record<string, number>;
+    unmapped: Array<{
+      action: string;
+      httpStatus?: number;
+      protocolErrorCode?: string;
+      systemCode?: unknown;
+    }>;
+    systemFault: number;
+    expected?: Record<string, number>;
+  };
+}
+
+/**
+ * E11：Web 绑定视图（bindings.yaml 非敏感投影子集）。
+ * 红线：
+ * - authConfig/tls 密钥段不读取；redactSensitiveFields 兜底
+ * - errorMap 完整展示（无敏感字段）
+ * - 用途：接口详情"传输绑定"表 + "错误映射"表
+ */
+export interface WebBindingView {
+  /** 角色绑定（仅 baseUrl/headers/kafka/nsq 公共段；authConfig 整块不读取） */
+  roles: Array<{
+    roleId: string;
+    baseUrl?: string;
+    headers?: Record<string, string>;
+    authKind?: string;
+  }>;
+  /** 接口绑定（仅 action/roleId/protocol/transport.method/path/type） */
+  interfaces: Array<{
+    action: string;
+    roleId?: string;
+    protocol?: string;
+    transport?: {
+      type: string;
+      method?: string;
+      path?: string;
+    };
+  }>;
+  /** 状态词表（stateMap，非敏感） */
+  stateMap?: Record<string, string>;
+  /** 错误映射表（errorMap，非敏感） */
+  errorMap?: Record<string, ErrorMapEntry>;
+  /** 缺绑（specs 中声明但 bindings.errorMap 未覆盖的 errorCode 列表） */
+  unmappedErrorCodes?: string[];
+  /** 警告（额外 errorCode / 模式不一致） */
+  warnings: string[];
+  /** 是否读取到了 bindings.yaml（false → 空数据） */
+  hasBindings: boolean;
 }
 
 /** 模型 diff 视图 */
@@ -373,8 +455,101 @@ export function buildInterfaceViews(specs: InterfaceSpec[]): WebInterfaceView[] 
       observesResourcePoolId: s.observesResourcePoolId,
     };
     if (s.actionType) view.actionType = s.actionType;
+    // E11：错误响应契约投影（接口详情"错误响应"表）
+    if (s.errorResponses && s.errorResponses.length > 0) {
+      view.errorResponses = s.errorResponses.slice();
+    }
     return view;
   });
+}
+
+/**
+ * E11：从 BindingConfig 构造 WebBindingView（非敏感投影子集）。
+ * - roles：仅 baseUrl / headers / auth（kind）；authConfig 整块不读取
+ * - interfaces：仅 action / roleId / protocol / transport.{type,method,path}
+ * - errorMap：完整展示（无敏感字段）
+ * - stateMap：完整展示（无敏感字段）
+ * 调用方负责：先读取 bindings.yaml → JSON.parse → redactSensitiveFields → 本函数
+ * - 未提供 bindings 时返回 hasBindings=false 的空视图
+ */
+export function buildBindingView(
+  bindings: BindingConfig | undefined,
+  specs: InterfaceSpec[]
+): WebBindingView {
+  if (!bindings) {
+    return { roles: [], interfaces: [], warnings: [], hasBindings: false };
+  }
+  const warnings: string[] = [];
+
+  const roles: WebBindingView['roles'] = [];
+  for (const [roleId, role] of Object.entries(bindings.roles ?? {})) {
+    const out: { roleId: string; baseUrl?: string; headers?: Record<string, string>; authKind?: string } = {
+      roleId,
+    };
+    if (role.baseUrl !== undefined) out.baseUrl = role.baseUrl;
+    if (role.headers && Object.keys(role.headers).length > 0) out.headers = role.headers;
+    // 仅显示 auth 类型，不读取 authConfig
+    out.authKind = role.auth;
+    roles.push(out);
+  }
+
+  const interfaces: WebBindingView['interfaces'] = [];
+  for (const ib of bindings.interfaces ?? []) {
+    const t = ib.transport;
+    const transportOut: { type: string; method?: string; path?: string } = { type: t.type };
+    if ('method' in t && t.method) transportOut.method = t.method;
+    if ('path' in t && t.path) transportOut.path = t.path;
+    const out: { action: string; roleId?: string; protocol?: string; transport?: { type: string; method?: string; path?: string } } = {
+      action: ib.action,
+      transport: transportOut,
+    };
+    if (ib.roleId !== undefined) out.roleId = ib.roleId;
+    if (ib.protocol !== undefined) out.protocol = ib.protocol;
+    interfaces.push(out);
+  }
+
+  // 计算 unmappedErrorCodes：specs 中声明但 bindings.errorMap 未覆盖
+  const declared = new Set<string>();
+  for (const spec of specs) {
+    for (const er of spec.errorResponses ?? []) {
+      declared.add(er.errorCode);
+    }
+  }
+  const unmappedErrorCodes: string[] = [];
+  if (bindings.errorMap) {
+    for (const code of declared) {
+      if (!(code in bindings.errorMap)) unmappedErrorCodes.push(code);
+    }
+    // 额外的 errorCode（errorMap 里有但 specs/异常路径没声明）
+    for (const code of Object.keys(bindings.errorMap)) {
+      if (!declared.has(code)) {
+        warnings.push(
+          `errorMap 中的错误码 "${code}" 未在 specs.errorResponses / 异常路径声明（可能是残留）`
+        );
+      }
+    }
+  } else {
+    for (const code of declared) {
+      unmappedErrorCodes.push(code);
+    }
+  }
+
+  const out: WebBindingView = {
+    roles,
+    interfaces,
+    warnings,
+    hasBindings: true,
+  };
+  if (bindings.stateMap && Object.keys(bindings.stateMap).length > 0) {
+    out.stateMap = bindings.stateMap;
+  }
+  if (bindings.errorMap && Object.keys(bindings.errorMap).length > 0) {
+    out.errorMap = bindings.errorMap;
+  }
+  if (unmappedErrorCodes.length > 0) {
+    out.unmappedErrorCodes = unmappedErrorCodes;
+  }
+  return out;
 }
 
 /** ProtocolPath[] → WebTestCaseView[]（合并 verification-report.json caseResults） */
@@ -440,6 +615,8 @@ export function buildVerificationView(
         missingAction: 0,
         invariantViolation: 0,
         timingViolation: 0,
+        errorMismatch: 0,
+        unexpectedError: 0,
         other: 0,
       },
       sideBySide: [],
@@ -451,6 +628,8 @@ export function buildVerificationView(
     missingAction: 0,
     invariantViolation: 0,
     timingViolation: 0,
+    errorMismatch: 0,
+    unexpectedError: 0,
     other: 0,
   };
   const sideBySide: WebVerificationView['sideBySide'] = [];
@@ -461,6 +640,8 @@ export function buildVerificationView(
       else if (d.kind === 'missing_action') summary.missingAction++;
       else if (d.kind === 'invariant_violation') summary.invariantViolation++;
       else if (d.kind === 'timing_violation') summary.timingViolation++;
+      else if (d.kind === 'error_mismatch') summary.errorMismatch++;
+      else if (d.kind === 'unexpected_error') summary.unexpectedError++;
       else summary.other++;
       // 双跑对账：field_mismatch 时填 legacy/impl；state_mismatch 时填 expected/actual
       sideBySide.push({
@@ -473,7 +654,7 @@ export function buildVerificationView(
       });
     }
   }
-  return {
+  const out: WebVerificationView = {
     hasReport: true,
     passed: verification.authoritative.passed,
     counts: verification.authoritative.counts,
@@ -481,6 +662,8 @@ export function buildVerificationView(
     deviationSummary: summary,
     sideBySide,
   };
+  if (verification.errorSummary) out.errorSummary = verification.errorSummary;
+  return out;
 }
 
 /** ModelDiff → WebDiffView */
@@ -575,17 +758,42 @@ export interface DeriveWebInputs {
   diff?: ModelDiff;
   /** impact-analysis.json（可选） */
   impact?: ImpactAnalysis;
+  /**
+   * E11：bindings.yaml（可选；非敏感投影子集）。
+   * 由调用方负责先 redactSensitiveFields 再传，避免敏感字段污染 web 产物。
+   * 未提供 → binding 视图标记 hasBindings=false。
+   */
+  bindings?: BindingConfig;
 }
 
 /** 由 inputs 构造 WebDataJson（pure function） */
 export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
-  const { specsEnvelope, model, testCases, verification, implCheck, diff, impact } = inputs;
-  const interfaces = buildInterfaceViews(specsEnvelope.specs);
+  const {
+    specsEnvelope,
+    model,
+    testCases,
+    verification,
+    implCheck,
+    diff,
+    impact,
+    bindings,
+  } = inputs;
+  const specs = specsEnvelope.specs;
+  const interfaces = buildInterfaceViews(specs);
   const testCaseViews = buildTestCaseViews(testCases, verification);
   const verificationView = buildVerificationView(verification);
   const diffView = buildDiffView(diff);
   const impactView = buildImpactView(impact, diff);
   const implCheckView = buildImplCheckView(implCheck);
+  const bindingView = buildBindingView(bindings, specs);
+  const exceptionPaths = (model.derivable.exceptions ?? []).map((e) => {
+    const out: { id: string; name: string; errorCode?: string } = {
+      id: e.id,
+      name: e.name,
+    };
+    if (e.errorCode) out.errorCode = e.errorCode;
+    return out;
+  });
   return {
     schemaVersion: WEB_DATA_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -608,6 +816,8 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
     implCheck: implCheckView,
     stateMachine: { mermaid: buildMermaidStateMachine(model) },
     redactionNotice: REDACTION_NOTICE_LINES,
+    binding: bindingView.hasBindings ? bindingView : undefined,
+    exceptionPaths: exceptionPaths.length > 0 ? exceptionPaths : undefined,
   };
 }
 
@@ -649,10 +859,173 @@ export function writeJson(path: string, data: unknown): void {
   writeFileSync(path, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+/**
+ * E11：从项目根读取 bindings.yaml（YAML），尽量宽松（兼容 protochain.config.yaml 内联）。
+ * - 优先 <rootDir>/bindings.yaml
+ * - 次选 <rootDir>/protochain.config.yaml 的 bindings 段
+ * 不存在则返回 undefined（兼容老协议/无 bindings）。
+ *
+ * 本函数已被 webgen 用来构造 binding 视图。
+ * 读取后必须经 redactSensitiveFields 处理（authConfig/tls 密钥段）。
+ */
+export function readBindingsFileSafely(rootDir: string): BindingConfig | undefined {
+  const y1 = readYamlBindings(join(rootDir, 'bindings.yaml'));
+  if (y1) return y1;
+  const y2 = readYamlBindings(join(rootDir, 'derived', 'bindings.yaml'));
+  if (y2) return y2;
+  const cfg = readProtochainConfigBindings(rootDir);
+  if (cfg) return cfg;
+  // #008 补充：多协议项目 rootDir 为协议根（protocol/<Pn>）时，共享 bindings.yaml
+  // 在系统根——向上定位 protochain.config.yaml，读其 bindingsFile（或内联 bindings 段）。
+  const configPath = findConfigPath(rootDir);
+  if (configPath) {
+    const systemRoot = dirname(configPath);
+    const rootCfg = readProtochainConfigBindings(systemRoot);
+    if (rootCfg) return rootCfg;
+    const rootBf = readConfigBindingsFile(systemRoot);
+    if (rootBf) return rootBf;
+  }
+  return undefined;
+}
+
+/** 读系统根 protochain.config.yaml 的 bindingsFile（如 bindings.yaml）指向的绑定文件 */
+function readConfigBindingsFile(systemRoot: string): BindingConfig | undefined {
+  const cfgPath = join(systemRoot, 'protochain.config.yaml');
+  if (!existsSync(cfgPath)) return undefined;
+  try {
+    const { parseYaml } = requireYaml();
+    const obj = parseYaml(readFileSync(cfgPath, 'utf-8')) as
+      | { bindingsFile?: string }
+      | null
+      | undefined;
+    const bf = obj?.bindingsFile;
+    if (!bf || typeof bf !== 'string') return undefined;
+    return readYamlBindings(join(systemRoot, bf));
+  } catch {
+    return undefined;
+  }
+}
+
+function readYamlBindings(path: string): BindingConfig | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    const raw = readFileSync(path, 'utf-8');
+    const { parseYaml } = requireYaml();
+    const obj = parseYaml(raw);
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      return obj as BindingConfig;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readProtochainConfigBindings(rootDir: string): BindingConfig | undefined {
+  const cfgPath = join(rootDir, 'protochain.config.yaml');
+  if (!existsSync(cfgPath)) return undefined;
+  try {
+    const raw = readFileSync(cfgPath, 'utf-8');
+    const { parseYaml } = requireYaml();
+    const obj = parseYaml(raw);
+    if (obj && typeof obj === 'object' && (obj as Record<string, unknown>).bindings) {
+      return (obj as Record<string, unknown>).bindings as BindingConfig;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 延迟加载 yaml 包（避免 webgen 加载链膨胀） */
+let _yamlRef: { parseYaml: (s: string) => unknown } | null = null;
+function requireYaml(): { parseYaml: (s: string) => unknown } {
+  if (_yamlRef) return _yamlRef;
+  // ESM 上下文（package.json type=module）下顶层 `require` 未定义；
+  // 改用顶层 ESM import `yaml` 即可在 CLI/serve/feedback 任意入口（编译产物 ESM）
+  // 都能解析 yaml 包；不再使用 createRequire(import.meta.url)，
+  // 避免 ts-jest 默认 CJS transform 模式下 import.meta 触发 SyntaxError（修改单 #008 缺陷 2）。
+  const yaml = yamlModule;
+  _yamlRef = {
+    parseYaml: (s: string) => yaml.parse(s),
+  };
+  return _yamlRef;
+}
+
 /** 写文本 */
 export function writeText(path: string, content: string): void {
-  mkdirSync(dirname(path), { recursive: true });
+  mkdirSync(dirname(path), {recursive: true});
   writeFileSync(path, content, 'utf-8');
+}
+
+/**
+ * 确保 webDir 下安装了 vitepress（站点工程的 devDep）
+ *
+ * 背景：web/package.json 已声明 vitepress ^1.6.3 作为 devDependency；
+ * 用户 `rm -rf web` 或初次使用时 vitepress 不在 node_modules 里，
+ * 直接 `npx vitepress build` 会抛 `Cannot find package 'vitepress'`。
+ *
+ * 行为：
+ * - 检测 webDir/node_modules/vitepress/package.json 存在性
+ * - 不存在时 spawnSync `npm install --no-audit --no-fund --silent vitepress ^1.6.3`
+ *   自动注入到 web/package.json（若缺失）；超时 5 分钟
+ * - 失败抛错（不静默兜底——vitepress 没装就没法构建）
+ *
+ * 返回 warnings（用于 CLI 报告安装状态）。
+ */
+export async function ensureVitepressInstalled(
+  webDir: string,
+  warnings: string[]
+): Promise<void> {
+  const vitepressModule = join(webDir, 'node_modules', 'vitepress', 'package.json');
+  if (existsSync(vitepressModule)) return; // 已装
+
+  const pkgPath = join(webDir, 'package.json');
+  let needWritePackageJson = !existsSync(pkgPath);
+  let pkg: {
+    name?: string;
+    type?: string;
+    devDependencies?: Record<string, string>;
+    [k: string]: unknown;
+  } = {};
+  if (!needWritePackageJson) {
+    try {
+      pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    } catch {
+      // package.json 损坏 → 重建
+      needWritePackageJson = true;
+    }
+  }
+  if (!pkg.devDependencies) pkg.devDependencies = {};
+  if (!pkg.devDependencies.vitepress) {
+    pkg.devDependencies.vitepress = '^1.6.3';
+    needWritePackageJson = true;
+  }
+  if (!pkg.name) pkg.name = 'protochain-web';
+  if (!pkg.type) pkg.type = 'module';
+  if (needWritePackageJson) {
+    mkdirSync(webDir, {recursive: true});
+    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf-8');
+  }
+
+  warnings.push(`首次运行检测到 vitepress 未安装，自动 npm install（web/package.json 已含 devDep）`);
+  const { spawnSync } = await import('node:child_process');
+  const result = spawnSync('npm install --no-audit --no-fund --silent', {
+    cwd: webDir,
+    encoding: 'utf-8',
+    shell: true,
+    timeout: 300000, // 5 分钟（vitepress + vue + 大量依赖首次安装可能慢）
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `vitepress 自动安装失败（webDir=${webDir}）：${(result.stderr ?? '').slice(0, 500)}`
+    );
+  }
+  if (!existsSync(vitepressModule)) {
+    throw new Error(
+      `vitepress 自动安装完成但仍未找到（webDir=${webDir}）；请手动 \`cd ${webDir} && npm install\``
+    );
+  }
 }
 
 // ============================================================================
@@ -663,12 +1036,24 @@ export function writeText(path: string, content: string): void {
 function renderTable(headers: string[], rows: string[][]): string {
   if (rows.length === 0) return '*(无)*';
   const lines: string[] = [];
-  lines.push(`| ${headers.join(' | ')} |`);
+  lines.push(`| ${headers.map(escapeMdCell).join(' | ')} |`);
   lines.push(`| ${headers.map(() => '---').join(' | ')} |`);
   for (const r of rows) {
-    lines.push(`| ${r.map((c) => String(c).replace(/\|/g, '\\|')).join(' | ')} |`);
+    lines.push(`| ${r.map((c) => escapeMdCell(String(c))).join(' | ')} |`);
   }
   return lines.join('\n');
+}
+
+/**
+ * 转义 markdown 单元格中的管道符和 HTML 标签字符。
+ * 类型串（如 `array<object>`）含 `<`/`>`，直接渲染会被 markdown-it 解析成
+ * 未闭合 HTML 标签，导致 VitePress build 失败（修改单 #008 缺陷 3）。
+ */
+function escapeMdCell(s: string): string {
+  return s
+    .replace(/\|/g, '\\|')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 /** 渲染 JSON Schema 为人读表格（properties 列表） */
@@ -772,6 +1157,12 @@ function renderInterfaceDetailPage(view: WebInterfaceView): string {
   parts.push('## 响应体 (responseSchema)\n');
   parts.push(renderSchemaTable(view.responseSchema));
   parts.push('');
+  // E11：错误响应契约表（接口详情"错误响应"段）
+  if (view.errorResponses && view.errorResponses.length > 0) {
+    parts.push('## 错误响应 (errorResponses)\n');
+    parts.push(renderErrorResponsesTable(view.errorResponses));
+    parts.push('');
+  }
   if (view.preconditions && view.preconditions.length > 0) {
     parts.push('## 前置条件 (preconditions)\n');
     for (const p of view.preconditions) {
@@ -797,6 +1188,111 @@ function renderInterfaceDetailPage(view: WebInterfaceView): string {
     parts.push('');
   }
   return parts.join('\n');
+}
+
+/** E11：渲染错误响应表 */
+function renderErrorResponsesTable(errors: ErrorResponseDef[]): string {
+  const rows = errors.map((er) => {
+    const bodySchema = er.bodySchema ? '`已定义`' : '—';
+    return [er.id, er.errorCode, String(er.httpStatus), bodySchema, er.description ?? ''];
+  });
+  return renderTable(['ID', '错误码', 'HTTP Status', 'bodySchema', '说明'], rows);
+}
+
+/** 生成 bindings.md（E11：绑定视图——错误响应/传输绑定表/错误映射表） */
+function renderBindingViewPage(data: WebDataJson): string {
+  const b = data.binding;
+  if (!b || !b.hasBindings) {
+    return `# 绑定视图（E11）
+
+> 未读取到 bindings.yaml。本页面仅在 \`<rootDir>/bindings.yaml\` 或
+> \`protochain.config.yaml#bindings\` 存在时填充。
+
+非敏感投影子集（roles baseUrl/headers + interfaces transport + errorMap）：
+见各接口详情页"绑定视图"段。
+
+## 安全边界
+
+- 不读取 authConfig.tokenEnv/secretEnv/passwordEnv
+- 不读取 tls.caFile/keyPath/certPath
+- 仅 transport/errorMap/stateMap 入站
+`;
+  }
+  const rolesRows = b.roles.map((r) => [
+    r.roleId,
+    r.baseUrl ?? '—',
+    r.authKind ?? '—',
+    String(r.headers ? Object.keys(r.headers).length : 0),
+  ]);
+  const ifaceRows = b.interfaces.map((i) => [
+    i.action,
+    i.roleId ?? '—',
+    i.protocol ?? '—',
+    i.transport?.type ?? '—',
+    i.transport?.method ?? '—',
+    i.transport?.path ?? '—',
+  ]);
+  const stateMapRows = b.stateMap ? Object.entries(b.stateMap).map(([k, v]) => [k, String(v)]) : [];
+  const errorMapRows = b.errorMap ? Object.entries(b.errorMap).map(([code, e]) => [
+    code,
+    String(e.httpStatus ?? '—'),
+    String(e.systemCode ?? '—'),
+    String(e.bodyField ?? 'code'),
+    String(e.bodyFieldValue ?? '—'),
+    String(e.messageField ?? '—'),
+  ]) : [];
+  const unmappedRows = (b.unmappedErrorCodes ?? []).map((c) => [c]);
+
+  return `# 绑定视图（E11）
+
+> 安全边界：仅展示非敏感投影子集（roles baseUrl/headers + interfaces transport + errorMap）。
+> authConfig/tls 密钥段不读取。\${REDACTION_NOTICE_LINES.length > 0 ? '（' + REDACTION_NOTICE_LINES[0] + '）' : ''}
+
+## 角色绑定
+
+${renderTable(['roleId', 'baseUrl', 'auth', 'headers 数'], rolesRows.length > 0 ? rolesRows : [['(无)', '—', '—', '—']])}
+
+## 接口绑定（transport）
+
+${renderTable(['action', 'roleId', 'protocol', 'type', 'method', 'path'], ifaceRows.length > 0 ? ifaceRows : [['(无)', '—', '—', '—', '—', '—']])}
+
+## 状态词表 (stateMap)
+
+${stateMapRows.length > 0
+  ? renderTable(['协议状态 ID', '系统状态值'], stateMapRows)
+  : '*(无)*'}
+
+## 错误映射表 (errorMap)
+
+${errorMapRows.length > 0
+  ? renderTable(['错误码', 'httpStatus', 'systemCode', 'bodyField', 'bodyFieldValue', 'messageField'], errorMapRows)
+  : '*(无)*'}
+
+## 缺绑错误码 (unmappedErrorCodes)
+
+${unmappedRows.length > 0
+  ? renderTable(['错误码'], unmappedRows)
+  : '*(无 — 所有错误码均已绑定)*'}
+
+## 警告
+
+${b.warnings.length > 0 ? b.warnings.map((w) => `- ${w}`).join('\n') : '*(无)*'}
+
+## 异常路径
+
+${
+  data.exceptionPaths && data.exceptionPaths.length > 0
+    ? renderTable(
+        ['ID', '名称', '错误码'],
+        data.exceptionPaths.map((e) => [
+          e.id,
+          e.name,
+          e.errorCode ?? '—',
+        ])
+      )
+    : '*(无)*'
+}
+`;
 }
 
 /** 生成 test-cases.md */
@@ -849,6 +1345,8 @@ function renderVerificationPage(data: WebDataJson): string {
   rows.push(['missing_action', String(s.missingAction)]);
   rows.push(['invariant_violation', String(s.invariantViolation)]);
   rows.push(['timing_violation', String(s.timingViolation)]);
+  rows.push(['error_mismatch', String(s.errorMismatch)]);
+  rows.push(['unexpected_error', String(s.unexpectedError)]);
   rows.push(['other', String(s.other)]);
   const sbRows = v.sideBySide.map((r) => [
     r.action,
@@ -858,6 +1356,9 @@ function renderVerificationPage(data: WebDataJson): string {
     r.impl,
     r.matched ? '✓' : '✗',
   ]);
+  const errorSummarySection = v.errorSummary
+    ? renderErrorSummarySection(v.errorSummary)
+    : '*(errorMap 未配置或未触发错误场景)*';
   return `# 验证报告对比（legacy vs impl）
 
 > 报告是否可用：${v.hasReport ? '是' : '否'} | 总体：${v.passed ? '✓ 通过' : '✗ 未通过'}
@@ -868,13 +1369,41 @@ ${v.verifiedAt ? `> 验证时间：${v.verifiedAt}\n` : ''}
 
 ${renderTable(['类型', '数量'], rows)}
 
+## 错误契约验证（E11）
+
+${errorSummarySection}
+
 ## 双跑对账（legacy vs impl 并排）
 
 ${renderTable(
-  ['动作', '状态', '字段', 'legacy', 'impl', '一致'],
-  sbRows,
-)}
+    ['动作', '状态', '字段', 'legacy', 'impl', '一致'],
+    sbRows,
+  )}
 `;
+}
+
+/** E11：错误契约验证汇总段 */
+function renderErrorSummarySection(s: NonNullable<WebVerificationView['errorSummary']>): string {
+  const matchedRows = Object.entries(s.matched).map(([code, count]) => [
+    code,
+    String(count),
+    String(s.expected?.[code] ?? 0),
+  ]);
+  const unmappedRows = s.unmapped.map((u) => [
+    u.action,
+    String(u.httpStatus ?? '—'),
+    String(u.protocolErrorCode ?? '—'),
+  ]);
+  let out = `> matched=${Object.values(s.matched).reduce((a, b) => a + b, 0)} | unmapped=${s.unmapped.length} | systemFault=${s.systemFault}\n\n`;
+  out += '### 命中 errorMap（按错误码聚合）\n\n';
+  out += renderTable(['错误码', '命中次数', 'expected 命中'], matchedRows.length > 0 ? matchedRows : [['(无)', '—', '—']]);
+  out += '\n\n';
+  if (unmappedRows.length > 0) {
+    out += '### 未命中 errorMap（error_mismatch 偏差）\n\n';
+    out += renderTable(['动作', 'HTTP Status', '实际 errorCode'], unmappedRows);
+    out += '\n';
+  }
+  return out;
 }
 
 /** 生成 diff.md */
@@ -1098,6 +1627,15 @@ export async function deriveWeb(
     }
   }
 
+  // E11：读取 bindings.yaml（bindingsFile 或 协议内 bindings.yaml）
+  const bindingsRaw = readBindingsFileSafely(rootDir);
+  let bindingsConfig: BindingConfig | undefined;
+  if (bindingsRaw) {
+    // E11 红线：authConfig/tls 密钥段不读取 → redactSensitiveFields 兜底
+    bindingsConfig = redactSensitiveFields(bindingsRaw) as BindingConfig;
+    if (bindingsConfig) warnings.push('bindings.yaml 已读取（仅非敏感投影子集）');
+  }
+
   // 4. 构造 WebDataJson
   let data = buildWebData({
     specsEnvelope: envelope,
@@ -1107,6 +1645,7 @@ export async function deriveWeb(
     implCheck,
     diff,
     impact,
+    bindings: bindingsConfig,
   });
 
   // 5. 防御性：redact sensitive fields（即使上游不慎写入）
@@ -1141,10 +1680,13 @@ export async function deriveWeb(
   writeText(join(docsDir, 'test-cases.md'), renderTestCasesPage(data));
   writeText(join(docsDir, 'verification.md'), renderVerificationPage(data));
   writeText(join(docsDir, 'diff.md'), renderDiffPage(data));
+  writeText(join(docsDir, 'bindings.md'), renderBindingViewPage(data));
 
   // 11. VitePress build（spawnSync npx；不强制成功，失败时 warnings 报告）
   let built = false;
   if (options.buildSite !== false) {
+    // B1-I6 修复：vitepress 不在 node_modules 时自动 npm install（防 rm -rf web 后报错）
+    await ensureVitepressInstalled(webDir, warnings);
     const { spawnSync } = await import('node:child_process');
     const cmd = `npx --yes vitepress build docs`;
     const result = spawnSync(cmd, {

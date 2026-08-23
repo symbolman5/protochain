@@ -1,0 +1,38 @@
+{
+  "passed": true,
+  "modelVersion": "1.0.0",
+  "modelName": "用户与配额协议",
+  "rules": [
+    {
+      "ruleId": "M001",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M002",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M003",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M004",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M005",
+      "passed": true,
+      "issues": []
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 0,
+    "infos": 0
+  },
+  "checkedAt": "2026-08-22T11:46:58.726Z"
+}

@@ -1,0 +1,448 @@
+{
+  "schemaVersion": "1.1",
+  "generatedAt": "2026-08-22T16:23:45.104Z",
+  "composition": {
+    "systemName": "hskNG",
+    "version": "0.7.0",
+    "changeType": "protocol_extend",
+    "sourcePath": "/work/hsk-ng/modeling/protocol/composition.md",
+    "parsedAt": "2026-08-22T16:23:45.101Z"
+  },
+  "protocols": [
+    {
+      "id": "P1",
+      "name": "转发服务器管理",
+      "version": "0.7.0",
+      "modelPath": "protocol/P1/model.md",
+      "interfaceCount": 17,
+      "systemInterfaceCount": 7,
+      "observationInterfaceCount": 10,
+      "specsAvailable": true,
+      "schemaSummary": "structured=0 / legacy-stub=0 / description-only=17",
+      "migrated": true
+    },
+    {
+      "id": "P2",
+      "name": "用户管理",
+      "version": "0.7.0",
+      "modelPath": "protocol/P2/model.md",
+      "interfaceCount": 14,
+      "systemInterfaceCount": 6,
+      "observationInterfaceCount": 8,
+      "specsAvailable": true,
+      "schemaSummary": "structured=0 / legacy-stub=0 / description-only=14",
+      "migrated": true
+    },
+    {
+      "id": "P3",
+      "name": "内网映射域",
+      "version": "0.7.0",
+      "modelPath": "protocol/P3/model.md",
+      "interfaceCount": 17,
+      "systemInterfaceCount": 4,
+      "observationInterfaceCount": 13,
+      "specsAvailable": true,
+      "schemaSummary": "structured=0 / legacy-stub=0 / description-only=17",
+      "migrated": true
+    },
+    {
+      "id": "P4",
+      "name": "文件托管域",
+      "version": "0.7.0",
+      "modelPath": "protocol/P4/model.md",
+      "interfaceCount": 17,
+      "systemInterfaceCount": 5,
+      "observationInterfaceCount": 12,
+      "specsAvailable": true,
+      "schemaSummary": "structured=0 / legacy-stub=0 / description-only=17",
+      "migrated": true
+    }
+  ],
+  "dependencyGraph": {
+    "mermaid": "graph LR\n  P1[转发服务器管理]\n  P2[用户管理]\n  P3[内网映射域]\n  P4[文件托管域]\n  P2 -.公共基础协议.-> P1\n  P2 -.公共基础协议.-> P3\n  P2 -.公共基础协议.-> P4\n  P1 -.入口宿主.-> P3\n  P3 -.域名基质共享.-> P4\n  P1 -.证书池语义复用.-> P4",
+    "edges": [
+      {
+        "from": "P2",
+        "to": "P1",
+        "dependencyType": "state",
+        "description": "P1 所有写操作（注册/上线/停用/注销）的守卫依赖 P2 账户处于活跃态且存在有效会话；P2 为公共基础协议"
+      },
+      {
+        "from": "P2",
+        "to": "P3",
+        "dependencyType": "state",
+        "description": "P3 所有写操作（域名 claim/映射创建与管理/端点管理/绑定/install secret 轮换）的守卫依赖 P2 账户处于活跃态且存在有效会话"
+      },
+      {
+        "from": "P1",
+        "to": "P3",
+        "dependencyType": "state",
+        "description": "P3 映射入口复用 P1 管理的节点（server，S2+ 在线）与网卡入口（公网 IP 作为 entry_ip）；server 注销前置检查 P3 非删除态映射引用"
+      },
+      {
+        "from": "P2",
+        "to": "P4",
+        "dependencyType": "state",
+        "description": "P4 全部管理操作（站点创建/上传签名/commit/停用/启用/删除/列表/详情/测试清理）的守卫依赖 P2 账户处于活跃态且存在有效会话（无 register 式机器面例外）；P2 为公共基础协议"
+      },
+      {
+        "from": "P3",
+        "to": "P4",
+        "dependencyType": "state",
+        "description": "P4 站点域名绑定复用 P3 域名基质（domain_pool/user_domains）并共享 fqdn_registry 统一 FQDN 台账——同一 FQDN 只能属于映射或托管站点之一（互斥）；P4 解绑删台账释放 FQDN，P4 软删保留台账行不复用；P3 随机二级域名分配保留，P4 在迭代 24 移除随机分配不影响 P3"
+      },
+      {
+        "from": "P1",
+        "to": "P4",
+        "dependencyType": "state",
+        "description": "P4 站点公开读 TLS 复用 P1 证书池导入仓库语义——站点域名（含通配 *.root）证书由管理员经 POST /v1/certs/import 导入登记；P4 不依赖 P1 节点/网卡（对象存储网关承载入口）"
+      }
+    ]
+  },
+  "crossRefs": [
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T6",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P3",
+      "context": "管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）"
+    },
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T6",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P3",
+      "context": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））"
+    },
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T6",
+      "sourceField": "inputs[2].description",
+      "kind": "guard",
+      "toProtocol": "P3",
+      "context": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））"
+    },
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T7",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P3",
+      "context": "管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）"
+    },
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T7",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P3",
+      "context": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））"
+    },
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T7",
+      "sourceField": "inputs[2].description",
+      "kind": "guard",
+      "toProtocol": "P3",
+      "context": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））"
+    },
+    {
+      "fromProtocol": "P3",
+      "fromApi": "IF_SYS_T1",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "P2 活跃会话 且 归属本人"
+    },
+    {
+      "fromProtocol": "P3",
+      "fromApi": "IF_SYS_T1",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 归属本人）"
+    },
+    {
+      "fromProtocol": "P3",
+      "fromApi": "IF_SYS_T2",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "P2 活跃会话 且 归属本人"
+    },
+    {
+      "fromProtocol": "P3",
+      "fromApi": "IF_SYS_T2",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 归属本人）"
+    },
+    {
+      "fromProtocol": "P3",
+      "fromApi": "IF_SYS_T3",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "P2 活跃会话 且 归属本人"
+    },
+    {
+      "fromProtocol": "P3",
+      "fromApi": "IF_SYS_T3",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 归属本人）"
+    },
+    {
+      "fromProtocol": "P3",
+      "fromApi": "IF_SYS_T4",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "P2 活跃会话 且 归属本人"
+    },
+    {
+      "fromProtocol": "P3",
+      "fromApi": "IF_SYS_T4",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 归属本人）"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T5",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "P2 活跃会话 且 claimCode 匹配"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T5",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 claimCode 匹配）"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T5",
+      "sourceField": "inputs[2].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 claimCode 匹配）"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T1",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "P2 活跃会话 且 归属本人"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T1",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 归属本人）"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T2",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "P2 活跃会话 且 归属本人"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T2",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 归属本人）"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T3",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "P2 活跃会话 且 归属本人"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T3",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 归属本人）"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T4",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "P2 活跃会话 且 归属本人"
+    },
+    {
+      "fromProtocol": "P4",
+      "fromApi": "IF_SYS_T4",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: P2 活跃会话 且 归属本人）"
+    },
+    {
+      "fromProtocol": "P2",
+      "sourceField": "dependencyGraph.edges[P2->P1]",
+      "kind": "shared",
+      "toProtocol": "P1",
+      "context": "P1 所有写操作（注册/上线/停用/注销）的…"
+    },
+    {
+      "fromProtocol": "P2",
+      "sourceField": "dependencyGraph.edges[P2->P3]",
+      "kind": "shared",
+      "toProtocol": "P3",
+      "context": "P3 所有写操作（域名 claim/映射创建…"
+    },
+    {
+      "fromProtocol": "P1",
+      "sourceField": "dependencyGraph.edges[P1->P3]",
+      "kind": "shared",
+      "toProtocol": "P3",
+      "context": "P3 映射入口复用 P1 管理的节点（ser…"
+    },
+    {
+      "fromProtocol": "P2",
+      "sourceField": "dependencyGraph.edges[P2->P4]",
+      "kind": "shared",
+      "toProtocol": "P4",
+      "context": "P4 全部管理操作（站点创建/上传签名/co…"
+    },
+    {
+      "fromProtocol": "P3",
+      "sourceField": "dependencyGraph.edges[P3->P4]",
+      "kind": "shared",
+      "toProtocol": "P4",
+      "context": "P4 站点域名绑定复用 P3 域名基质（do…"
+    },
+    {
+      "fromProtocol": "P1",
+      "sourceField": "dependencyGraph.edges[P1->P4]",
+      "kind": "shared",
+      "toProtocol": "P4",
+      "context": "P4 站点公开读 TLS 复用 P1 证书池…"
+    }
+  ],
+  "invariantSpans": [
+    {
+      "id": "CI1",
+      "name": "P1写操作会话守卫",
+      "protocols": [
+        "P1",
+        "P2"
+      ],
+      "declaredBy": "system",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    },
+    {
+      "id": "CI2",
+      "name": "网卡IP入口归属唯一账户",
+      "protocols": [
+        "P1",
+        "P2"
+      ],
+      "declaredBy": "system",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    },
+    {
+      "id": "CI3",
+      "name": "FQDN全局唯一",
+      "protocols": [
+        "P3",
+        "P4"
+      ],
+      "declaredBy": "system",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    },
+    {
+      "id": "CI4",
+      "name": "域名http/https入口唯一",
+      "protocols": [
+        "P3"
+      ],
+      "declaredBy": "system",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    },
+    {
+      "id": "CI5",
+      "name": "入口端口跨域名唯一",
+      "protocols": [
+        "P3"
+      ],
+      "declaredBy": "system",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    },
+    {
+      "id": "CI6",
+      "name": "同域名同入口IP",
+      "protocols": [
+        "P3"
+      ],
+      "declaredBy": "system",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    },
+    {
+      "id": "CI7",
+      "name": "端点绑定归属一致",
+      "protocols": [
+        "P3"
+      ],
+      "declaredBy": "system",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    },
+    {
+      "id": "CI8",
+      "name": "用户注销级联",
+      "protocols": [
+        "P2",
+        "P3",
+        "P4",
+        "P1"
+      ],
+      "declaredBy": "system",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    }
+  ],
+  "sharedMatrix": {
+    "sharedObjects": [],
+    "crossObservations": []
+  },
+  "warnings": [
+    "[envelopeMigrate] 老格式 specs.json 自动迁移：检测到 17 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。",
+    "[envelopeMigrate] 17 个接口标记为 description-only（无 I/O 字段，仅名字可读）。",
+    "[envelopeMigrate] 老格式 specs.json 自动迁移：检测到 14 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。",
+    "[envelopeMigrate] 14 个接口标记为 description-only（无 I/O 字段，仅名字可读）。",
+    "[envelopeMigrate] 老格式 specs.json 自动迁移：检测到 17 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。",
+    "[envelopeMigrate] 17 个接口标记为 description-only（无 I/O 字段，仅名字可读）。",
+    "[envelopeMigrate] 老格式 specs.json 自动迁移：检测到 17 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。",
+    "[envelopeMigrate] 17 个接口标记为 description-only（无 I/O 字段，仅名字可读）。"
+  ]
+}

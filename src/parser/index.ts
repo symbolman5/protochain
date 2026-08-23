@@ -37,6 +37,9 @@ import type {
   ChangeDeclaration,
   ConceptDef,
   ContractLayerInput,
+  ContractEntry,
+  SchemaExpression,
+  JSONSchema,
   ResourcePoolDef,
   InstantiationDef,
   ExternalEventDef,
@@ -44,6 +47,7 @@ import type {
   SubsidiaryEntityDef,
   GuardTranslationDef,
   AttributeEffect,
+  ErrorResponseDef,
 } from '../model/types.js';
 import {
   parseMarkdownAst,
@@ -478,7 +482,8 @@ function normalizeHeader(s: string): string {
     源事件: 'source',
     目标: 'target',
     目标事件: 'target',
-    source: 'source',
+    // 注：原 map 有 `source: 'source'`（时序约束源）；下方的 `source: 'source'` 为
+    // E4 不变量的实现保证，重复键违反 TS1117。统一只保留 E4 列（map 去重即可）。
     target: 'target',
     约束值: 'boundms',
     '约束值(ms)': 'boundms',
@@ -496,10 +501,26 @@ function normalizeHeader(s: string): string {
     声明方: 'declaredby',
     invariantclass: 'invariantclass',
     不变量类别: 'invariantclass',
-    onviolation: 'onviolation',
+    'onviolation': 'onviolation',
     违约转移: 'onviolation',
     schedule: 'schedule',
     定时: 'schedule',
+    // ── E4：不变量校验层级 ──
+    level: 'level',
+    层级: 'level',
+    级别: 'level',
+    // ── E4：不变量的实现侧责任分类 ──
+    source: 'source',
+    实现保证: 'source',
+    storageref: 'storageref',
+    存储表: 'storageref',
+    // ── E4：守卫位置（by-design 段展示用） ──
+    guardlocation: 'guardlocation',
+    守卫位置: 'guardlocation',
+    // ── E11：异常路径错误码列（协议错误码，snake_case 唯一） ──
+    errorcode: 'errorcode',
+    错误码: 'errorcode',
+    '协议错误码': 'errorcode',
   };
   return map[trimmed] ?? trimmed;
 }
@@ -587,6 +608,19 @@ function rowToInvariant(row: Record<string, string>): InvariantDef {
       ? (invariantClassRaw as InvariantDef['invariantClass'])
       : undefined;
 
+  // ── E4：数据级不变量字段（level / source / storageRef） ──
+  // 旧表无 level 列 → 默认 state-machine（不破坏现有协议）
+  const levelRaw = (row.level || '').toLowerCase();
+  const level: InvariantDef['level'] | undefined =
+    levelRaw === 'state-machine' || levelRaw === 'data' || levelRaw === '状态机' || levelRaw === '数据'
+      ? (levelRaw === '状态机' ? 'state-machine' : levelRaw === '数据' ? 'data' : levelRaw) as InvariantDef['level']
+      : undefined;
+  const sourceRaw = (row.source || '').toLowerCase();
+  const source: InvariantDef['source'] | undefined =
+    sourceRaw === 'storage' || sourceRaw === 'guard' || sourceRaw === '存储' || sourceRaw === '守卫'
+      ? (sourceRaw === '存储' ? 'storage' : sourceRaw === '守卫' ? 'guard' : sourceRaw) as InvariantDef['source']
+      : undefined;
+
   const inv: InvariantDef = {
     id,
     name,
@@ -595,7 +629,17 @@ function rowToInvariant(row: Record<string, string>): InvariantDef {
     description: row.description || undefined,
     declaredBy: row.declaredby ?? '',
     invariantClass: invariantClass!,
+    level,
+    source,
+    storageRef: row.storageref || undefined,
+    // guardLocation 暂不放在 InvariantDef 主字段（避免污染 invariants 列表契约）；
+    // 由 verify 阶段从 desc 末段 [guard:<loc>] 解析，归入 by-design 段。
   };
+  // ── E4：可选的 guardLocation 行内字段；
+  // 若声明，把位置拼到 description 末段，下游 sqlcheck 据此归入 by-design 段。
+  if (row.guardlocation && row.guardlocation.trim().length > 0) {
+    inv.description = (inv.description ?? '') + ` [guard:${row.guardlocation.trim()}]`;
+  }
   return inv;
 }
 
@@ -638,12 +682,15 @@ function rowToException(row: Record<string, string>): ExceptionPathDef {
     .split(/[|,，]/)
     .map((s) => s.trim())
     .filter(Boolean);
+  // E11：异常路径错误码列（旧表无该列 → 不填、不报错、不改变现有行为）
+  const errorCode = row.errorcode ? row.errorcode.trim() : undefined;
   return {
     id,
     name,
     trigger,
     transitionIds,
     recovery: row.recovery || undefined,
+    errorCode: errorCode && errorCode.length > 0 ? errorCode : undefined,
   };
 }
 
@@ -706,6 +753,10 @@ function applyLegacyMigration(
     }
     if (!inv.invariantClass) {
       inv.invariantClass = 'intra_protocol';
+    }
+    // ── E4：旧表无 level 列时默认 state-machine（不破坏现有协议） ──
+    if (!inv.level) {
+      inv.level = 'state-machine';
     }
   }
 }
@@ -906,34 +957,42 @@ function parseContractInput(sections: Section[]): ContractLayerInput | undefined
 
   // 支持 YAML 代码块形式的契约层输入
   const code = findFirstCodeBlock(contractSection.children, 'yaml');
-  if (code && code.value) {
+  let parsedYaml: Record<string, unknown> | undefined;
+  const candidates: { value: string }[] = [];
+  if (code && code.value) candidates.push({ value: code.value });
+  // 尝试任意代码块（兼容非 yaml 标注）
+  const anyCode = findFirstCodeBlock(contractSection.children);
+  if (anyCode && anyCode.value && (!code || anyCode.value !== code.value)) {
+    candidates.push({ value: anyCode.value });
+  }
+  for (const c of candidates) {
     try {
-      const parsed = parseYaml(code.value) as Record<string, unknown>;
-      return {
-        parties: Array.isArray(parsed.parties) ? (parsed.parties as string[]) : [],
-        expectedInformationFields: Array.isArray(parsed.expectedInformationFields)
-          ? (parsed.expectedInformationFields as string[])
-          : undefined,
-      };
-    } catch {
-      // 忽略解析失败，尝试列表形式
-    }
-  } else {
-    // 尝试任意代码块（兼容非 yaml 标注）
-    const anyCode = findFirstCodeBlock(contractSection.children);
-    if (anyCode && anyCode.value) {
-      try {
-        const parsed = parseYaml(anyCode.value) as Record<string, unknown>;
-        return {
-          parties: Array.isArray(parsed.parties) ? (parsed.parties as string[]) : [],
-          expectedInformationFields: Array.isArray(parsed.expectedInformationFields)
-            ? (parsed.expectedInformationFields as string[])
-            : undefined,
-        };
-      } catch {
-        // 忽略
+      const obj = parseYaml(c.value) as Record<string, unknown>;
+      if (obj && typeof obj === 'object') {
+        parsedYaml = obj;
+        break;
       }
+    } catch {
+      // 忽略解析失败，尝试下一个
     }
+  }
+  if (parsedYaml) {
+    const result: ContractLayerInput = {
+      parties: Array.isArray(parsedYaml.parties)
+        ? (parsedYaml.parties as string[])
+        : [],
+      expectedInformationFields: Array.isArray(parsedYaml.expectedInformationFields)
+        ? (parsedYaml.expectedInformationFields as string[])
+        : undefined,
+    };
+    // E2.1：消费 contracts 段（结构化字段）
+    const contractsRaw = parsedYaml.contracts;
+    if (Array.isArray(contractsRaw)) {
+      result.contracts = contractsRaw.map((c, idx) =>
+        parseContractEntry(c, `contracts[${idx}]`)
+      );
+    }
+    return result;
   }
 
   // 支持列表形式
@@ -948,6 +1007,229 @@ function parseContractInput(sections: Section[]): ContractLayerInput | undefined
   }
   if (parties.length === 0) return undefined;
   return { parties };
+}
+
+/**
+ * E2.1：解析契约层单条接口契约（contracts[] 一项）
+ * - interface / sourceId 必填其一（interface 为必填，sourceId 选填）
+ * - requestSchema / responseSchema 形态须符合 JSON Schema 子集
+ * - preconditions / postconditions / sideEffects 为 SchemaExpression[]；字符串数组自动归一
+ * 非法 schema 抛 ParseError（拒绝静默）
+ */
+function parseContractEntry(raw: unknown, path: string): ContractEntry {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new ParseError(`${path} 必须是对象`);
+  }
+  const r = raw as Record<string, unknown>;
+  const iface = r.interface;
+  if (typeof iface !== 'string' || iface.trim() === '') {
+    throw new ParseError(`${path}.interface 必填且非空字符串`);
+  }
+  const entry: ContractEntry = {
+    interface: iface.trim(),
+    sourceId:
+      typeof r.sourceId === 'string' && r.sourceId.trim() !== ''
+        ? r.sourceId.trim()
+        : undefined,
+    description:
+      typeof r.description === 'string' ? r.description : undefined,
+  };
+  if (r.requestSchema !== undefined && r.requestSchema !== null) {
+    entry.requestSchema = parseJsonSchemaValue(r.requestSchema, `${path}.requestSchema`);
+  }
+  if (r.responseSchema !== undefined && r.responseSchema !== null) {
+    entry.responseSchema = parseJsonSchemaValue(r.responseSchema, `${path}.responseSchema`);
+  }
+  if (r.preconditions !== undefined && r.preconditions !== null) {
+    entry.preconditions = parseExpressionArray(r.preconditions, `${path}.preconditions`);
+  }
+  if (r.postconditions !== undefined && r.postconditions !== null) {
+    entry.postconditions = parseExpressionArray(
+      r.postconditions,
+      `${path}.postconditions`
+    );
+  }
+  if (r.sideEffects !== undefined && r.sideEffects !== null) {
+    entry.sideEffects = parseExpressionArray(r.sideEffects, `${path}.sideEffects`);
+  }
+  // E11：契约层 contracts[].errorResponses 解析（复用 parseJsonSchemaValue 校验 bodySchema）
+  if (r.errorResponses !== undefined && r.errorResponses !== null) {
+    entry.errorResponses = parseErrorResponses(
+      r.errorResponses,
+      `${path}.errorResponses`
+    );
+  }
+  return entry;
+}
+
+/**
+ * E11：解析契约层 errorResponses[] 数组。
+ * - 每个条目必填 id / errorCode / httpStatus
+ * - bodySchema 复用 parseJsonSchemaValue（与 requestSchema/responseSchema 同语义）
+ * - 非法形态抛 ParseError
+ */
+function parseErrorResponses(raw: unknown, path: string): ErrorResponseDef[] {
+  if (!Array.isArray(raw)) {
+    throw new ParseError(`${path} 必须是数组`);
+  }
+  return raw.map((item, idx) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new ParseError(`${path}[${idx}] 必须是对象`);
+    }
+    const r = item as Record<string, unknown>;
+    if (typeof r.id !== 'string' || r.id.trim() === '') {
+      throw new ParseError(`${path}[${idx}].id 必填且非空字符串`);
+    }
+    if (typeof r.errorCode !== 'string' || r.errorCode.trim() === '') {
+      throw new ParseError(`${path}[${idx}].errorCode 必填且非空字符串`);
+    }
+    if (typeof r.httpStatus !== 'number' || !Number.isInteger(r.httpStatus)) {
+      throw new ParseError(`${path}[${idx}].httpStatus 必填且为整数`);
+    }
+    const def: ErrorResponseDef = {
+      id: r.id.trim(),
+      errorCode: r.errorCode.trim(),
+      httpStatus: r.httpStatus,
+    };
+    if (r.bodySchema !== undefined && r.bodySchema !== null) {
+      def.bodySchema = parseJsonSchemaValue(r.bodySchema, `${path}[${idx}].bodySchema`);
+    }
+    if (typeof r.description === 'string') {
+      def.description = r.description;
+    }
+    return def;
+  });
+}
+
+/**
+ * E2.1：把契约段里嵌的 JSON Schema 解析/校验成 JSONSchema 子集
+ * - 缺 type 时按 properties/required 推断为 object；其他按声明保留
+ * - 非法形态抛 ParseError
+ */
+function parseJsonSchemaValue(raw: unknown, path: string): JSONSchema {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new ParseError(`${path} 必须是对象`);
+  }
+  const r = raw as Record<string, unknown>;
+  const schema: JSONSchema = {};
+  // 接受 type / properties / required / items / enum / description / format / default / minItems / maxItems / additionalProperties
+  if (r.type !== undefined) {
+    const t = r.type;
+    if (
+      t !== 'string' &&
+      t !== 'number' &&
+      t !== 'integer' &&
+      t !== 'boolean' &&
+      t !== 'object' &&
+      t !== 'array' &&
+      t !== 'null'
+    ) {
+      throw new ParseError(`${path}.type 非法：${String(t)}`);
+    }
+    schema.type = t;
+  }
+  if (r.properties !== undefined) {
+    if (!r.properties || typeof r.properties !== 'object' || Array.isArray(r.properties)) {
+      throw new ParseError(`${path}.properties 必须是对象`);
+    }
+    const props: Record<string, JSONSchema> = {};
+    for (const [k, v] of Object.entries(r.properties as Record<string, unknown>)) {
+      props[k] = parseJsonSchemaValue(v, `${path}.properties.${k}`);
+    }
+    schema.properties = props;
+  }
+  if (r.required !== undefined) {
+    if (!Array.isArray(r.required)) {
+      throw new ParseError(`${path}.required 必须是字符串数组`);
+    }
+    schema.required = r.required.map((x, i) => {
+      if (typeof x !== 'string') {
+        throw new ParseError(`${path}.required[${i}] 必须是字符串`);
+      }
+      return x;
+    });
+  }
+  if (r.items !== undefined) {
+    schema.items = parseJsonSchemaValue(r.items, `${path}.items`);
+  }
+  if (r.enum !== undefined) {
+    if (!Array.isArray(r.enum)) {
+      throw new ParseError(`${path}.enum 必须是数组`);
+    }
+    schema.enum = r.enum as unknown[];
+  }
+  if (typeof r.description === 'string') schema.description = r.description;
+  if (typeof r.format === 'string') schema.format = r.format;
+  if (r.default !== undefined) schema.default = r.default;
+  if (typeof r.minItems === 'number') schema.minItems = r.minItems;
+  if (typeof r.maxItems === 'number') schema.maxItems = r.maxItems;
+  if (r.additionalProperties !== undefined) {
+    if (typeof r.additionalProperties === 'boolean') {
+      schema.additionalProperties = r.additionalProperties;
+    } else if (r.additionalProperties && typeof r.additionalProperties === 'object') {
+      schema.additionalProperties = parseJsonSchemaValue(
+        r.additionalProperties,
+        `${path}.additionalProperties`
+      );
+    } else {
+      throw new ParseError(`${path}.additionalProperties 必须是 boolean 或 JSONSchema 对象`);
+    }
+  }
+  // 隐式 object 推断：properties 或 required 任一存在 → 强制 type=object
+  if (
+    schema.type === undefined &&
+    (schema.properties !== undefined || schema.required !== undefined)
+  ) {
+    schema.type = 'object';
+  }
+  return schema;
+}
+
+/**
+ * E2.1：解析表达式数组：
+ *   - 已是 SchemaExpression[] 形态（含 kind 字段）→ 校验后保留
+ *   - 字符串数组 → 自动包装为 { kind:'description-only', description:string }
+ * 其他形态抛 ParseError
+ */
+function parseExpressionArray(raw: unknown, path: string): SchemaExpression[] {
+  if (!Array.isArray(raw)) {
+    throw new ParseError(`${path} 必须是数组`);
+  }
+  return raw.map((item, idx) => {
+    if (typeof item === 'string') {
+      return { kind: 'description-only', description: item };
+    }
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      const expr = item as Record<string, unknown>;
+      const k = expr.kind;
+      if (k === 'json-schema') {
+        return {
+          kind: 'json-schema',
+          description:
+            typeof expr.description === 'string' ? expr.description : undefined,
+          schema:
+            expr.schema !== undefined
+              ? parseJsonSchemaValue(expr.schema, `${path}[${idx}].schema`)
+              : undefined,
+        };
+      }
+      if (k === 'legacy-stub' || k === 'description-only') {
+        return {
+          kind: k,
+          description:
+            typeof expr.description === 'string' ? expr.description : undefined,
+          schema:
+            expr.schema !== undefined
+              ? parseJsonSchemaValue(expr.schema, `${path}[${idx}].schema`)
+              : undefined,
+        };
+      }
+      throw new ParseError(
+        `${path}[${idx}].kind 必须是 json-schema / legacy-stub / description-only，实际为 ${String(k)}`
+      );
+    }
+    throw new ParseError(`${path}[${idx}] 必须是字符串或 SchemaExpression 对象`);
+  });
 }
 
 // ----------------------------------------------------------------------------

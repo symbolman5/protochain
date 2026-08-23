@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Review · P1</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <header>
+    <h1>评审 → 修改单草稿</h1>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/scenarios">Scenarios</a>
+      <a href="/bindings">Bindings</a>
+      <a href="/run">Run</a>
+      <a href="/review">Review</a>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <h2>新建评审（落盘 /work）</h2>
+      <form id="reviewForm">
+        <label>评审对象：
+          <select name="target">
+            <option value="model">model.md</option>
+            <option value="specs">specs.json</option>
+            <option value="test-cases">test-cases.json</option>
+            <option value="verification">verify-report</option>
+            <option value="interface">interface 详情</option>
+            <option value="scenario">scenario</option>
+            <option value="binding">binding</option>
+            <option value="other">other</option>
+          </select>
+        </label>
+        <label>元素 ID：
+          <input name="elementId" type="text" placeholder="IF_SYS_T1 / SC-P1-01 / INV1" />
+        </label>
+        <label>类别：
+          <select name="category">
+            <option value="bug">bug</option>
+            <option value="doc">doc</option>
+            <option value="api-design">api-design</option>
+            <option value="coverage">coverage</option>
+            <option value="other">other</option>
+          </select>
+        </label>
+        <label>严重度（SLO）：
+          <select name="severity">
+            <option value="P0-24h">P0-24h</option>
+            <option value="P1-7d">P1-7d</option>
+            <option value="P2-30d">P2-30d</option>
+          </select>
+        </label>
+        <label>标题：<input name="title" type="text" required /></label>
+        <label>作者：<input name="author" type="text" placeholder="strangler-fig 实例 / zz 等" /></label>
+        <label>问题（现象 + 证据）：<textarea name="body" required rows="4"></textarea></label>
+        <label>影响：<textarea name="impact" rows="2"></textarea></label>
+        <label>建议修改：<textarea name="suggestion" rows="3"></textarea></label>
+        <div class="formActions">
+          <button type="submit">落盘草稿</button>
+        </div>
+      </form>
+      <pre id="messageBox"></pre>
+    </section>
+    <section>
+      <h2>已有修改单</h2>
+      <table id="issuesTable">
+        <thead><tr><th>NNN</th><th>slug</th><th>status</th><th>path</th></tr></thead>
+        <tbody id="issuesTbody"></tbody>
+      </table>
+    </section>
+  </main>
+  <script src="/assets/app.js"></script>
+  <script>window.P1.bootReview();</script>
+</body>
+</html>

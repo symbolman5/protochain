@@ -1,0 +1,10 @@
+$ npx jest tests/verifier/field-level-compare.test.ts 2>&1 | tail -30
+
+PASS tests/verifier/field-level-compare.test.ts
+  E2 verify 字段级偏差集成
+    ✓ 新格式 specs.json + 启用 enableFieldLevelCompare + legacy 期望 → 报告含 field_mismatch (legacy=Y, impl=Z)
+    ✓ 未启用 enableFieldLevelCompare → 字段级偏差不产出，仍走原 state_mismatch
+    ✓ spec 无 responseSchema → 不产出 field_mismatch（即使启用）
+
+Tests:       10 passed, 10 total
+Test Suites: 1 passed, 1 total

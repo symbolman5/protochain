@@ -1,0 +1,202 @@
+E7-P1 Web 反馈闭环 + 在线编辑 + 一键执行 + 评审→修改单草稿 —— 验收完成
+
+═══════════════════════════════════════════════════════════════════════
+基线（验收阶段独立复跑）
+═══════════════════════════════════════════════════════════════════════
+  npx tsc --noEmit             → 0 errors
+  npx jest                    → 70 suites / 1027 cases 全部通过
+                                  （T1/T2 基线 64/933；本任务增量 +6 suites / +94 cases）
+
+═══════════════════════════════════════════════════════════════════════
+新增运行时依赖（声明于 package.json，验收记录附理由）
+═══════════════════════════════════════════════════════════════════════
+  - express ^4.21.2            （运行时服务）
+  - @types/express ^4.17.21    （devDep：types）
+
+  选型理由（Express vs Fastify 二选一定案）：
+    1. 现行 E7-P0 静态服务已用 node:http(createServer)；Express 是其直接超集，
+       心智模型延续、handler 编程风格与现有 handleRequest 异步函数形式一致。
+    2. P1 API 表面积小（编辑/触发/评审/草稿），无需 Fastify schema-first 优势。
+    3. 团队维护门槛低（测试断言语义为「服务可用 + 数据流正确」，不绑定框架特性）。
+    4. 双方任选即可达成验收；本任务以最小扩散为目标。
+
+═══════════════════════════════════════════════════════════════════════
+红线（不强破坏 P0/P1 安全面）
+═══════════════════════════════════════════════════════════════════════
+  ✅ P0 静态站点无运行时依赖：停掉 P1 服务后 derive-web 产物仍可独立托管
+     （src/webgen/serve.ts / src/webgen/index.ts / src/webgen/composition.ts 未改）
+  ✅ 在线编辑落权威源（scenarios/*.yaml + bindings.yaml），never 直接动 derived/
+     （generate-cases/bind/verify 仍由机械命令重推导）
+  ✅ 在线编辑仍走权威源校验：SCENARIO_SCHEMA + BINDING_FILE_SCHEMA（ajv）
+     非法 content → 拒绝落盘（PUT 缺 interfaces → 400 must have required property 'interfaces'）
+  ✅ 服务进程不持有 token：
+       scrubProcessEnv() 删除 process.env 内所有 TOKEN/SECRET/PASSWORD/APIKEY 键
+       /api/health 报告 remainingSensitiveEnvKeys=[] + tokenEnvAbsent=true
+       透明披露 OS /proc/<pid>/environ 残留（osProcResidualKeys 字段）
+  ✅ 一键 verify 走子进程隔离：filterEnvForChild 白名单 + 兜底过滤
+       service→child env 不出现已知 secret 字符串（E7P1-FINAL-DEMO-XXX 出现 0 次）
+  ✅ 响应 redact：所有 ok() 走 redactSensitiveFields 整键删除（与 E7-P0 一致）
+  ✅ 评审→修改单草稿走 M→D→B→I→V→R 完整流程（status=待审阅 / 单覆盖状态行），
+     不直接改权威模型；草稿落到 /work 与历史 001-003 单同格式
+
+═══════════════════════════════════════════════════════════════════════
+端到端验收（hsk-ng P1 + strangler-fig P1 + 单协议临时 dir）
+═══════════════════════════════════════════════════════════════════════
+  启动（注入 LEGACY_TOKEN + ADMIN_TOKEN）：
+    LEGACY_TOKEN="..." ADMIN_TOKEN="..." node dist/cli/index.js feedback-serve \
+      --dir /work/hsk-ng/modeling --port 5220
+    → 启动成功；scrubbed 6 个敏感 env 键；
+      Scrubbed 键名：ADMIN_TOKEN / LEGACY_TOKEN / SERVER_TOKENFILE /
+                    TRAE_JWT_TOKEN_PATH / TRAE_USER_CLOUDIDE_TOKEN_BLOB / CFS_TOKEN
+    → 详见 startup-log.txt
+
+  /api/health (端到端证据：api-health-snapshot.txt):
+    remainingSensitiveEnvKeys: []
+    scrubbedKeyNames: [6 个 [REDACTED-FAMILY] 键名]
+    tokenEnvAbsent: true
+    osProcResidualKeys: [6 个] （Linux 内核 mm_struct 残留 — 透明披露）
+    osProcResidualDisclosure: "OS/kernel 内存；root 或同 uid 可读；不影响子进程 env"
+
+  /api/scenarios + /api/scenarios/PUT + /api/scenarios/DELETE：
+    - list：列出 hsk-ng P1 4 个 sc-XX.yaml + 各自 id
+    - PUT：sc-e2e-test.yaml 落盘到 /work/hsk-ng/modeling/protocol/P1/scenarios/
+    - GET：读回 raw + parsed（expectedActions=["register"]）+ validation.ok
+    - DELETE：清理场景文件
+
+  /api/bindings（仅读，不破坏权威源）：
+    - GET：status=200 + path=/work/hsk-ng/modeling/bindings.yaml + raw + parsed
+    - PUT 合法 _rawYAML：落盘
+    - PUT 非法（缺 interfaces）：返 400 + must have required property 'interfaces'
+
+  /api/run/generate-cases（机械命令产生用例变化）：
+    test-cases.json BEFORE: 1fb207b1b774d5a57230ec4829d3463b256324db71813c89a1ed55b09fed039b
+    test-cases.json AFTER:  b2f43f6dc31d7ca8cb32bd958eede3abe91093bac3dbba96c57ed84cafdc1832
+    diff: DIFFERENT（"✅ 即为「机械命令产生用例变化」"）
+
+  /api/run/verify（dev 环境无 impl → 工具链协议预期提示）：
+    argv: ['/work/protochain/dist/cli/index.js', 'verify', '--dir', '/work/hsk-ng/modeling', '--protocol', 'P1']
+    服务进程 spawn 子进程传递 env 经 filterEnvForChild 白名单；
+    已知 secret 字符串在子进程 stdout/stderr 出现次数 = 0
+
+  /api/issues（评审→修改单草稿）:
+    POST 落盘 /work/工具链修改单-007-protochain-feedback-serve-e7p1.md
+    状态=待审阅 / 编号=NNN=7
+    → 走通 M→D→B→I→V→R 流程，详见 draft-issue-sample.md
+
+═══════════════════════════════════════════════════════════════════════
+安全面深度验证（红色边界）
+═══════════════════════════════════════════════════════════════════════
+  ✅ service 进程不持有 TOKEN 环境变量：
+      process.env.LEGACY_TOKEN === undefined  // 由 unit-test env-guard.test.ts 持续断言
+      scrubbedKeyNames 报告含 LEGACY_TOKEN（值已 redact）
+      remainingSensitiveEnvKeys 报告为 []
+      tokenEnvAbsent: true
+
+  ✅ child 进程不持有 TOKEN 环境变量：
+      secret-leak-scan.txt: E7P1-FINAL-DEMO-001-XYZ: 0 次
+      secret-leak-scan.txt: E7P1-FINAL-DEMO-002-ABC: 0 次
+      ↑ 子进程 output 仅 422/686 字节 stdout/stderr，含「环境变量缺失」提示
+      ↑ 但已知 secret 字符串 0 次命中（filterEnvForChild 工作正常）
+
+  ✅ response 不含敏感字段：
+      /api/scenarios raw+parsed 不含 tokenEnv/secretEnv/passwordEnv 键名
+      （redactSensitiveFields 整键删除；与 E7-P0 一致行为）
+
+  ✅ OS /proc/<pid>/environ 残留（透明披露）：
+      /api/health.osProcResidualKeys = [...] （6 个键名）
+      表明 Linux kernel mm_struct 拷贝了父进程 legacy token；
+      这是 OS 限制（Node.js 单进程无法主动清理 /proc 内存），
+      通过 service 进程→子进程的 env 链路已严密隔离；
+      修复路径（v0.2 followup）：在 Linux 下用 prctl(PR_SET_DUMPABLE,0)
+      + setrlimit RLIMIT_CORE=0 让 coredump 不带 env；
+      当前实现已加 osProcResidualKeys 字段充分披露（red-team
+      可基于此 flag 决定是否启用 followup 缓解策略）。
+
+═══════════════════════════════════════════════════════════════════════
+单测覆盖（正向 + 反向）
+═══════════════════════════════════════════════════════════════════════
+  tests/webgen/feedback-env-guard.test.ts
+    20 cases（敏感键识别 / scrubProcessEnv / filterEnvForChild /
+             assertSecretLeak / checkProcEnvironForSecrets）
+  tests/webgen/feedback-schemas.test.ts
+    12 cases（scenario 正反向 + bindings 正反向 + formatAjvErrors）
+  tests/webgen/feedback-store.test.ts
+    24 cases（list/read/write/create/delete + 越界拒绝 + 落盘 + 读回一致 +
+             multi-protocol scenarios 探测）
+  tests/webgen/feedback-issues.test.ts
+    16 cases（slugify + nextIssueNumber + validateReview +
+             renderDraftIssue + writeDraftIssue + listIssues）
+  tests/webgen/feedback-server.test.ts
+    10 cases（start + scrub + skipEnvScrub + 静态资源 + scenarios CRUD
+             + bindings YAML + issues 落盘 + 一键 execute + 安全头）
+  tests/webgen/feedback-runner.test.ts
+    6 cases（filterEnvForChild + detectCliPath PROTOCHAIN_CLI_PATH +
+            statArtifact 存在/不存在/绝对）
+
+═══════════════════════════════════════════════════════════════════════
+代码改动汇总
+═══════════════════════════════════════════════════════════════════════
+  src/webgen/feedback/env-guard.ts        （新建）
+    - isSensitiveEnvKey / scrubProcessEnv / filterEnvForChild / assertSecretLeak
+    - checkProcEnvironForSecrets  /  SENSITIVE_ENV_KEY_PATTERNS / CHILD_ENV_ALLOWLIST
+  src/webgen/feedback/schemas.ts          （新建）
+    - SCENARIO_SCHEMA（ajv） / BINDING_FILE_SCHEMA（ajv）
+    - buildScenarioAjv / buildBindingAjv / formatAjvErrors / validateScenario / validateBindingFile
+  src/webgen/feedback/store.ts             （新建）
+    - findScenariosDir / findBindingsFile / listScenarios / readScenarioFile
+      / writeScenarioFile / createScenarioFile / deleteScenarioFile /
+      readBindingsFile / writeBindingsFile / assertScenarioFileWithinDir
+  src/webgen/feedback/runner.ts            （新建）
+    - detectCliPath (env + argv + 向上扫描) / runCliSync (子进程隔离) /
+      statArtifact
+  src/webgen/feedback/issues.ts            （新建）
+    - slugify / nextIssueNumber / validateReview / renderDraftIssue /
+      writeDraftIssue / listIssues / tryGetGitSha
+  src/webgen/feedback/index.ts             （新建）
+    - express app factory + 6 类 API + 安全头 (CSP/X-Frame-Options/nosniff) +
+      /api/health 含 osProcResidualKeys 透明披露
+  src/webgen/feedback/static/index.html | scenarios.html | bindings.html |
+       run.html | review.html | assets/app.{js,css}          （5 静态页面 + 共享 app.js/css）
+  src/cli/index.ts
+    - import { startFeedbackServer } from '../webgen/feedback/index.js'
+    - staticDir 通过 import.meta.url 上溯探测（避免 feedback/index.ts 引入 import.meta），
+      CLI 层走 ESM（fs/yml/url 已存在），
+    - feedback-serve 子命令 + SIGINT/SIGTERM/SIGQUIT/SIGHUP 优雅退出（process.exit(0) 兜底）
+  package.json
+    - express ^4.21.2 / @types/express ^4.17.21
+
+═══════════════════════════════════════════════════════════════════════
+issues.md 登记
+═══════════════════════════════════════════════════════════════════════
+  E7-P1-1 (P004 修改单草稿 medium/open): PUT /api/bindings 全量覆盖无 merge —
+    端到端发现，提交工具链修改单-004 草稿到 /work 记录；
+    修复路径：PATCH 接口（字段级合并）+ .bak 自动备份 + atomic write；
+    由维护者（用户）审阅采纳后纳入 v0.2 修复。
+  E7-P1-2 (low/open): Linux /proc/<pid>/environ OS 层残留透明披露 +
+    建议 v0.2 用 prctl(PR_SET_DUMPABLE,0) 进一步缓解。
+  E7-P1-3 (low/documented): detectCliPath 走 process.argv[1] + 上溯扫描；
+    避开了 src/webgen/feedback 内 import.meta.url 触发 ts-jest CJS 评估错
+    （与 E5-I1 同源 import.meta 限制未被 E7-P1 解决；本任务彻底避免了）。
+  E7-P1-4 (low/open): SCENARIO_SCHEMA.id pattern 'SC-' 对单实例宽松命名
+    严格；hsk-ng/sc-01（id='SC-01'）通过；strangler-fig 同款。
+
+═══════════════════════════════════════════════════════════════════════
+T2 进度（4/4 PASS）
+═══════════════════════════════════════════════════════════════════════
+  E1      PASS (pre-T1)
+  E2      PASS (pre-T1)
+  E3      PASS (pre-T1)
+  E7-P0   PASS (pre-T1)
+  E7-B1   PASS (v0.2)
+  E4      PASS (T2)
+  E5      PASS (T2)
+  E6      PASS (T2)
+  E7-P1   PASS (v0.1，本任务)
+  T2 完成标志：4/4 全部达成
+
+═══════════════════════════════════════════════════════════════════════
+结论
+═══════════════════════════════════════════════════════════════════════
+  E7-P1 PASS（v0.1）
+  T2 完成标志 4/4 达成（E4 + E5 + E6 + E7-P1 全过）
+  T3（E8 / E9 / E10）准备进入

@@ -1,0 +1,102 @@
+item: E6
+date: 2026-08-23
+executor: protochain E6 v0.1 自动化实现（fixtures 决策 + mock/spy 生成 + verify --mock）+ 验收阶段独立复验
+instance: strangler-fig P1（端到端；无 impl 环境）；单测 mock.test.ts（构造模型）
+command: |
+  # 1) fixtures 来源决策（任务前置，E5-COMPLETE.txt 与 src/testtool/mock.ts 头注释均有记录）
+  #    读 test-cases.schema.json（空壳：仅 version）+ 实例 test-cases.json（{paths:[...]}，
+  #    无 expectedResults）+ scenarios/*.yaml（无 expectedResponse 字段）→ 三源均无可用
+  #    expectedResults → 选定 model.md TRANSITIONS（derived/protocol-model.ts 同源数组）为
+  #    fixtures 唯一源：静态、确定性、与模型同源不漂移（决策依据见 mock.ts L14-21）
+  #
+  # 2) generate-tests --emit=mock
+  node dist/cli/index.js generate-tests --emit=mock --dir /work/strangler-fig/modeling --protocol P1
+  # → derived/test-tool/mocks.ts 已生成（fixtures+spy；来源 model.md v0.3.0）
+  #
+  # 3) verify --mock 连续两次 + sha256（无 impl 环境，模型层契约一致性）
+  node dist/cli/index.js verify --mock --no-ai --dir /work/strangler-fig/modeling --protocol P1
+  # → 一致性验证 ✓ 通过 19/19（通过: 19 / 失败: 0 / 跳过: 0）
+  # → mock 模式：fixtures+spy 实现；用例 10/10 通过；spy 触发 5 个 action
+  # → SQL 校验（E4）: 通过 1 / 失败 7（by-design 7 项，见 E4 验收）
+  # → 两次输出 sha256 一致（d67b6712...，见 sha256-record.txt）
+  #
+  # 4) 默认 verify（含 AI 摘要）两次 sha256 不一致 —— AI 摘要标注「非权威」，
+  #    确定性口径 = --no-ai（工具链核心输出 byte-level 确定；AI 摘要随机措辞不在
+  #    「无 AI 随机性」承诺范围内，见 E6-I2）
+result: pass
+
+deliverables:
+  code:
+    - src/testtool/mock.ts（新建；buildMockImplementation / runMockVerification / getSpySnapshot / resetSpy；
+      fixtures 源 = model.md TRANSITIONS 静态查表；spy 计数；输出确定性）
+    - src/testgen/index.ts（generateMockCode：generate-tests --emit=mock 生成 derived/test-tool/mocks.ts；
+      每 action 返回 fixtures 固定 nextState+effects；spy 计数与导出辅助）
+    - src/verifier/index.ts（VerifyContext 加 mockMode；verify --mock 用 mock 实现跑模型层契约一致性，
+      产出 TestToolRunReport 并入 verify 报告）
+    - src/cli/index.ts（generate-tests 加 --emit=mock；verify 加 --mock）
+  tests:
+    - tests/testtool/mock.test.ts（新建；5 用例：deterministic TS 生成 / mock 全绿 / spy 触发 /
+      两次 run 确定性 / resetSpy 清零）
+    - tests/transport/mock-connection.test.ts（既有；mock 连接适配兼容）
+  evidence:
+    - verification/acceptance/E6/verify-mock-run-1.txt（verify --mock 全绿输出 run#1）
+    - verification/acceptance/E6/verify-mock-run-2.txt（run#2；与 run#1 byte 一致）
+    - verification/acceptance/E6/sha256-record.txt（d67b6712... = d67b6712...）
+    - verification/acceptance/E6/mocks-snapshot.txt（mocks.ts 头 60 行证据）
+    - verification/acceptance/E6/E6-COMPLETE.txt
+
+build_baseline:
+  tsc_errors: 0
+  jest_suites: 64
+  jest_cases: 933
+  delta_from_t1: "T1 基线 59/899 → 64/933；含 E4/E5/E6 新增（sqlcheck 6 + verifier e4-by-design 6 + scaffolder e5 7 + testtool mock 5 等）"
+
+issues_resolution:
+  E6-I1: 验收阶段发现 E6 验收目录为空（缺 acceptance-record/COMPLETE/证据）→ 本验收补齐；open→resolved（2026-08-23 验收阶段生成）
+  E6-I2: 默认 verify 含 AI 摘要输出非确定（两次 sha256 不等）→ 确定性口径收窄为 --no-ai（工具链核心输出确定；AI 摘要非权威标注）
+  E5-I1: E5 引入 src/scaffolder/index.ts 顶层 import.meta 导致 npx jest 3 套件编译失败（CJS 转换上下文）→ 验收阶段修复（resolveTemplatesDir 改 typeof __dirname 守卫，与 instanceTemplateDir 同款），64/933 全绿
+
+scope_guards:
+  no_impl_required:
+    pass: true
+    note: verify --mock 全绿不依赖真实 impl/网络/令牌（一致性验证 19/19 通过）
+  deterministic_output:
+    pass: true
+    note: --no-ai 两次输出 sha256 一致；mock 返回来自 TRANSITIONS 静态查表（无随机/无时间依赖）
+  mock_matches_fixtures:
+    pass: true
+    note: mock 返回 nextState=fixtures.to（TRANSITIONS 静态查表）；verify --mock 断言 nextState===t.to 全绿
+  no_derived_artifact_mutation:
+    pass: true
+    note: mocks.ts 由 generate-tests --emit=mock 机械生成；不手改
+
+acceptance_checklist:
+  mocks_ts_generated:
+    pass: true
+    note: generate-tests --emit=mock → derived/test-tool/mocks.ts（fixtures + spy 计数 + reset/getSpySnapshot）
+  verify_mock_all_green:
+    pass: true
+    note: strangler-fig P1 无 impl 环境 verify --mock 一致性验证 19/19 通过（失败 0 / 跳过 0）
+  sha256_deterministic:
+    pass: true
+    note: 连续两次 verify --mock --no-ai 输出 sha256 一致（d67b6712...）；默认含 AI 摘要时不等（AI 摘要非权威，见 E6-I2）
+  mock_values_match_fixtures:
+    pass: true
+    note: mock 返回与 fixtures（TRANSITIONS.to/effects）完全一致；单测 + CLI 全绿双重验证
+  fixtures_source_decided:
+    pass: true
+    note: 定案 = model.md TRANSITIONS（derived/protocol-model.ts 同源）；test-cases.schema.json 空壳、
+         test-cases.json 无 expectedResults、scenarios/*.yaml 无 expectedResponse → 三源均不可用，选 TRANSITIONS
+
+followup:
+  - E6-I2 确定性口径：若要求默认 verify 输出亦确定性，需在 verify 报告区分「核心输出 vs AI 摘要」字节域（建议 E8 确定化路径一并处理）
+  - kafka/nsq mock：当前 mock 仅覆盖状态机 action；kafka/nsq 传输接口 mock 待相关协议 bindings 引入后增补（与 E5 followup 同源）
+  - E8 前置已满足：mock runner 与 description runner 共栈（mock.test.ts 复用 TestToolRunReport 结构）
+
+t1_status:
+  E1: PASS（pre-T1）
+  E2: PASS（pre-T1）
+  E3: PASS（pre-T1）
+  E7-P0: PASS（v0.5，pre-T1）
+  E7-B1: PASS（v0.2）
+  T2: 3/4（E4 + E5 + E6 PASS；E7-P1 在线编辑留给独立任务）

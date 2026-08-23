@@ -1,0 +1,11 @@
+# 不变量
+
+| ID | 名称 | 表达式 | 作用状态 | 声明方 | 不变量类别 | 级别 | source | storageRef | guardLocation | 描述 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| INV1 | 状态合法性 | state \in States | S1, S2, S3, S4, S5, S6 | R-Op | intra_protocol | state-machine | | | | 映射与临时映射生命周期状态机恒在合法状态集合内（TLC 可检查，单实体状态变量；S5/S6 为 TempMapping 态，与 Mapping S1-S4 隔离） |
+| INV2 | 启用时依赖守卫 | TRUE | S1 | R-Op | cross_protocol | data | guard | | service.go L695-707 | 【TLC 降级：跨实体数据不进单状态机】活跃映射的可用性依赖：Node（P2）未禁未删 + License 未封禁未过期且 in_use。语义=启用时守卫（resume 瞬间校验，service.go L695-707），不做主动级联；此后 License 被封/Node 被删映射仍显示 active（忠实现状）。真实保障：T3 守卫；关联 composition CI1 |
+| INV3 | 无主动级联 | TRUE | S1, S2, S3, S4 | R-Op | cross_protocol | data | guard | | service_client.go L600-620 | 【TLC 降级】删除 Node（P2）/ 封禁 License 不级联改 mapping.status（现状无级联代码）。被动失效弱断言：此后该映射不得再换 ticket（由 T6 守卫保证），不设 reconciler |
+| INV4 | ticket安全闭环 | TRUE | S1 | R-Op | cross_protocol | data | guard | | service_client.go L484-504 | 【TLC 降级】适用范围=持久映射 ticket（T6 issueTicket）：只有"映射 active 且 License 已绑且 active 且 usability=usable"才能签发/换 ticket（service_client.go L484-504 显式拦截 license_id=0 与非 active）。过期/删除/暂停的映射必须立刻无法换 ticket——数据面真正的安全闸口，底线不变量。临时映射 ticket（T7/T8）按 §5.9 设计不占 License、不走本闭环（范式差异，见 INV15）。真实保障：T6 守卫 + verify 观测；关联 composition CI2 |
+| INV5 | License占用守恒 | TRUE | S1, S2 | R-Op | cross_protocol | data | storage | forward_mapping_license | | 本协议只断言 License 占用（idle⇄in_use）随 create/delete/expire 转移：T1 占用（idle→in_use），T4/T4b/T5/T5b 释放（in_use→idle）；发放/封禁/过期字段由外部 R-Lic 写入（§5.6），verify 靠 db_query 观测 forward_mapping_license.status，不经本系统接口。真实保障：T1/T4/T4b/T5/T5b effects + MySQL 行状态；关联 composition CI3 |
+| INV10 | 品牌隔离 | TRUE | S1, S2 | R-Op | cross_protocol | data | guard | | tunnel_repository.go L48-52 | 单条/列表接口按 brand 过滤（license→user_service.source_type_id JOIN），异 brand 资源对本接口"不存在"（tunnel_repository.go L48-52，避免 xrk 资源经 tunnel 接口泄露）。真实保障：查询层 brand 过滤 |
+| INV11 | 异常可见性 | TRUE | S1, S2 | R-Op | intra_protocol | data | guard | | xrk/service.go L174-225 | 异常映射（usability=unusable）对用户列表可见（返回完整配置+locked/locked_reason），对客户端下发通道不可见（不签 ticket）。真实保障：xrk/service.go L174-225、failTunnelBlocked 仍回完整配置；usability 为读取路径派生，不写 DB status |

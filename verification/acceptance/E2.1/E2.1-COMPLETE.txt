@@ -1,0 +1,66 @@
+E2.1 完成报告
+============
+
+item: E2.1（契约层接口字段消费 / E2 补全）
+date: 2026-08-23
+status: PASS
+
+1. 交付物 ✅
+  1) parser 契约层 contracts[] 段解析（src/parser/index.ts parseContractInput 扩展）
+     - 支持 §E2.1 定义 YAML 形态：contracts[].interface + requestSchema/responseSchema
+       + preconditions/postconditions/sideEffects
+     - 契约条目与转移派生接口按 interface/sourceId 对齐；无契约字段的接口维持
+       description-only/legacy-stub（零回归）
+  2) specifier 契约字段合并（src/specifier/index.ts deriveSystemInterface）
+     - 契约层有字段 → 用契约 request/responseSchema 覆盖 guard 派生 inputs，产出
+       schemaKind=structured；契约层缺字段 → 维持现状（行为零回归）
+  3) checker 适配（src/checker/index.ts checkContractSchemas）
+     - 契约 schema 可被 ajv 编译通过（schema 自检）
+  4) verify 字段级对比接通（src/verifier/field-compare.ts + src/cli/index.ts）
+     - legacyExpected 是 JSON Schema 类型字符串时按类型比对；
+     - 偏差报告列出「字段 X：legacy=<type>, impl=<type>」（E2-I4 闭环）
+  5) 实例侧数据来源（hsk-ng P1 + 一键脚本）
+     - scripts/extract-contracts-from-impl.mjs 从 impl 提取接口字段注入 model.md 契约层
+     - model.md 走修改单流程
+
+2. 测试 ✅
+  - contracts 段解析（legal / illegal / 老协议兼容）：tests/parser/parser-contracts.test.ts（11 cases）
+  - specifier 合并优先级（契约覆盖 guard / 缺字段降级）：tests/specifier/specifier-contracts.test.ts（6 cases）
+  - checker schema 自检（合法 / 非法 / 数组 / 无段）：tests/checker/checker-contracts.test.ts（6 cases）
+  - verify 字段级（type sentinel 比对 / 字段缺失 / 普通值）：tests/verifier/field-level-compare-e2_1.test.ts（5 cases）
+  - verify 端到端（CLI 路径字段级三元组）：tests/verifier/field-level-cli-e2_1.test.ts（2 cases）
+  - hsk-ng P1 集成：tests/integration/e2_1-hskng-integration.test.ts（6 cases）
+
+3. 验收 ✅
+  - hsk-ng P1 register：specs.json schemaKind=structured，requestSchema/responseSchema
+    字段齐全（10 个 request 字段、8 个 response 字段）
+  - hsk-ng P1 bind：specs.json schemaKind=structured，requestSchema/responseSchema
+    字段齐全（4 个 request 字段、8 个 response 字段）
+  - E7 展示层接口详情页字段表格由 responseSchema.properties 驱动（详见 E7 任务）
+  - verify 真实 CLI 偏差报告含字段级三元组（"字段 response.port：legacy=integer, impl=string"）
+  - 无契约字段接口仍 description-only/legacy-stub（hsk-ng P1 5 个转移维持 legacy-stub）
+  - E2 老协议（approval-flow）行为零回归：structured=7 legacy-stub=5
+  - tsc 0 errors + jest 76 suites / 1080 cases 全过（增量 +6 suites / +53 cases）
+
+4. 红线 ✅
+  - 不做 §E2.1 之外的扩展（不动 E8/E9/E10）
+  - 不改 derived/ 产物（变化一律经 derive-specs / verify 机械命令重推导）
+  - model.md 是权威源：契约字段修改走 version save + 修改单流程
+  - 兼容性零回归：无契约字段的既有协议（含 strangler-fig 019）行为不变
+
+5. 问题登记
+  - 见 IMPLEMENTATION-ISSUES.md 新增 E2.1-I1/I2/I3（low / low / medium open）
+
+6. 验收产物
+  - verification/acceptance/E2.1/acceptance-record.yaml
+  - verification/acceptance/E2.1/E2.1-COMPLETE.txt（本文件）
+  - verification/acceptance/E2.1/derive-specs-cli-output.txt
+  - verification/acceptance/E2.1/acceptance-cli-output.txt
+  - verification/acceptance/E2.1/hskng-p1-specs-snapshot.json
+  - verification/acceptance/E2.1/legacy-migration-output.txt
+  - verification/acceptance/E2.1/verify-mock-output.txt
+
+附：基线对比
+  E2 阶段：70 suites / 1027 cases；E2.1 阶段：76 suites / 1080 cases
+  E2 阶段：approval-flow structured=7 legacy-stub=5；E2.1 阶段：相同（零回归）
+  E2.1 新增：hsk-ng P1 register/bind 从 description-only 升为 structured

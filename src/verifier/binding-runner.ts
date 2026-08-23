@@ -32,6 +32,8 @@ import type {
   TransitionDef,
   CaseResult,
   Deviation,
+  ErrorMapEntry,
+  ErrorSummary,
 } from '../model/types.js';
 import type { TransportResult } from '../transport/types.js';
 import { executeTransport } from '../transport/index.js';
@@ -57,6 +59,12 @@ export interface ScenarioParamSource {
   params: Record<string, unknown>;
   /** 前置 setup 动作序列：每条命中的测试路径执行前按序调用 */
   setup?: SetupAction[];
+  /**
+   * E11：期望错误断言（场景层声明该路径期望遇到某个错误码）。
+   * - 命中 errorMap 的指定 errorCode → 错误场景通过
+   * - 未声明 expectedError 仍期望成功（沿用现有判定）
+   */
+  expectedError?: { errorCode: string; httpStatus?: number };
 }
 
 export interface BindingVerifyOptions {
@@ -79,6 +87,23 @@ export interface BindingVerifyOptions {
   legacyExpectedResponses?: Record<string, Record<string, unknown>>;
   /** 启用 E2 字段级比对（默认 false；老格式 specs.json 自动降级到 state_mismatch） */
   enableFieldLevelCompare?: boolean;
+  // ── E11 错误判定 ──
+  /**
+   * 错误映射表（协议错误码 → 真实系统错误表达）。
+   * - verifier 在 ok=false 时按此判定：命中 → 业务错误合规 / 未命中 → error_mismatch
+   * - ≥500 → systemFault 计数（不参与失败计数）
+   * 缺省视为兼容老协议（仅作 state_mismatch 处理）。
+   */
+  errorMap?: Record<string, ErrorMapEntry>;
+  /**
+   * 错误计数累加器（共享对象，确保多次 runBindingPathCase 调用聚合到同一份 ErrorSummary）。
+   * - matched：errorCode → 命中次数
+   * - unmapped：未命中 errorMap 的错误响应（含 action/httpStatus/protocolErrorCode/systemCode）
+   * - systemFault：5xx/504 计数
+   * - expected：场景层 expectedError 命中数（errorCode → 次数）
+   * 调用方负责初始化与读取；此处仅累加。
+   */
+  errorSummary?: ErrorSummary;
 }
 
 /** 保留字段：不注入 runtimeParams（避免污染路径变量/请求体） */
@@ -133,6 +158,8 @@ export function loadScenarioParams(scenariosDir: string): ScenarioParamSource[] 
           expectedActions: doc.expectedActions,
           params: doc.params && typeof doc.params === 'object' ? doc.params : {},
           setup: Array.isArray(doc.setup) ? doc.setup : undefined,
+          // E11：场景层期望错误断言（可空，非法形态忽略）
+          expectedError: parseExpectedError(doc.expectedError),
         });
       }
     } catch {
@@ -152,6 +179,205 @@ export function findScenariosDir(rootDir: string): string | undefined {
   const multi = join(rootDir, 'scenarios');
   if (existsSync(multi)) return multi;
   return undefined;
+}
+
+/**
+ * E11：从 scenario 顶层 expectedError 字段抽取错误断言。
+ * - 非对象 / errorCode 非字符串 / httpStatus 非整数 → 忽略（视为未声明）
+ * - 兼容 httpStatus 缺省（不强制）
+ */
+function parseExpectedError(
+  raw: unknown
+): { errorCode: string; httpStatus?: number } | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.errorCode !== 'string' || r.errorCode.trim() === '') return undefined;
+  const out: { errorCode: string; httpStatus?: number } = {
+    errorCode: r.errorCode.trim(),
+  };
+  if (typeof r.httpStatus === 'number' && Number.isInteger(r.httpStatus)) {
+    out.httpStatus = r.httpStatus;
+  }
+  return out;
+}
+
+/**
+ * E11：错误判定核心。
+ * 输入：transport 结果（含 status/data）、action、场景期望错误（可选）、errorMap、累加器
+ * 行为：
+ *   1. httpStatus ≥ 500 → system_fault（不参与失败计数，记录到累加器）
+ *   2. 命中 errorMap：
+ *      - 该步有 expectedError 且 errorCode 匹配 → ✓ expectedMatched=true，清空偏差
+ *      - 该步有 expectedError 但不匹配 → deviation: unexpected_error / state_mismatch
+ *      - 该步无 expectedError → deviation: unexpected_error
+ *   3. 未命中 errorMap → deviation: error_mismatch（错误格式未声明/未对齐）
+ *   4. errorMap + expectedError 均未设 → 全部 dev=null, expectedMatched=false（fallback）
+ */
+function judgeError(
+  result: TransportResult,
+  action: string,
+  expectedError: { errorCode: string; httpStatus?: number } | undefined,
+  errorMap: Record<string, ErrorMapEntry> | undefined,
+  summary: ErrorSummary | undefined
+): {
+  deviation?: Deviation;
+  expectedMatched: boolean;
+} {
+  const status = typeof result.status === 'number' ? result.status : 0;
+  const body = result.data;
+  const errorCode = extractErrorCodeFromBody(body, errorMap);
+
+  // ── 1. 5xx → system_fault（不参与失败计数） ──
+  if (status >= 500) {
+    if (summary) summary.systemFault++;
+    return { deviation: undefined, expectedMatched: false };
+  }
+
+  // ── 2. 命中 errorMap ──
+  const matched =
+    errorCode !== undefined &&
+    errorMap !== undefined &&
+    errorCode in errorMap;
+  if (matched && errorCode && errorMap) {
+    const entry = errorMap[errorCode];
+    // httpStatus 校验（若声明）
+    const statusOk =
+      entry.httpStatus === undefined || entry.httpStatus === status;
+    if (summary) {
+      summary.matched[errorCode] = (summary.matched[errorCode] ?? 0) + 1;
+    }
+    // status 不匹配 → 命中但状态码不对，仍算未对齐
+    if (!statusOk) {
+      return {
+        deviation: {
+          action,
+          state: '',
+          expected: `errorCode=${errorCode} httpStatus=${entry.httpStatus}（按 errorMap）`,
+          actual: `httpStatus=${status}`,
+          kind: 'error_mismatch',
+          httpStatus: status,
+          responseBody: summarizeResponseBody(body),
+        },
+        expectedMatched: false,
+      };
+    }
+    // 该步有 expectedError → 校验是否匹配
+    if (expectedError) {
+      if (expectedError.errorCode === errorCode) {
+        // 期望错误匹配 → 路径视为通过
+        if (summary) {
+          summary.expected = summary.expected ?? {};
+          summary.expected[errorCode] = (summary.expected[errorCode] ?? 0) + 1;
+        }
+        return { deviation: undefined, expectedMatched: true };
+      }
+      // 期望错误不匹配 → unexpected_error deviation
+      return {
+        deviation: {
+          action,
+          state: '',
+          expected: `expected errorCode=${expectedError.errorCode}`,
+          actual: `errorCode=${errorCode}`,
+          kind: 'unexpected_error',
+          httpStatus: status,
+          responseBody: summarizeResponseBody(body),
+        },
+        expectedMatched: false,
+      };
+    }
+    // 该步无 expectedError，但接口报错 → unexpected_error
+    return {
+      deviation: {
+        action,
+        state: '',
+        expected: 'success',
+        actual: `errorCode=${errorCode}`,
+        kind: 'unexpected_error',
+        httpStatus: status,
+        responseBody: summarizeResponseBody(body),
+      },
+      expectedMatched: false,
+    };
+  }
+
+  // ── 3. 未命中 errorMap（业务错误但未声明）──
+  if (summary) {
+    summary.unmapped.push({
+      action,
+      httpStatus: status,
+      protocolErrorCode: errorCode,
+      systemCode: (body as Record<string, unknown> | undefined)?.['error'],
+    });
+  }
+  // 无 errorMap → 不报 error_mismatch（视为兼容老协议）；fallback 路径
+  if (!errorMap) {
+    return { deviation: undefined, expectedMatched: false };
+  }
+  return {
+    deviation: {
+      action,
+      state: '',
+      expected: 'success 或 errorMap 中已声明的错误码',
+      actual:
+        errorCode !== undefined
+          ? `errorCode=${errorCode}（未在 errorMap 中声明）`
+          : `status=${status}（错误体未含 errorCode 或无法识别）`,
+      kind: 'error_mismatch',
+      httpStatus: status,
+      responseBody: summarizeResponseBody(body),
+    },
+    expectedMatched: false,
+  };
+}
+
+/**
+ * E11：从响应体提取 errorCode。
+ * 优先级：
+ *   1. body.error（implied systemCode 路径）
+ *   2. body.code（统一 envelope 默认约定）
+ *   3. errorMap.bodyField 路径（如 err.code / msg.code）
+ *   4. errorMap.messageField 路径（非 HTTP 传输）
+ */
+function extractErrorCodeFromBody(
+  body: unknown,
+  errorMap: Record<string, ErrorMapEntry> | undefined
+): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const record = body as Record<string, unknown>;
+
+  // 1. 常见约定：code / error 字段
+  const direct =
+    typeof record['code'] === 'string'
+      ? record['code']
+      : typeof (record['error'] as Record<string, unknown> | undefined)?.['code'] ===
+          'string'
+        ? ((record['error'] as Record<string, unknown>)['code'] as string)
+        : typeof record['error'] === 'string'
+          ? (record['error'] as string)
+          : undefined;
+  if (direct) return direct;
+
+  // 2. errorMap.bodyField 路径（点号分隔）
+  if (errorMap) {
+    for (const code of Object.keys(errorMap)) {
+      const entry = errorMap[code];
+      if (!entry.bodyField) continue;
+      const v = readPath(record, entry.bodyField);
+      if (typeof v === 'string') return v;
+    }
+  }
+  return undefined;
+}
+
+/** 点号路径读取（如 "err.code" → obj.err.code） */
+function readPath(obj: Record<string, unknown>, path: string): unknown {
+  const parts = path.split('.');
+  let cur: unknown = obj;
+  for (const p of parts) {
+    if (!cur || typeof cur !== 'object') return undefined;
+    cur = (cur as Record<string, unknown>)[p];
+  }
+  return cur;
 }
 
 /**
@@ -334,16 +560,34 @@ export async function runBindingPathCase(
       }
     }
     if (!result.ok) {
-      deviations.push({
-        action: t.action,
-        state: currentState,
-        expected: `接口调用成功（期望状态 ${t.to}）`,
-        actual: `接口调用失败：${describeTransportError(result)}`,
-        kind: 'state_mismatch',
-        stepIndex: stepIdx,
-        httpStatus: result.status,
-        responseBody: summarizeResponseBody(result.data),
-      });
+      // ── E11：错误判定（按 errorMap 分类） ──
+      const errorJudgment = judgeError(
+        result,
+        t.action,
+        scenarioSource?.expectedError,
+        options.errorMap,
+        options.errorSummary
+      );
+      // expectedMatched 表示 expectedError 命中 → 清空 deviations（视为该步通过）
+      // 仍 break（继续执行没有意义：状态未达成 t.to）
+      if (errorJudgment.expectedMatched) {
+        deviations.length = 0;
+        // 仍 break
+      } else if (errorJudgment.deviation) {
+        deviations.push({ ...errorJudgment.deviation, stepIndex: stepIdx });
+      } else {
+        // fallback：errorMap/expectedError 都未设，沿用旧 state_mismatch 行为
+        deviations.push({
+          action: t.action,
+          state: currentState,
+          expected: `接口调用成功（期望状态 ${t.to}）`,
+          actual: `接口调用失败：${describeTransportError(result)}`,
+          kind: 'state_mismatch',
+          stepIndex: stepIdx,
+          httpStatus: result.status,
+          responseBody: summarizeResponseBody(result.data),
+        });
+      }
       break;
     }
 

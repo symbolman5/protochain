@@ -1,0 +1,3 @@
+CALL_OK status=200 data={"ok":true,"echo":"{\"name\":\"srv-1\"}"}
+SERVER_RECEIVED method=POST url=/api/servers/register?nodeId=n-9 body={"name":"srv-1"}
+UNREGISTERED=HTTP 0: 未注册 action: noSuchAction（bindings.yaml 缺该接口）

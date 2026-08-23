@@ -1,0 +1,15 @@
+
+✓ specs.json 已升到 JSON Schema（schemaVersion=1.0）；verify 默认启用字段级对比。
+规格推导：✓ 通过
+  schemaVersion: 1.0
+  系统接口: 5 个
+  观测接口: 7 个
+  schema 分类: structured=7 legacy-stub=5 description-only=0
+  JSON Schema 自检（ajv）：✓ 全部通过（12 个 schema）
+  接口列表（前5个）：
+    - [system] IF_SYS_T1 (schemaKind=legacy-stub) ← submit（submit）
+    - [system] IF_SYS_T2 (schemaKind=legacy-stub) ← approve（approve）
+    - [system] IF_SYS_T3 (schemaKind=legacy-stub) ← reject（reject）
+    - [system] IF_SYS_T4 (schemaKind=legacy-stub) ← withdraw（withdraw）
+    - [system] IF_SYS_T5 (schemaKind=legacy-stub) ← timeout_return（timeout_return）
+    ... 还有 7 个

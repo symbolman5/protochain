@@ -1,0 +1,147 @@
+item: E2.1
+date: 2026-08-23
+executor: derive-specs / verify 自动运行 + 一次性脚本（hsk-ng impl 提取）
+instance: hsk-ng P1（多协议项目 P1 子协议）+ 单协议临时 dir
+command: |
+  # ===== 1) parser 契约层 contracts[] 段解析（CLI 端到端）=====
+  cd /work/protochain && npm run build
+  node dist/cli/index.js derive-specs --dir /tmp/e2_1-acceptance
+  # → 解析契约层 contracts[] 段；register 接口 schemaKind=structured；17 个 schema ajv 全部通过
+
+  # ===== 2) hsk-ng P1 实操：注入 contracts[] 后 derive-specs =====
+  node dist/cli/index.js derive-specs --dir /work/hsk-ng/modeling/protocol/P1
+  # → register/bind = structured（契约覆盖 guard 派生）；
+  #   其他 5 个转移仍 legacy-stub（无契约字段，行为零回归）
+
+  # ===== 3) verify 端到端字段级对比（mock 模式）=====
+  node dist/cli/index.js verify --dir /work/hsk-ng/modeling/protocol/P1 --mock
+  # → 9/9 用例通过；dev 环境无 impl，verify 走 mock 路径
+
+  # ===== 4) 字段级偏差三元组（单测端到端）=====
+  npx jest tests/verifier/field-level-cli-e2_1.test.ts
+  # → 含「字段 X：legacy=integer, impl=string」三元组的 verify report
+
+  # ===== 5) 兼容性回归（approval-flow 老协议）=====
+  node dist/cli/index.js derive-specs --dir /tmp/e2-1-regression
+  # → structured=7 legacy-stub=5（与改造前一致；零回归）
+
+  # ===== 6) hsk-ng impl 字段提取（一次性脚本）=====
+  node scripts/extract-contracts-from-impl.mjs
+  # → stdout 输出 YAML contracts[] 草稿（人工复核后已注入 model.md）
+
+result: pass
+
+deliverables:
+  code:
+    - src/parser/index.ts (parseContractInput 扩展：contracts[] 段消费；
+      新增 parseContractEntry / parseJsonSchemaValue / parseExpressionArray 三个 helper)
+    - src/specifier/index.ts (deriveSystemInterface 接受 contractMap；
+      新增 buildContractMap / findContractForTransition / mergeContractRequestSchema
+      / mergeContractResponseSchema / schemaPropertiesToFields / fieldTypeFromJsonSchema)
+    - src/checker/index.ts (新增 checkContractSchemas：ajv 编译契约 schema)
+    - src/cli/index.ts (buildLegacyExpectedFromModel：契约层 contracts[].responseSchema.properties
+      字段类型作为 sentinel 注入 legacyExpectedResponses；配合 field-compare type-name 比对)
+    - src/verifier/field-compare.ts (legacyExpected 是 JSON Schema 类型字符串时按类型比对)
+    - src/model/types.ts (新增 ContractEntry / ContractLayerInput.contracts;
+      InterfaceSpec.contractSource 标识契约来源)
+    - scripts/extract-contracts-from-impl.mjs (一次性脚本：从 hsk-ng impl 提取字段注入 model.md)
+
+  hskng_data_injection:
+    - /work/hsk-ng/modeling/protocol/P1/model.md
+        「契约层」段追加 contracts[]（register / bind），含 requestSchema + responseSchema +
+        preconditions + postconditions；model.md 走修改单流程
+
+  tests:
+    - tests/parser/parser-contracts.test.ts (11 cases：合法解析 / 非法抛错 / 老协议兼容)
+    - tests/specifier/specifier-contracts.test.ts (6 cases：契约字段合并 / 缺字段降级 / sourceId 对齐)
+    - tests/checker/checker-contracts.test.ts (6 cases：schema 自检 / 数组 / 无 contracts 段)
+    - tests/verifier/field-level-compare-e2_1.test.ts (5 cases：type sentinel 比对 / 字段缺失 / 普通值)
+    - tests/verifier/field-level-cli-e2_1.test.ts (2 cases：CLI 端到端字段级偏差三元组)
+    - tests/integration/e2_1-hskng-integration.test.ts (6 cases：hsk-ng P1 集成)
+
+  evidence:
+    - verification/acceptance/E2.1/derive-specs-cli-output.txt
+        CLI 端到端 derive-specs 输出（含 contracts[] 模型）
+    - verification/acceptance/E2.1/acceptance-cli-output.txt
+        验收脚本输出：specs.json register spec 字段名/类型/必填明细
+    - verification/acceptance/E2.1/hskng-p1-specs-snapshot.json
+        hsk-ng P1 真实 derive-specs 产物（含 register/bind 的 structured requestSchema/responseSchema）
+    - verification/acceptance/E2.1/legacy-migration-output.txt
+        老协议（无 contracts）迁移输出（行为零回归）
+    - verification/acceptance/E2.1/verify-mock-output.txt
+        hsk-ng P1 verify --mock 端到端输出
+
+build_baseline:
+  tsc_errors: 0
+  jest_suites: 76
+  jest_cases: 1080
+  delta_from_e2: "T1/T2 基线 70/1027；本任务增量 +6 suites (parser-contracts, specifier-contracts, checker-contracts, field-level-compare-e2_1, field-level-cli-e2_1, e2_1-hskng-integration) / +53 cases"
+
+issues_resolution:
+  E2-I4 (resolved): 契约层 contracts[].responseSchema.properties → 注入 legacyExpectedResponses 的 type sentinel；
+    field-compare 增强 JSON Schema 类型名比对；verify 真实 CLI 路径可产出「字段 X：legacy=<type>, impl=<type>」三元组
+
+scope_guards:
+  p0_promise_preserved:
+    pass: true
+    note: E2 验收 4 项复验通过（approval-flow 老协议 structured=7 legacy-stub=5）
+  p0_derived_unmutated:
+    pass: true
+    note: hsk-ng P1 改动仅限 model.md「契约层」段（权威源走修改单流程）；derived/ 经 derive-specs 重推导
+  schema_validation_required:
+    pass: true
+    note: checker.ajv 编译契约 schema 通过；契约字段类型/必填在契约段显式声明
+  no_token_in_response:
+    pass: true
+    note: 契约字段消费链路不接触环境变量；现有 redact 行为不变
+  contract_compatibility:
+    pass: true
+    note: 无 contracts 段的 model.md 行为完全一致（party/expectedInformationFields 沿用 E2）；
+      E2 老 specs.json 自动迁移 + migrated=true + schemaKind 复用 classifySchemaKind 口径
+  contractSchema_kind_structured:
+    pass: true
+    note: 含 requestSchema/responseSchema 的契约接口 schemaKind=structured（register/bind 已验）
+  field_level_legacy_impl:
+    pass: true
+    note: 字段类型不符时偏差三元组：「字段 response.X：legacy=<type>, impl=<type>」
+      （CLI 真实路径已验；含 hsk-ng P1 mocks 模式）
+
+acceptance_checklist:
+  hskng_p1_register_structured:
+    pass: true
+    note: hsk-ng P1 model.md 注入 contracts[] 后，register 接口 schemaKind=structured；
+      requestSchema 含 name/hostDomain/nics/tunnelPort 等 10 个字段；responseSchema 含 serverId/serverSecret 等 8 个字段
+  hskng_p1_bind_structured:
+    pass: true
+    note: bind 接口 schemaKind=structured；requestSchema 含 serverSecret/version/ports；
+      responseSchema 含 instanceToken/certPem/certKeyPem
+  e7_interface_detail_field_table:
+    pass: true
+    note: 接口详情页字段表格由 responseSchema.properties 直接驱动（详见 E7 任务）
+  verify_field_level_cli:
+    pass: true
+    note: tests/verifier/field-level-cli-e2_1.test.ts 构造契约 schema + 类型不符响应 →
+      偏差含「字段 response.port：legacy=integer, impl=string」
+  no_contract_legacy_compat:
+    pass: true
+    note: approval-flow 老协议 derive-specs 输出与改造前一致：structured=7 legacy-stub=5
+  tsc_clean:
+    pass: true
+    note: npx tsc --noEmit → 0 errors
+  jest_clean:
+    pass: true
+    note: npx jest → 76 suites / 1080 cases 全过（增量 +6/+53 含 E2.1 新测试）
+  contractSchema_kind_classification:
+    pass: true
+    note: 无契约字段接口仍 description-only/legacy-stub（hsk-ng P1 5 个转移维持 legacy-stub）
+
+followup:
+  - E2.1-I1 (low / open): contracts[].preconditions 是字符串数组时全部归一为 description-only，
+      若需 json-schema 形式需显式写 - kind: json-schema 条目（人工门槛）；
+      建议 v0.2 加 helper：契约层自然语言 → JSON Schema 转换（需 AI 或字典）
+  - E2.1-I2 (low / open): field-compare 的 legacyExpected sentinel 与现有 __info_expected 行为耦合；
+      当 contracts[].responseSchema 字段名与 expectedInformationFields 重名时，type sentinel 覆盖
+      info sentinel（避免误报）；后续扩面时确认优先级
+  - E2.1-I3 (medium / open): contracts 段解析校验 schema required 字段引用 properties 中不存在的字段
+      时仅 ajv 兜底（strict:false 默认允许），建议 parser 增 cross-check（required ⊆ properties keys）
+      — 留待 E4 SQL 校验一并加固

@@ -1,0 +1,34 @@
+item: E1
+date: 2026-08-22
+executor: m-check 自动运行
+instance: strangler-fig / hsk-ng 任一 fixture
+command: protochain m-check --model <fixture/model.md> --json
+result: pass
+evidence:
+  - bad-model-A.json (019 单 INV-PS1 还原，M001+M004 双拦下，exit=1)
+  - bad-model-B.json (SE 命名违规模拟修改单 001，exit=1)
+  - bad-model-A.txt / bad-model-B.txt (人类可读报告)
+  - normal-P1.json / normal-P1.txt (tests/fixtures/saas-real-P1-user.md 通过，exit=0)
+  - multi-self-i7.{json,txt} (CLI 多协议 self 修复前后对比)
+  - multi-clean-i7.{json,txt} (CLI 多协议无撞名 peer，M002 只报真 peer 冲突，无 self 误报)
+  - src/mcheck/{types,rules,index}.ts (实现)
+  - tests/mcheck.test.ts (24 个单元测试全部通过：原 20 + E1-I6 SE 用例 + E1-I2 跨协议 belongsTo 用例 + E1-I1 M002 集成测试 + E1-I7 self peer 集成测试)
+  - npx tsc 通过 (无类型错误)
+  - npx jest tests/mcheck.test.ts 通过 (24/24)
+followup: |
+  IMPLEMENTATION-ISSUES.md 中 E1-I1~I8 全部 resolved（2026-08-22）：
+
+  | 问题 | 修复 |
+  |---|---|
+  | E1-I1（高）M002 peer 目录过滤 `/^P\d+$/` 不匹配 `P1-用户配额同步` | 改为 `/^P\d+/` 前缀匹配；新增集成测试覆盖目录扫描路径 |
+  | E1-I2（高）M003 跨协议 belongsTo 误报 | 借鉴 checker 跨协议识别，含 `P\d` 时跳过单协议校验；新增测试 |
+  | E1-I3（中）M005 裸 TRUE warning 等级 | 注释段补充等级说明，明确与 E4 联动方向 |
+  | E1-I4（中）M003 与 checker belongsTo 职责边界 | M003 顶部加职责边界注释，与 E1-I2 一并写入 |
+  | E1-I5（低）验收产物 gitignore | `verification/` 不在 .gitignore，与 V5 审计可追溯一致 |
+  | E1-I6（低）坏模型 B 覆盖维度 | 补 SE-BAD subsidiaryEntities ID 用例 |
+  | E1-I7（高）多协议 self peer 误报 | loadPeerModels 加 currentModelPath 参数，按路径识别 self；CLI 透传；新增集成测试覆盖 |
+  | E1-I8（高）verifier E2 半成品接线编译失败 | 三处最小修复（options 类型补字段、ctx→options、verify 调用处补参） |
+
+  下一步：E2（specs.json JSON Schema 升级）已在另一轨道推进，不阻塞。
+  M001 范围调整说明：原"强制 /^[A-Z]+_\w+$/"改为"只检查禁用字符"，避免误伤 S1/T1/INV1
+  这类合规简洁 ID（PITFALLS #4 关心的是禁用字符而非风格）。

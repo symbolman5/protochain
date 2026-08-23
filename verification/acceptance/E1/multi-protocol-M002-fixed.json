@@ -1,0 +1,183 @@
+{
+  "passed": false,
+  "modelVersion": "1.0.0",
+  "modelName": "用户与配额协议",
+  "rules": [
+    {
+      "ruleId": "M001",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M002",
+      "passed": false,
+      "issues": [
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "S1",
+          "elementType": "state",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "state ID \"S1\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"S1\" 重命名为 \"用户与配额协议-S1\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "S2",
+          "elementType": "state",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "state ID \"S2\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"S2\" 重命名为 \"用户与配额协议-S2\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "T1",
+          "elementType": "transition",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "transition ID \"T1\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"T1\" 重命名为 \"用户与配额协议-T1\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "T2",
+          "elementType": "transition",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "transition ID \"T2\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"T2\" 重命名为 \"用户与配额协议-T2\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "INV1",
+          "elementType": "invariant",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "invariant ID \"INV1\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"INV1\" 重命名为 \"用户与配额协议-INV1\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "INV2",
+          "elementType": "invariant",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "invariant ID \"INV2\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"INV2\" 重命名为 \"用户与配额协议-INV2\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "INV3",
+          "elementType": "invariant",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "invariant ID \"INV3\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"INV3\" 重命名为 \"用户与配额协议-INV3\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "TM1",
+          "elementType": "timing",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "timing ID \"TM1\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"TM1\" 重命名为 \"用户与配额协议-TM1\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "RP1",
+          "elementType": "resourcePool",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "resourcePool ID \"RP1\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"RP1\" 重命名为 \"用户与配额协议-RP1\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "EE1",
+          "elementType": "externalEvent",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "externalEvent ID \"EE1\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"EE1\" 重命名为 \"用户与配额协议-EE1\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "EE2",
+          "elementType": "externalEvent",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "externalEvent ID \"EE2\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"EE2\" 重命名为 \"用户与配额协议-EE2\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "EE3",
+          "elementType": "externalEvent",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "externalEvent ID \"EE3\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"EE3\" 重命名为 \"用户与配额协议-EE3\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "EE4",
+          "elementType": "externalEvent",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "externalEvent ID \"EE4\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"EE4\" 重命名为 \"用户与配额协议-EE4\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "EE5",
+          "elementType": "externalEvent",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "externalEvent ID \"EE5\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"EE5\" 重命名为 \"用户与配额协议-EE5\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "NA1",
+          "elementType": "negativeAssurance",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "negativeAssurance ID \"NA1\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"NA1\" 重命名为 \"用户与配额协议-NA1\" 形式"
+        },
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "traffic_quota",
+          "elementType": "subsidiaryEntity",
+          "elementPath": "derivable (peer P2-我的协议 同名)",
+          "message": "subsidiaryEntity ID \"traffic_quota\" 在子协议 P2-我的协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"traffic_quota\" 重命名为 \"用户与配额协议-traffic_quota\" 形式"
+        }
+      ]
+    },
+    {
+      "ruleId": "M003",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M004",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M005",
+      "passed": true,
+      "issues": []
+    }
+  ],
+  "summary": {
+    "errors": 16,
+    "warnings": 0,
+    "infos": 0
+  },
+  "checkedAt": "2026-08-22T11:48:40.961Z"
+}

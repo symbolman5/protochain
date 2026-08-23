@@ -179,7 +179,14 @@ export function parseSubItemsByHeading<T>(
   parentSection: Section,
   subDepth: number,
   itemName: string,
-  itemParser: (yaml: unknown, headingRaw: string) => T
+  itemParser: (yaml: unknown, headingRaw: string) => T,
+  /**
+   * YAML 文本预处理器（B1-I2 修复）：composition.md 含 prose 字段（expression/
+   * checkMethod/description 等），标准 yaml 严格解析会抛错；预处理器把已知 prose
+   * 字段转 literal block scalar（`|`）后再 parseYaml。
+   * 缺省：原样 parseYaml（既有行为，向后兼容）。
+   */
+  yamlPreprocessor?: (text: string) => string
 ): T[] {
   const results: T[] = [];
   let currentHeading: string | null = null;
@@ -194,9 +201,10 @@ export function parseSubItemsByHeading<T>(
         itemName
       );
     }
+    const rawText = yamlPreprocessor ? yamlPreprocessor(codeBlock.value) : codeBlock.value;
     let parsed: unknown;
     try {
-      parsed = parseYaml(codeBlock.value);
+      parsed = parseYaml(rawText);
     } catch (err) {
       throw new ParseError(
         `${itemName}声明"${currentHeading}"的 YAML 解析失败：${err instanceof Error ? err.message : String(err)}`,

@@ -1,0 +1,4 @@
+
+test-cases.json BEFORE: 1fb207b1b774d5a57230ec4829d3463b256324db71813c89a1ed55b09fed039b
+test-cases.json AFTER:  b2f43f6dc31d7ca8cb32bd958eede3abe91093bac3dbba96c57ed84cafdc1832
+diff: DIFFERENT (✅ 即为「机械命令产生用例变化」)

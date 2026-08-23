@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import type { AIAdapter, InterfaceSpec, ContractSet, TestToolCode } from '../model/types.js';
 import type { ProtochainConfig } from '../model/types.js';
-import { generateTestTool } from '../testgen/index.js';
+import { generateTestTool, generateMockCode } from '../testgen/index.js';
 import { specify, specsFromEnvelope } from '../specifier/index.js';
 import { deriveContracts } from '../contractor/index.js';
 import type { StepExecutor } from '../orchestrator/index.js';

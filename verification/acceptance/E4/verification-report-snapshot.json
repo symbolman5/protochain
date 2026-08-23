@@ -1,0 +1,337 @@
+{
+  "authoritative": {
+    "passed": false,
+    "counts": {
+      "passed": 14,
+      "failed": 5,
+      "skipped": 0
+    },
+    "caseResults": [
+      {
+        "pathId": "PATH_01",
+        "passed": true,
+        "scenarioMatch": {
+          "id": "SC-P1-01"
+        },
+        "injectedParams": {
+          "id": "scenario"
+        }
+      },
+      {
+        "pathId": "PATH_02",
+        "passed": false,
+        "deviations": [
+          {
+            "action": "delete",
+            "state": "S1",
+            "expected": "接口调用成功（期望状态 S4）",
+            "actual": "接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置",
+            "kind": "state_mismatch",
+            "stepIndex": 0,
+            "httpStatus": 401,
+            "responseBody": {
+              "error": "认证失败：令牌环境变量 LEGACY_TOKEN 未配置"
+            }
+          }
+        ],
+        "scenarioMatch": {
+          "id": "SC-P1-02"
+        },
+        "injectedParams": {
+          "id": "scenario"
+        }
+      },
+      {
+        "pathId": "PATH_03",
+        "passed": true,
+        "scenarioMatch": {
+          "id": "SC-P1-03"
+        },
+        "injectedParams": {
+          "id": "scenario"
+        }
+      },
+      {
+        "pathId": "PATH_04",
+        "passed": false,
+        "deviations": [
+          {
+            "action": "delete",
+            "state": "S2",
+            "expected": "接口调用成功（期望状态 S4）",
+            "actual": "接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置",
+            "kind": "state_mismatch",
+            "stepIndex": 1,
+            "httpStatus": 401,
+            "responseBody": {
+              "error": "认证失败：令牌环境变量 LEGACY_TOKEN 未配置"
+            }
+          }
+        ],
+        "scenarioMatch": {
+          "id": "SC-P1-04"
+        },
+        "injectedParams": {
+          "id": "scenario"
+        }
+      },
+      {
+        "pathId": "PATH_05",
+        "passed": true,
+        "scenarioMatch": {
+          "id": "SC-P1-05"
+        },
+        "injectedParams": {
+          "resource_id": "scenario",
+          "id": "scenario",
+          "ticket": "response"
+        }
+      },
+      {
+        "pathId": "PATH_06",
+        "passed": false,
+        "deviations": [
+          {
+            "action": "delete",
+            "state": "S1",
+            "expected": "接口调用成功（期望状态 S4）",
+            "actual": "接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置",
+            "kind": "state_mismatch",
+            "stepIndex": 1,
+            "httpStatus": 401,
+            "responseBody": {
+              "error": "认证失败：令牌环境变量 LEGACY_TOKEN 未配置"
+            }
+          }
+        ],
+        "scenarioMatch": {
+          "id": "SC-P1-06"
+        },
+        "injectedParams": {
+          "resource_id": "scenario",
+          "id": "scenario",
+          "ticket": "response"
+        }
+      },
+      {
+        "pathId": "PATH_07",
+        "passed": true,
+        "scenarioMatch": {
+          "id": "SC-P1-07"
+        },
+        "injectedParams": {
+          "id": "scenario"
+        }
+      },
+      {
+        "pathId": "PATH_08",
+        "passed": false,
+        "deviations": [
+          {
+            "action": "delete",
+            "state": "S1",
+            "expected": "接口调用成功（期望状态 S4）",
+            "actual": "接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置",
+            "kind": "state_mismatch",
+            "stepIndex": 2,
+            "httpStatus": 401,
+            "responseBody": {
+              "error": "认证失败：令牌环境变量 LEGACY_TOKEN 未配置"
+            }
+          }
+        ],
+        "scenarioMatch": {
+          "id": "SC-P1-08"
+        },
+        "injectedParams": {
+          "id": "scenario"
+        }
+      },
+      {
+        "pathId": "PATH_09",
+        "passed": true,
+        "scenarioMatch": {
+          "id": "SC-P1-09"
+        },
+        "injectedParams": {
+          "resource_id": "scenario",
+          "id": "scenario",
+          "ticket": "response"
+        }
+      },
+      {
+        "pathId": "PATH_10",
+        "passed": false,
+        "deviations": [
+          {
+            "action": "delete",
+            "state": "S2",
+            "expected": "接口调用成功（期望状态 S4）",
+            "actual": "接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置",
+            "kind": "state_mismatch",
+            "stepIndex": 2,
+            "httpStatus": 401,
+            "responseBody": {
+              "error": "认证失败：令牌环境变量 LEGACY_TOKEN 未配置"
+            }
+          }
+        ],
+        "scenarioMatch": {
+          "id": "SC-P1-10"
+        },
+        "injectedParams": {
+          "resource_id": "scenario",
+          "id": "scenario",
+          "ticket": "response"
+        }
+      },
+      {
+        "pathId": "negative-assurance:INV1",
+        "passed": true
+      },
+      {
+        "pathId": "negative-assurance:INV2",
+        "passed": true
+      },
+      {
+        "pathId": "negative-assurance:INV3",
+        "passed": true
+      },
+      {
+        "pathId": "negative-assurance:INV4",
+        "passed": true
+      },
+      {
+        "pathId": "negative-assurance:INV5",
+        "passed": true
+      },
+      {
+        "pathId": "negative-assurance:INV10",
+        "passed": true
+      },
+      {
+        "pathId": "negative-assurance:INV11",
+        "passed": true
+      },
+      {
+        "pathId": "negative-assurance:INV12",
+        "passed": true
+      },
+      {
+        "pathId": "negative-assurance:INV15",
+        "passed": true
+      }
+    ],
+    "scenarioWarnings": []
+  },
+  "auxiliary": {
+    "summary": "验证共执行19个场景：14个通过，5个失败，0个跳过。5个失败场景均因缺少环境变量 LEGACY_TOKEN 导致接口返回401认证失败，触发状态不匹配偏差（期望S4接口调用成功，实际停留在初始状态）。",
+    "deviationCategories": [
+      "状态不匹配"
+    ]
+  },
+  "sqlInvariantCheck": {
+    "ran": true,
+    "connection": {
+      "driver": "mysql",
+      "host": "127.0.0.1",
+      "port": 3306,
+      "database": "forward"
+    },
+    "items": [
+      {
+        "invariantId": "INV2",
+        "passed": false,
+        "sql": "",
+        "failureReason": "由 impl 守卫保证（source=guard），不进 SQL 校验；归入 by-design 段"
+      },
+      {
+        "invariantId": "INV3",
+        "passed": false,
+        "sql": "",
+        "failureReason": "由 impl 守卫保证（source=guard），不进 SQL 校验；归入 by-design 段"
+      },
+      {
+        "invariantId": "INV4",
+        "passed": false,
+        "sql": "",
+        "failureReason": "由 impl 守卫保证（source=guard），不进 SQL 校验；归入 by-design 段"
+      },
+      {
+        "invariantId": "INV5",
+        "passed": true,
+        "sql": "SELECT COUNT(*) FROM `forward_mapping_license`;",
+        "rowCount": 5
+      },
+      {
+        "invariantId": "INV10",
+        "passed": false,
+        "sql": "",
+        "failureReason": "由 impl 守卫保证（source=guard），不进 SQL 校验；归入 by-design 段"
+      },
+      {
+        "invariantId": "INV11",
+        "passed": false,
+        "sql": "",
+        "failureReason": "由 impl 守卫保证（source=guard），不进 SQL 校验；归入 by-design 段"
+      },
+      {
+        "invariantId": "INV12",
+        "passed": false,
+        "sql": "",
+        "failureReason": "由 impl 守卫保证（source=guard），不进 SQL 校验；归入 by-design 段"
+      },
+      {
+        "invariantId": "INV15",
+        "passed": false,
+        "sql": "",
+        "failureReason": "由 impl 守卫保证（source=guard），不进 SQL 校验；归入 by-design 段"
+      }
+    ]
+  },
+  "byDesignNotTestedByToolchain": [
+    {
+      "invariantId": "INV2",
+      "expression": "TRUE",
+      "reason": "【TLC 降级：跨实体数据不进单状态机】活跃映射的可用性依赖：Node（P2）未禁未删 + License 未封禁未过期且 in_use。语义=启用时守卫（resume 瞬间校验，service.go L695-707），不做主动级联；此后 License 被封/Node 被删映射仍显示 active（忠实现状）。真实保障：T3 守卫；关联 composition CI1",
+      "guardLocation": "service.go L695-707"
+    },
+    {
+      "invariantId": "INV3",
+      "expression": "TRUE",
+      "reason": "【TLC 降级】删除 Node（P2）/ 封禁 License 不级联改 mapping.status（现状无级联代码）。被动失效弱断言：此后该映射不得再换 ticket（由 T6 守卫保证），不设 reconciler",
+      "guardLocation": "service_client.go L600-620"
+    },
+    {
+      "invariantId": "INV4",
+      "expression": "TRUE",
+      "reason": "【TLC 降级】适用范围=持久映射 ticket（T6 issueTicket）：只有\"映射 active 且 License 已绑且 active 且 usability=usable\"才能签发/换 ticket（service_client.go L484-504 显式拦截 license_id=0 与非 active）。过期/删除/暂停的映射必须立刻无法换 ticket——数据面真正的安全闸口，底线不变量。临时映射 ticket（T7/T8）按 §5.9 设计不占 License、不走本闭环（范式差异，见 INV15）。真实保障：T6 守卫 + verify 观测；关联 composition CI2",
+      "guardLocation": "service_client.go L484-504"
+    },
+    {
+      "invariantId": "INV10",
+      "expression": "TRUE",
+      "reason": "单条/列表接口按 brand 过滤（license→user_service.source_type_id JOIN），异 brand 资源对本接口\"不存在\"（tunnel_repository.go L48-52，避免 xrk 资源经 tunnel 接口泄露）。真实保障：查询层 brand 过滤",
+      "guardLocation": "tunnel_repository.go L48-52"
+    },
+    {
+      "invariantId": "INV11",
+      "expression": "TRUE",
+      "reason": "异常映射（usability=unusable）对用户列表可见（返回完整配置+locked/locked_reason），对客户端下发通道不可见（不签 ticket）。真实保障：xrk/service.go L174-225、failTunnelBlocked 仍回完整配置；usability 为读取路径派生，不写 DB status",
+      "guardLocation": "xrk/service.go L174-225"
+    },
+    {
+      "invariantId": "INV12",
+      "expression": "TRUE",
+      "reason": "随机域名近似唯一（弱保证，非强断言）：持久映射靠应用层跨表查重(forward_http_entry+forward_port_entry，重试5次)，DB 无 UNIQUE 索引；临时映射连查重都没有（48bit 纯随机，碰撞概率可忽略但不归零）。登记为应用层弱保证，verify 不强测 DB 唯一约束；关联 composition CI4（P4 域名域）",
+      "guardLocation": "service.go L300-330"
+    },
+    {
+      "invariantId": "INV15",
+      "expression": "TRUE",
+      "reason": "TempMapping 生命周期全程只存 Redis（res_map_），永不落 forward_mapping_resource、永不占 License；claim 仅属性回填+统计日志，到期照样销毁。主状态机以 S5/S6 承载其生命周期（T7/T8/T9 自环、T10 到期），Mapping 转移（T2-T6）不作用于 S5/S6。真实保障：public/service.go L87-264 全程不碰 MySQL + 主状态机状态隔离",
+      "guardLocation": "public/service.go L87-264"
+    }
+  ],
+  "verifiedAt": "2026-08-23T00:19:49.786Z"
+}

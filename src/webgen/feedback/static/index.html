@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Protochain P1 反馈闭环 — Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <header>
+    <h1>Protochain P1 反馈闭环</h1>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/scenarios">Scenarios</a>
+      <a href="/bindings">Bindings</a>
+      <a href="/run">Run</a>
+      <a href="/review">Review</a>
+    </nav>
+  </header>
+  <main>
+    <section id="overview">
+      <h2>当前实例</h2>
+      <dl>
+        <dt>根目录</dt><dd id="rootDir">加载中…</dd>
+        <dt>Service</dt><dd id="serviceName">加载中…</dd>
+        <dt>Env-scrubbed 残留</dt><dd id="envResidue">加载中…</dd>
+        <dt>敏感字段清单</dt><dd id="sensitiveList">加载中…</dd>
+      </dl>
+    </section>
+    <section>
+      <h2>能力</h2>
+      <ul>
+        <li><strong>Scenarios：</strong><a href="/scenarios">在线编辑 <code>scenarios/*.yaml</code></a>（增/改/删；落权威源；ajv 校验）</li>
+        <li><strong>Bindings：</strong><a href="/bindings">在线编辑 <code>bindings.yaml</code></a>（E3 骨架基础上填 baseUrl/headers；ajv 校验；tokenEnv/secretEnv 等敏感键已 redact）</li>
+        <li><strong>Run：</strong><a href="/run">一键触发 generate-cases / bind / verify</a>（子进程隔离；不带 TOKEN 环境）</li>
+        <li><strong>Review：</strong><a href="/review">评审 model / specs / test-cases / verify</a> → 生成工具链修改单草稿到 <code>/work</code></li>
+      </ul>
+    </section>
+    <section>
+      <h2>基线说明</h2>
+      <ul>
+        <li>P0 静态站点（VitePress）<strong>不受影响</strong>：停掉本服务后 P0 产物仍可独立托管</li>
+        <li>在线编辑落权威源（scenarios / bindings），从不直接动 derived/ 产物；变化一律经机械命令（generate-cases / bind / verify）</li>
+        <li>本服务进程 <strong>不读取 / 不持有</strong> TOKEN/SECRET/PASSWORD/APIKEY 类环境变量（启动 scrub）；如需绑定鉴权头使用，走子进程隔离（filterEnvForChild）</li>
+        <li>页面 / 接口响应 <strong>不含</strong> <code>authConfig.token</code> / <code>stateMap.secret</code> 等敏感键（redactSensitiveFields 整键删除）</li>
+      </ul>
+    </section>
+  </main>
+  <script src="/assets/app.js"></script>
+  <script>window.P1.bootIndex();</script>
+</body>
+</html>

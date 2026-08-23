@@ -1,0 +1,22 @@
+# E2.1 兼容性回归证据（2026-08-23 复验重新捕获）
+# 场景：老协议（approval-flow，无 contracts 段）derive-specs → 行为与改造前一致
+# 命令：node dist/cli/index.js derive-specs --dir /tmp/e2_1-legacy-migration
+# 结论：structured=7 legacy-stub=5（与 E2 基线一致，零回归；ajv 12/12 schema 全过）
+
+✓ specs.json 已升到 JSON Schema（schemaVersion=1.0）；verify 默认启用字段级对比。
+规格推导：✓ 通过
+  schemaVersion: 1.0
+  系统接口: 5 个
+  观测接口: 7 个
+  schema 分类: structured=7 legacy-stub=5 description-only=0
+  JSON Schema 自检（ajv）：✓ 全部通过（12 个 schema）
+  接口列表（前5个）：
+    - [system] IF_SYS_T1 (schemaKind=legacy-stub) ← submit（submit）
+    - [system] IF_SYS_T2 (schemaKind=legacy-stub) ← approve（approve）
+    - [system] IF_SYS_T3 (schemaKind=legacy-stub) ← reject（reject）
+    - [system] IF_SYS_T4 (schemaKind=legacy-stub) ← withdraw（withdraw）
+    - [system] IF_SYS_T5 (schemaKind=legacy-stub) ← timeout_return（timeout_return）
+    ... 还有 7 个
+
+# 说明：此证据取代先前误录的失败运行（ENOENT /tmp/e2_1-legacy-migration/protocol/model.md，
+# 系临时目录未创建所致，非工具链缺陷）；复验已在正确 fixture 上重跑通过。

@@ -1,0 +1,7 @@
+=== 接口绑定完整性校验 ===
+  绑定环境: (默认)
+  规格接口总数: 12
+  缺失系统接口: reject, withdraw, timeout_return
+  缺失观测接口: observe_草稿, observe_待审批, observe_已通过, observe_已驳回, observe_已撤回, observe_INV1, observe_INV2
+
+总体：✗ 未通过

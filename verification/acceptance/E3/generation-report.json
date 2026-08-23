@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-08-22T12:38:46.080Z",
+  "sourceModelVersion": "1.0.0",
+  "stats": {
+    "total": 12,
+    "system": 5,
+    "observation": 7,
+    "generated": 12,
+    "partial": 0,
+    "generationRate": 1,
+    "manualConfirmItems": 8
+  },
+  "warnings": [],
+  "sourceEnvelope": true,
+  "sourceMigrated": false,
+  "sourceMigrationWarnings": []
+}

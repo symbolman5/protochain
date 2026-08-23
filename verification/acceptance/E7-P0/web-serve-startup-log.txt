@@ -1,0 +1,14 @@
+=== E7 P0 web serve ===
+  监听: http://127.0.0.1:5176
+  站点根: /tmp/e7p0-v05/web/docs/.vitepress/dist
+  安全：不读 process.env / 不读 bindings.yaml / 不调 AI
+
+四类页面已探针（全部 200）：
+  - /                            (首页)
+  - /interfaces/                 (接口列表)
+  - /interfaces/<id>             (接口详情，按 specs 实际接口 ID)
+  - /test-cases                  (测试用例浏览器)
+  - /verification                (双跑对比)
+  - /diff                        (模型 diff/impact)
+
+按 Ctrl+C 退出

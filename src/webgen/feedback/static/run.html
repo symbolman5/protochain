@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Run · P1</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <header>
+    <h1>一键执行</h1>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/scenarios">Scenarios</a>
+      <a href="/bindings">Bindings</a>
+      <a href="/run">Run</a>
+      <a href="/review">Review</a>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <h2>选一个动作</h2>
+      <div class="actions">
+        <button data-kind="generate-cases">generate-cases</button>
+        <button data-kind="bind">bind</button>
+        <button data-kind="verify">verify（无 token 隔离）</button>
+        <button data-kind="diff">diff</button>
+      </div>
+      <p><label>额外 args（空格分隔；按 --key value 解析）
+        <input id="argsInput" type="text" placeholder="--protocol P1 --no-ai" />
+      </label></p>
+      <p><small>注：子进程隔离（filterEnvForChild），服务进程与生成子进程都不持有 TOKEN/SECRET。</small></p>
+    </section>
+    <section id="runResult" hidden>
+      <h2>结果</h2>
+      <dl>
+        <dt>ok</dt><dd id="rOk"></dd>
+        <dt>exitCode</dt><dd id="rExit"></dd>
+        <dt>耗时（ms）</dt><dd id="rMs"></dd>
+        <dt>argv</dt><dd><code id="rArgv"></code></dd>
+        <dt>stdout（截断 30KB）</dt><dd><pre id="rStdout"></pre></dd>
+        <dt>stderr（截断 30KB）</dt><dd><pre id="rStderr"></pre></dd>
+      </dl>
+      <p id="rWarn" hidden class="warn">⚠ 输出被截断，请到终端看完整结果</p>
+    </section>
+  </main>
+  <script src="/assets/app.js"></script>
+  <script>window.P1.bootRun();</script>
+</body>
+</html>

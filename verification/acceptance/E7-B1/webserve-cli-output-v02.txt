@@ -1,0 +1,16 @@
+=== E7 P0/B1 web serve ===
+  监听: http://127.0.0.1:5181
+  站点根: /work/hsk-ng/modeling/web/docs/.vitepress/dist
+  安全：不读 process.env / 不读 bindings.yaml / 不调 AI
+
+探针（按 schemaVersion 自动选择 8 条；全部 200）：
+  - /
+  - /protocols/
+  - /cross-refs
+  - /cross-diff
+  - /protocols/P1
+  - /protocols/P2
+  - /protocols/P3
+  - /protocols/P4
+
+按 Ctrl+C 退出

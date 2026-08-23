@@ -1,0 +1,92 @@
+# 跨协议引用矩阵 —— hskNG
+
+> 跨协议引用总数：**31**（机械提取，参照 E1-I2 跨协议引用识别口径）
+
+## 共享实体 / 关联矩阵
+
+*(composition.md 未声明对象状态切面)*
+
+## 跨协议观测接口
+
+*(composition.md 未声明观测接口)*
+
+## 跨协议守卫 / 字段引用（按引用源→目标分组）
+
+### P1 → P3（7 条）
+
+| 源接口 | 源字段 | 类型 | 目标 | 上下文 |
+| --- | --- | --- | --- | --- |
+| IF_SYS_T6 | precondition | guard | P3 | 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置） |
+| IF_SYS_T6 | inputs[1].description | guard | P3 | 守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）） |
+| IF_SYS_T6 | inputs[2].description | guard | P3 | 守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）） |
+| IF_SYS_T7 | precondition | guard | P3 | 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置） |
+| IF_SYS_T7 | inputs[1].description | guard | P3 | 守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）） |
+| IF_SYS_T7 | inputs[2].description | guard | P3 | 守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）） |
+| — | dependencyGraph.edges[P1->P3] | shared | P3 | P3 映射入口复用 P1 管理的节点（ser… |
+
+### P3 → P2（8 条）
+
+| 源接口 | 源字段 | 类型 | 目标 | 上下文 |
+| --- | --- | --- | --- | --- |
+| IF_SYS_T1 | precondition | guard | P2 | P2 活跃会话 且 归属本人 |
+| IF_SYS_T1 | inputs[1].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| IF_SYS_T2 | precondition | guard | P2 | P2 活跃会话 且 归属本人 |
+| IF_SYS_T2 | inputs[1].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| IF_SYS_T3 | precondition | guard | P2 | P2 活跃会话 且 归属本人 |
+| IF_SYS_T3 | inputs[1].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| IF_SYS_T4 | precondition | guard | P2 | P2 活跃会话 且 归属本人 |
+| IF_SYS_T4 | inputs[1].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+
+### P4 → P2（11 条）
+
+| 源接口 | 源字段 | 类型 | 目标 | 上下文 |
+| --- | --- | --- | --- | --- |
+| IF_SYS_T5 | precondition | guard | P2 | P2 活跃会话 且 claimCode 匹配 |
+| IF_SYS_T5 | inputs[1].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 claimCode 匹配） |
+| IF_SYS_T5 | inputs[2].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 claimCode 匹配） |
+| IF_SYS_T1 | precondition | guard | P2 | P2 活跃会话 且 归属本人 |
+| IF_SYS_T1 | inputs[1].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| IF_SYS_T2 | precondition | guard | P2 | P2 活跃会话 且 归属本人 |
+| IF_SYS_T2 | inputs[1].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| IF_SYS_T3 | precondition | guard | P2 | P2 活跃会话 且 归属本人 |
+| IF_SYS_T3 | inputs[1].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| IF_SYS_T4 | precondition | guard | P2 | P2 活跃会话 且 归属本人 |
+| IF_SYS_T4 | inputs[1].description | guard | P2 | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+
+### P2 → P1（1 条）
+
+| 源接口 | 源字段 | 类型 | 目标 | 上下文 |
+| --- | --- | --- | --- | --- |
+| — | dependencyGraph.edges[P2->P1] | shared | P1 | P1 所有写操作（注册/上线/停用/注销）的… |
+
+### P2 → P3（1 条）
+
+| 源接口 | 源字段 | 类型 | 目标 | 上下文 |
+| --- | --- | --- | --- | --- |
+| — | dependencyGraph.edges[P2->P3] | shared | P3 | P3 所有写操作（域名 claim/映射创建… |
+
+### P2 → P4（1 条）
+
+| 源接口 | 源字段 | 类型 | 目标 | 上下文 |
+| --- | --- | --- | --- | --- |
+| — | dependencyGraph.edges[P2->P4] | shared | P4 | P4 全部管理操作守卫依赖 P2 账户活跃且… |
+
+### P3 → P4（1 条）
+
+| 源接口 | 源字段 | 类型 | 目标 | 上下文 |
+| --- | --- | --- | --- | --- |
+| — | dependencyGraph.edges[P3->P4] | shared | P4 | P4 站点域名绑定复用 P3 域名基质 |
+
+### P1 → P4（1 条）
+
+| 源接口 | 源字段 | 类型 | 目标 | 上下文 |
+| --- | --- | --- | --- | --- |
+| — | dependencyGraph.edges[P1->P4] | shared | P4 | P4 站点公开读 TLS 复用 P1 证书池… |
+
+## 跨协议不变量覆盖映射
+
+| 不变量 | 名称 | span | 声明方 | 复杂度 | 关联接口 |
+| --- | --- | --- | --- | --- | --- |
+| CI1 | P1写操作会话守卫 | P1, P2 | system | simple_boolean | *(无)* |
+| CI2 | 网卡IP入口归属唯一账户 | P1, P2 | system | first_order | *(无)* |
+| CI3 | FQDN唯一归属 | P3, P4 | system | first_order | *(无)* |

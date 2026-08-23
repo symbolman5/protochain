@@ -1,0 +1,58 @@
+# P3 —— 内网映射域
+
+> 版本：**0.7.0** | 接口总数：**17**（系统 4 + 观测 13）
+> specs.json 状态：**已自动迁移**（老格式 → Envelope）
+
+## 接口列表
+
+| ID | 名称 | 类型 | schemaKind |
+| --- | --- | --- | --- |
+| IF_SYS_T1 | disable | 系统 | description-only |
+| IF_SYS_T2 | enable | 系统 | description-only |
+| IF_SYS_T3 | delete | 系统 | description-only |
+| IF_SYS_T4 | delete | 系统 | description-only |
+| IF_OBS_STATE_S0 | observe_启用 | 观测 | description-only |
+| IF_OBS_STATE_S1 | observe_停用 | 观测 | description-only |
+| IF_OBS_STATE_S2 | observe_已删除（软删） | 观测 | description-only |
+| IF_OBS_INV_INV1 | observe_INV1 | 观测 | description-only |
+| IF_OBS_INV_INV2 | observe_INV2 | 观测 | description-only |
+| IF_OBS_INV_INV3 | observe_INV3 | 观测 | description-only |
+| IF_OBS_INV_INV4 | observe_INV4 | 观测 | description-only |
+| IF_OBS_INV_INV5 | observe_INV5 | 观测 | description-only |
+| IF_OBS_INV_INV6 | observe_INV6 | 观测 | description-only |
+| IF_OBS_INV_INV7 | observe_INV7 | 观测 | description-only |
+| IF_OBS_INV_INV8 | observe_INV8 | 观测 | description-only |
+| IF_OBS_INV_INV9 | observe_INV9 | 观测 | description-only |
+| IF_OBS_INV_INV10 | observe_INV10 | 观测 | description-only |
+
+## 跨协议引用
+
+- 引用其他协议：**9** 条
+- 被其他协议引用：**8** 条
+
+### 引用其他协议
+
+| 源接口 | 源字段 | 目标协议 | 目标 | 类型 | 上下文 |
+| --- | --- | --- | --- | --- | --- |
+| IF_SYS_T1 | precondition | P2 | — | guard | P2 活跃会话 且 归属本人 |
+| IF_SYS_T1 | inputs[1].description | P2 | — | guard | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| IF_SYS_T2 | precondition | P2 | — | guard | P2 活跃会话 且 归属本人 |
+| IF_SYS_T2 | inputs[1].description | P2 | — | guard | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| IF_SYS_T3 | precondition | P2 | — | guard | P2 活跃会话 且 归属本人 |
+| IF_SYS_T3 | inputs[1].description | P2 | — | guard | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| IF_SYS_T4 | precondition | P2 | — | guard | P2 活跃会话 且 归属本人 |
+| IF_SYS_T4 | inputs[1].description | P2 | — | guard | 守卫条件参数（来自 guard: P2 活跃会话 且 归属本人） |
+| — | dependencyGraph.edges[P3->P4] | P4 | — | shared | P4 站点域名绑定复用 P3 域名基质 |
+
+### 被其他协议引用
+
+| 源协议 | 源接口 | 源字段 | 目标 | 类型 | 上下文 |
+| --- | --- | --- | --- | --- | --- |
+| P1 | IF_SYS_T6 | precondition | — | guard | 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置） |
+| P1 | IF_SYS_T6 | inputs[1].description | — | guard | 守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）） |
+| P1 | IF_SYS_T6 | inputs[2].description | — | guard | 守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）） |
+| P1 | IF_SYS_T7 | precondition | — | guard | 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置） |
+| P1 | IF_SYS_T7 | inputs[1].description | — | guard | 守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）） |
+| P1 | IF_SYS_T7 | inputs[2].description | — | guard | 守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）） |
+| P2 | — | dependencyGraph.edges[P2->P3] | — | shared | P3 所有写操作（域名 claim/映射创建… |
+| P1 | — | dependencyGraph.edges[P1->P3] | — | shared | P3 映射入口复用 P1 管理的节点（ser… |

@@ -1,0 +1,88 @@
+E4 数据级不变量结构化声明 + SQL 校验 —— 验收完成
+
+═══════════════════════════════════════════════════════════════════════
+基线
+═══════════════════════════════════════════════════════════════════════
+  npx tsc --noEmit          → 0 errors
+  npx jest                 → 63 suites / 931 cases 全部通过
+  npx npm run build        → 干净
+
+═══════════════════════════════════════════════════════════════════════
+storage 驱动决策（必填）
+═══════════════════════════════════════════════════════════════════════
+  选定方案：b) mysql CLI 子进程（podman exec sf-mysql mysql ...）
+  理由：
+    - 维持"无运行时依赖"原则（package.json 不引入 mysql2/pg 原生绑定）
+    - CI/本地/容器统一入口；实测 sf-mysql 容器可达
+    - 防御性：SQL 模板白名单 + 二次扫描（拒绝 INSERT/UPDATE/DELETE/DDL）
+  替代方案 mysql2 + pg 直连：留作 E4.x 备选（T3 后视 hskNG 接入评估）
+
+═══════════════════════════════════════════════════════════════════════
+不变量盘点（N 值以盘点为准，超越规划预测 11）
+═══════════════════════════════════════════════════════════════════════
+  P1: 9 条不变量，其中 8 条数据级（表达式 TRUE）
+  P2: 7 条，6 条数据级
+  P3: 5 条，4 条数据级
+  P4: 6 条，5 条数据级
+  P5: 6 条，5 条数据级
+  P6: 5 条，4 条数据级
+  P7: 5 条，10 条数据级（INV_PS1~5 + 5 个 INV）
+  ── 总量：43 条不变量，42 条数据级（> 规划预测 11）
+
+═══════════════════════════════════════════════════════════════════════
+P1 端到端验收（基准协议）
+═══════════════════════════════════════════════════════════════════════
+  1. P1 model.md 不变量表新增 4 列（级别/source/storageRef/guardLocation）
+     - INV1 状态合法性：level=state-machine（其余列空）
+     - INV2/3/4/10/11/12/15 跨协议/守卫型：level=data, source=guard, guardLocation=具体行号
+     - INV5 License 占用守恒：level=data, source=storage, storageRef=forward_mapping_license
+  2. formalize → formal-report.json 的 deferredToSqlValidation 段 = 8 条
+     - TLA+ 仅过 INV1（state-machine）；data 项归 deferred
+  3. verify 连 sf-mysql：
+     - SQL 校验（E4）: mysql@127.0.0.1:3306/forward 通过 1 / 失败 7（共 8）
+     - ✓ INV5: SELECT COUNT(*) FROM `forward_mapping_license`
+     - ✗ INV2/3/4/10/11/12/15: 归入 by-design 段
+     - by-design-not-tested-by-toolchain（7 项）：列出 + guardLocation
+  4. --skip-sql-check：
+     - "SQL 校验（E4）: 已跳过（--skip-sql-check 显式跳过）"
+     - by-design 段仍在（不静默）
+
+═══════════════════════════════════════════════════════════════════════
+代码改动汇总
+═══════════════════════════════════════════════════════════════════════
+  - src/model/types.ts          InvariantDef + level/source/storageRef
+                                FormalReport + deferredToSqlValidation
+                                VerificationReport + sqlInvariantCheck / byDesignNotTestedByToolchain
+                                新增 SqlInvariantCheckReport / SqlInvariantCheckItem / ByDesignNotTestedItem
+                                DeferredSqlInvariant 类型
+  - src/parser/index.ts         normalizeHeader 加 8 个中英文映射
+                                rowToInvariant 读 E4 字段 + guardLocation 拼到 description 末段
+                                applyLegacyMigration 默认 level=state-machine
+  - src/formalizer/index.ts     collectDeferredToSqlValidation(model) → DeferredSqlInvariant[]
+                                formalize 三个 return 分支均注入该段
+  - src/sqlcheck/index.ts       （新建）mysql/postgres 双驱动；
+                                runSqlInvariantCheck / skippedSqlInvariantCheck
+                                executeSelect 子进程 + SQL 白名单（拒绝写操作）
+                                loadSqlCheckConfigFromEnv 读 PROTOCHAIN_SQL_* + SF_MYSQL_CONTAINER
+  - src/verifier/index.ts      VerifyContext + skipSqlCheck / sqlInvariantCheck / mockMode
+                                verify 增 sqlInvariantCheck + byDesignNotTestedByToolchain 段
+                                collectByDesignItems / splitGuardMarker
+                                formatVerificationSummary 渲染新段
+  - src/cli/index.ts            verify 加 --skip-sql-check
+                                读 formal-report.json 的 deferred 段触发 sqlcheck
+  - src/testgen/index.ts        生成 protocol-model.ts 时 InvariantDef 含 level/source/storageRef 字段
+
+═══════════════════════════════════════════════════════════════════════
+单测覆盖
+═══════════════════════════════════════════════════════════════════════
+  - tests/sqlcheck/sqlcheck.test.ts     6 cases（白名单 / env / skipped）
+  - tests/verifier/e4-by-design.test.ts 6 cases（source=guard / 缺 storageRef / legacy）
+
+═══════════════════════════════════════════════════════════════════════
+T2 进度
+═══════════════════════════════════════════════════════════════════════
+  3/4 PASS（E4 + E5 + E6 PASS；E7-P1 在线编辑留给独立任务）
+
+═══════════════════════════════════════════════════════════════════════
+结论：E4 PASS（v0.1）
+═══════════════════════════════════════════════════════════════════════

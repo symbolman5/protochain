@@ -1,0 +1,24 @@
+=== E7 P0 Web 检阅界面生成报告 ===
+  协议: 审批流协议 (1.0.0)
+  web/data.json schemaVersion: 1.0 (=1.0)
+  源 model.md version: 1.0.0
+  接口总数: 12（系统 5 + 观测 7）
+  测试用例: 0
+  验证报告: 未生成
+  实现完整性: 未生成
+  diff/impact: 未生成
+
+  web/data.json: /tmp/e7p0-v05/web/data.json
+  站点工程目录: /tmp/e7p0-v05/web
+  VitePress dist: /tmp/e7p0-v05/web/docs/.vitepress/dist
+  VitePress build: ✗ 未生成（见 warnings）
+
+  安全边界：不读 bindings.yaml / 不读 process.env / 不调 AI / 不接触令牌环境变量
+  敏感字段脱敏: tokenEnv/secretEnv/passwordEnv/keyEnv/usernameEnv/certPath/keyPath/caPath/token/secret/password/apiKey
+
+警告：
+  - 未找到 derived/test-cases.json；对应页面将空
+  - 未找到 derived/verification/verification-report.json；对应页面将空
+  - 未找到 derived/impl-check/impl-check-report.json；对应页面将空
+  - 未找到 derived/diff/model-diff.json；diff 页将显示"无差异"
+  - 未找到 derived/impact-analysis.json；对应页面将空

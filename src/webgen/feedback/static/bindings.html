@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Bindings · P1</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <header>
+    <h1>Bindings（在线编辑）</h1>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/scenarios">Scenarios</a>
+      <a href="/bindings">Bindings</a>
+      <a href="/run">Run</a>
+      <a href="/review">Review</a>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <h2>当前 bindings.yaml</h2>
+      <p><strong>Path：</strong><code id="bindingsPath">加载中…</code></p>
+      <p>
+        <strong>接口角色/skeleton：</strong>
+        <span id="bindingsMeta">加载中…</span>
+      </p>
+      <p class="warn">
+        注意：<code>authConfig.tokenEnv</code> / <code>secretEnv</code> / <code>passwordEnv</code> 等敏感键
+        在显示层<b>被自动 redact</b>，保存时仍保留原值（权威源不动）。
+      </p>
+    </section>
+    <section>
+      <h2>编辑器（YAML 直接编辑；保存走 ajv schema 校验）</h2>
+      <textarea id="bindingsEditor" rows="22" spellcheck="false"></textarea>
+      <div class="formActions">
+        <button id="reloadBtn" type="button">重新加载</button>
+        <button id="saveBtn" type="button">保存</button>
+      </div>
+      <pre id="messageBox"></pre>
+    </section>
+  </main>
+  <script src="/assets/app.js"></script>
+  <script>window.P1.bootBindings();</script>
+</body>
+</html>

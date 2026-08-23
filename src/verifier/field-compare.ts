@@ -83,6 +83,28 @@ export function compareFields(input: FieldCompareInput): Deviation[] {
     // ── 2. 值比对：与 legacy expected 比较（如有） ──
     if (legacyExpected && fieldName in legacyExpected) {
       const legacyVal = legacyExpected[fieldName];
+      // E2.1：legacyExpected 是 JSON Schema 类型字符串（如 "string"/"number"）→
+      //   按类型名比对，避免把"string"作为期望值与 impl 实际值 deepEqual
+      if (typeof legacyVal === 'string' && isJsonSchemaTypeName(legacyVal)) {
+        if (
+          !matchesSimpleType(actual, legacyVal as NonNullable<JSONSchema['type']>)
+        ) {
+          deviations.push({
+            action,
+            state,
+            expected: legacyVal,
+            actual: stringifyCompact(actual),
+            kind: 'field_mismatch',
+            stepIndex,
+            field: `response.${fieldName}`,
+            legacy: legacyVal,
+            impl: stringifyCompact(actual),
+            httpStatus,
+          });
+        }
+        continue;
+      }
+      // 普通值比对
       if (!deepEqual(actual, legacyVal)) {
         deviations.push({
           action,
@@ -122,6 +144,14 @@ function matchesSimpleType(value: unknown, type: NonNullable<JSONSchema['type']>
     default:
       return true;
   }
+}
+
+const JSON_SCHEMA_TYPE_NAMES = new Set([
+  'string', 'number', 'integer', 'boolean', 'object', 'array', 'null',
+]);
+
+function isJsonSchemaTypeName(s: string): boolean {
+  return JSON_SCHEMA_TYPE_NAMES.has(s);
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {

@@ -22,6 +22,7 @@ import type {
   FormalToolAdapter,
   InvariantVerifyResult,
   TlcConfig,
+  DeferredSqlInvariant,
 } from '../model/types.js';
 import { parseAIJson } from '../ai/adapter.js';
 import {
@@ -103,6 +104,8 @@ export async function formalize(
         invariantResults: shouldFillWithAI
           ? await verifyInvariantsWithAI(model, aiAdapter, generatedSpec, adapter.name)
           : toolReport.invariantResults,
+        // E4：把 level=data 的不变量归入 deferredToSqlValidation 段
+        deferredToSqlValidation: collectDeferredToSqlValidation(model),
         verifiedAt: new Date().toISOString(),
       };
     } else {
@@ -171,6 +174,8 @@ async function aiFallbackVerify(
     rawOutput: `形式化工具 ${adapter.name} 不可用（${toolError ?? '未安装'}），降级为 AI 推演验证。` +
       `\n选择依据：${reasons.join('; ')}`,
     invariantResults,
+    // E4：把 level=data 的不变量归入 deferredToSqlValidation 段
+    deferredToSqlValidation: collectDeferredToSqlValidation(model),
     verifiedAt: new Date().toISOString(),
   };
 }
@@ -298,4 +303,35 @@ function buildInvariantVerificationPrompt(
 export function analyzeToolSuitability(model: DerivableLayer) {
   const scores = scoreAllAdapters(model);
   return scores;
+}
+
+// ============================================================================
+// E4：收集被推迟到 SQL 校验路径的数据级不变量
+// ============================================================================
+
+/**
+ * E4：从模型的不变量列表中筛选出 level='data' 的项，归入 formal-report.json 的
+ * `deferredToSqlValidation` 段。这些项不进入 TLA+ 形式化验证，由 verify 的
+ * SQL 校验路径（src/sqlcheck/）承接。
+ *
+ * - source='storage' 且 storageRef 已声明 → verify 阶段生成对该表的只读 SELECT
+ * - source='guard' → verify 阶段归入 `by-design-not-tested-by-toolchain` 段
+ * - source 未声明但 level=data → 当作 storage（默认行为）；
+ *   若 storageRef 缺失，verify 阶段仍归入 by-design 段（不可消除项）
+ */
+export function collectDeferredToSqlValidation(
+  model: SourceProtocolModel
+): DeferredSqlInvariant[] {
+  const out: DeferredSqlInvariant[] = [];
+  for (const inv of model.derivable.invariants) {
+    if (inv.level !== 'data') continue;
+    out.push({
+      invariantId: inv.id,
+      expression: inv.expression,
+      source: inv.source ?? 'storage',
+      storageRef: inv.storageRef,
+      scopeStateIds: inv.scopeStateIds,
+    });
+  }
+  return out;
 }

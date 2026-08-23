@@ -305,15 +305,18 @@ export async function executeHttp(
     }
   })();
 
-  // 401 文案区分：认证所需环境变量未配置 vs 令牌已发送但被拒绝（无效/无权限）
+  // 401 文案区分：仅当"认证所需环境变量缺失"时给出本地化提示；
+  // 请求已携带凭证且服务端返回 {error:{code,...}} envelope 时必须保留原 envelope，
+  // 以便 verifier/errorMap 能命中业务错误码（如 invalid_server_secret）。
+  // E11：401 + 无 errorMap 命中归 unmapped，verifier 已有兜底逻辑。
   if (raw.status === 401) {
-    const record = raw.data && typeof raw.data === 'object' ? (raw.data as Record<string, unknown>) : {};
-    const serverMsg = typeof record['error'] === 'string' ? record['error'] : '';
     const hint = missingAuthEnvHint(role);
     if (hint) {
+      const record =
+        raw.data && typeof raw.data === 'object'
+          ? (raw.data as Record<string, unknown>)
+          : {};
       raw.data = { ...record, error: `认证失败：${hint}` };
-    } else if (role.auth === 'bearer' || role.auth === 'basic' || role.auth === 'api_key') {
-      raw.data = { ...record, error: `认证失败：令牌无效${serverMsg ? `（${serverMsg}）` : ''}` };
     }
   }
 

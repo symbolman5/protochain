@@ -1,0 +1,40 @@
+=== E2.1 验收：derive-specs 输出 ===
+
+✓ specs.json 已升到 JSON Schema（schemaVersion=1.0）；verify 默认启用字段级对比。
+规格推导：✓ 通过
+  schemaVersion: 1.0
+  系统接口: 1 个
+  观测接口: 2 个
+  schema 分类: structured=3 legacy-stub=0 description-only=0
+  JSON Schema 自检（ajv）：✓ 全部通过（3 个 schema）
+  接口列表（前5个）：
+    - [system] IF_SYS_T1 (schemaKind=structured) ← register（register）
+    - [observation] IF_OBS_STATE_S1 (schemaKind=structured) ← S1（observe_初始）
+    - [observation] IF_OBS_STATE_S2 (schemaKind=structured) ← S2（observe_终态）
+
+=== E2.1 验收：specs.json register spec ===
+{
+  "id": "IF_SYS_T1",
+  "schemaKind": "structured",
+  "contractSource": "register",
+  "inputNames": [
+    "currentState",
+    "name"
+  ],
+  "outputNames": [
+    "serverId",
+    "port",
+    "nextState"
+  ],
+  "requestRequired": [
+    "currentState",
+    "name"
+  ],
+  "responseRequired": [
+    "serverId",
+    "port",
+    "nextState"
+  ]
+}
+=== E2.1 验收：ajv 编译 contract schema ===
+（CLI 已自检通过 17/17 schema）

@@ -20,6 +20,7 @@ import type {
   BindingValidationReport,
   InterfaceBinding,
   RoleBinding,
+  ErrorMapEntry,
 } from '../model/types.js';
 
 /**
@@ -34,6 +35,7 @@ import type {
  * 3. stateMap：manual.stateMap 浅合并 skeleton.stateMap（人工确认的系统词优先）
  * 4. 顺序：interfaces 中「manual 条目排前 + skeleton-only 条目在后」（保持可读性）
  * 5. 其他字段（defaultEnv / environments / crossProtocolObservations）：取 manual；manual 缺省则取 skeleton
+ * 6. errorMap：manual 覆盖 skeleton 同 key（与 stateMap 同构；用于 E11 错误绑定）
  *
  * 边界：
  * - 同一 action 在 skeleton 和 manual 中都存在，但 transport.type 不同（HTTP vs Kafka）
@@ -67,11 +69,18 @@ export function mergeBindings(
     mergedStateMap[k] = v;
   }
 
+  // 6. E11：errorMap 合并（与 stateMap 同构；manual 覆盖 skeleton 同 key）
+  const mergedErrorMap: Record<string, ErrorMapEntry> = { ...(skeleton.errorMap ?? {}) };
+  for (const [k, v] of Object.entries(manual.errorMap ?? {})) {
+    mergedErrorMap[k] = { ...mergedErrorMap[k], ...v };
+  }
+
   // 4. 其他字段：manual 优先；manual 缺省则回退 skeleton
   const merged: BindingConfig = {
     roles: mergedRoles,
     interfaces: mergedInterfaces,
     stateMap: Object.keys(mergedStateMap).length > 0 ? mergedStateMap : undefined,
+    errorMap: Object.keys(mergedErrorMap).length > 0 ? mergedErrorMap : undefined,
     defaultEnv: manual.defaultEnv ?? skeleton.defaultEnv,
     environments:
       manual.environments ?? (skeleton as { environments?: BindingConfig['environments'] }).environments,
@@ -226,11 +235,50 @@ export function validateBindings(
     }
   }
 
+  // ── E11：错误契约完整性（errorMap 必须覆盖 specs.errorResponses 中的所有 errorCode）──
+  const unmappedErrorCodes: string[] = [];
+  const declaredErrorCodes = new Set<string>();
+  for (const spec of specs) {
+    for (const er of spec.errorResponses ?? []) {
+      declaredErrorCodes.add(er.errorCode);
+      if (!config.errorMap || !(er.errorCode in config.errorMap)) {
+        unmappedErrorCodes.push(er.errorCode);
+      }
+    }
+  }
+
+  // errorMap 中多余的 errorCode（不在 specs/异常路径中）→ warning（可能残留）
+  let extraErrorCodes: string[] | undefined;
+  if (config.errorMap) {
+    extras: for (const code of Object.keys(config.errorMap)) {
+      if (!declaredErrorCodes.has(code)) {
+        if (!extraErrorCodes) extraErrorCodes = [];
+        extraErrorCodes.push(code);
+        warnings.push(
+          `errorMap 中的错误码 "${code}" 未在 specs.errorResponses 中声明（可能是残留）`
+        );
+      }
+    }
+  }
+  if (unmappedErrorCodes.length > 0) {
+    const dedup = Array.from(new Set(unmappedErrorCodes));
+    for (const code of dedup) {
+      warnings.push(
+        `errorCode "${code}" 在 specs.errorResponses 中声明但未在 bindings.errorMap 绑定（bind 失败）`
+      );
+    }
+  }
+
   return {
-    valid: missingSystem.length === 0 && missingObservation.length === 0,
+    valid:
+      missingSystem.length === 0 &&
+      missingObservation.length === 0 &&
+      unmappedErrorCodes.length === 0,
     missingSystem,
     missingObservation,
     warnings,
+    unmappedErrorCodes: unmappedErrorCodes.length > 0 ? Array.from(new Set(unmappedErrorCodes)) : undefined,
+    extraErrorCodes,
   };
 }
 

@@ -96,6 +96,9 @@ import {
 import { deriveBindings, isSkeletonBindings, SKELETON_MARKER, type SkeletonBindings } from '../bindgen/index.js';
 import { deriveWeb, WEB_DATA_SCHEMA_VERSION } from '../webgen/index.js';
 import { startServe } from '../webgen/serve.js';
+import { deriveProjectWeb } from '../webgen/composition.js';
+import { startFeedbackServer } from '../webgen/feedback/index.js';
+import { dirname as pathDirname, join as pathJoin } from 'node:path';
 import { loadScenarioParams, findScenariosDir } from '../verifier/binding-runner.js';
 import { writeEnvDepsReport, formatEnvDepsWarnings } from '../verifier/env-deps.js';
 import { loadTestTool } from '../testtool/loader.js';
@@ -103,7 +106,19 @@ import { runMCheck, formatMCheckReport, mCheckCli } from '../mcheck/index.js';
 import { runTestCasesWithTestTool } from '../testtool/runner.js';
 import { buildVerificationReportFromTestTool } from '../verifier/index.js';
 import { readReport, writeReport } from '../orchestrator/index.js';
-import type { StepId, AIAdapter, InterfaceSpec, TestCaseSet, CompositionCompletenessReport, SourceProtocolModel } from '../model/types.js';
+import type { StepId, AIAdapter, InterfaceSpec, TestCaseSet, CompositionCompletenessReport, SourceProtocolModel, BindingConfig } from '../model/types.js';
+import {
+  runSqlInvariantCheck,
+  skippedSqlInvariantCheck,
+  loadSqlCheckConfigFromEnv,
+  type SqlCheckConfig,
+} from '../sqlcheck/index.js';
+// E6 mock 模式（testtool/mock.js）由 E6 任务创建，本 CLI 注入点保留：
+//   --mock 时 implementation = buildMockImplementation(model)
+//   runMockVerification(test-tool, mockImpl, testCases) → TestToolRunReport
+// 详见 src/testtool/mock.ts
+// 注：mock 模块在 E6 步骤同步创建，本 CLI 用动态 import 避免循环依赖。
+// verify 真实执行时不需要它，所以 --mock 之外的 verify 仍走原路径。
 
 /**
  * 加载 + 兼容老格式 specs.json —— E2 specs.json envelope 兼容读
@@ -136,16 +151,17 @@ function loadSpecsOrMigrate(
 }
 
 /**
- * 从 model + specs 推导出 legacyExpectedResponses（E2-I4 修复）。
+ * 从 model + specs 推导出 legacyExpectedResponses（E2-I4 修复 + E2.1 扩面）。
  *
  * 设计：
- * - 数据源分两层：
+ * - 数据源分三层：
  *   1. model.contractInput.expectedInformationFields（USAGE §4.2 契约层段）：
  *      每个 action 的响应应包含这些信息字段；缺则视为字段级偏差
- *   2. model.derivable.invariants[].id：每个 action 在响应中验证该不变量保持
- *      （值由具体 impl 提供，不在 helper 内填具体值；仅声明「应保持」）
- * - 输出形态：{ actionName: { field1: '<expected>', invariant1: '<expected>' } }
- * - override 机制：scenarios/*.yaml.expectedFields 若存在则覆盖（E2.1 后续扩面）
+ *   2. model.contractInput.contracts[].responseSchema（E2.1）：
+ *      契约层声明的响应字段类型 → type-mismatch 时报「legacy=<type>, impl=<type>」
+ *   3. model.derivable.invariants[].id：每个 action 在响应中验证该不变量保持
+ * - 输出形态：{ actionName: { field1: '<expected>', ... } }
+ * - scenarios/*.yaml.expectedResponse 显式 override（E2.1）
  *
  * 注意：helper 不强行推测具体值（避免引入随机性 / 假阴性），仅标记「应包含此字段」。
  * 实际期望值由 scenarios 或 impl 行为决定；缺值时仅记 type-mismatch。
@@ -157,6 +173,12 @@ function buildLegacyExpectedFromModel(
   const result: Record<string, Record<string, unknown>> = {};
   const infoFields: string[] = model.contractInput?.expectedInformationFields ?? [];
   const invariantIds: string[] = model.derivable.invariants.map((inv) => inv.id);
+  const contractByAction = new Map<string, import('../model/types.js').ContractEntry>();
+  for (const c of model.contractInput?.contracts ?? []) {
+    if (!c.interface) continue;
+    contractByAction.set(c.interface, c);
+    if (c.sourceId) contractByAction.set(c.sourceId, c);
+  }
 
   // 仅系统接口参与字段级对比（observation 接口无响应体外部期望）
   const systemSpecs = specs.filter((s) => s.kind === 'system');
@@ -164,7 +186,7 @@ function buildLegacyExpectedFromModel(
     const action = spec.name;
     const expected: Record<string, unknown> = {};
     // 信息字段：用「__present」作 sentinel —— 字段存在性提示
-    //   field-compare 暂不做 sentinel 比对；保留 entries 表示「此 action 的响应预期含这些字段」
+    //   field-compare 在字段缺失 + 非 sentinel 时报字段级偏差
     for (const f of infoFields) {
       expected[`__info_expected:${f}`] = true;
     }
@@ -172,12 +194,18 @@ function buildLegacyExpectedFromModel(
     for (const inv of invariantIds) {
       expected[`__invariant_expected:${inv}`] = true;
     }
-    // 保留空对象语义：即使 model 缺 expectedInformationFields 也不阻断
-    // 真实「字段 X：legacy=Y, impl=Z」值级三元组由 scenarios/*.yaml.expectedResponse 注入（E2.1 扩面）
+    // E2.1：契约层 contracts[] 的响应字段类型 → 走 type-mismatch 路径
+    const contractEntry = contractByAction.get(action);
+    if (contractEntry?.responseSchema?.properties) {
+      for (const [fieldName, prop] of Object.entries(contractEntry.responseSchema.properties)) {
+        if (fieldName === 'nextState') continue; // 协议层强制，已覆盖
+        // 写字段类型 → field-compare 在 impl 字段类型不符时输出
+        // 「legacy=<type>, impl=<type>」三元组
+        expected[fieldName] = prop.type ?? prop.description ?? '<contract>';
+      }
+    }
     result[action] = expected;
   }
-  // 注：真实值级对比保留 verify 调用处的显式 legacyExpectedResponses 注入；
-  // 当前 CLI 不强制要求用户在配置层提供 —— 字段级对比仍可工作（仅基于 responseSchema 类型校验）。
   return result;
 }
 
@@ -952,8 +980,9 @@ program
 
 program
   .command('generate-tests')
-  .description('⑥ 测试工具生成（生成场景加载器/协议执行器/一致性断言器/协议模型源码）')
+  .description('⑥ 测试工具生成（生成场景加载器/协议执行器/一致性断言器/协议模型源码）；E6：--emit=mock 额外生成 mocks.ts')
   .option('-d, --dir <目录>', '项目根目录', process.cwd())
+  .option('--emit <emit>', 'E6：emit 选项（test-tool=默认；mock=额外生成 mocks.ts）', 'test-tool')
   .action(async (opts) => {
     const ctx = resolveCtx(opts);
     const rootDir = ctx.protocolRoot;
@@ -975,6 +1004,18 @@ program
       rootDir,
       artifacts: {},
     });
+
+    // ── E6：--emit=mock → 额外生成 derived/test-tool/mocks.ts ──
+    const emitMode = (opts.emit ?? 'test-tool') as 'test-tool' | 'mock';
+    if (result.passed && emitMode === 'mock') {
+      const { generateMockCode } = await import('../testgen/index.js');
+      const mockCode = generateMockCode(model);
+      const mockPath = join(rootDir, 'derived/test-tool/mocks.ts');
+      mkdirSync(dirname(mockPath), { recursive: true });
+      writeFileSync(mockPath, mockCode, 'utf-8');
+      console.log(`E6 mock 已落： ${mockPath}（fixtures+spy；来源 model.md v${model.metadata.version}）`);
+    }
+
     if (result.passed && result.outputs && result.outputs.length > 0) {
       recordManifest(rootDir, {
         stepId: result.stepId,
@@ -1001,6 +1042,9 @@ program
     'state'
   )
   .option('--max-path-length <数>', '最大路径长度（path 准则时生效）')
+  // E7-P1-I2 修复：--no-ai 强制走确定性 BFS/DFS 路径，绕过 LLM 非确定性。
+  // 与 check/verify/exec-task/diff 的 --no-ai 同口径；CLI 默认仍由 config.ai.useForGeneration 决定。
+  .option('--no-ai', '禁用 AI 生成（强制走确定性路径；与 LLM 非确定性互斥）')
   .action(async (opts) => {
     const ctx = resolveCtx(opts);
     const rootDir = ctx.protocolRoot;
@@ -1016,7 +1060,8 @@ program
     };
 
     let aiAdapter: AIAdapter | undefined = undefined;
-    if (config.ai?.useForGeneration) {
+    // --no-ai 显式覆盖 config.ai.useForGeneration；保证连续两次输出 sha256 一致。
+    if (opts.ai !== false && config.ai?.useForGeneration) {
       try {
         aiAdapter = createAIRouter(config.ai).get('generation');
       } catch (err) {
@@ -1024,6 +1069,8 @@ program
           `AI 适配器初始化失败，使用确定性路径生成：${err instanceof Error ? err.message : err}`
         );
       }
+    } else if (opts.ai === false && config.ai?.useForGeneration) {
+      console.warn('--no-ai 已启用，跳过 AI 生成（config.ai.useForGeneration 被覆盖）');
     }
 
     const model = parseProtocolFile(ctx.modelPath);
@@ -1042,9 +1089,11 @@ program
 
 program
   .command('generate-scaffold')
-  .description('⑨ 从接口规格生成实现类型骨架（interfaces.d.ts）')
+  .description('⑨ 从接口规格生成实现类型骨架（interfaces.d.ts）；E5：--lang=ts 额外生成 clients/{http,kafka,nsq}.ts')
   .option('-d, --dir <目录>', '项目根目录', process.cwd())
   .option('-o, --output <路径>', '输出文件路径（默认 <协议根>/impl-scaffold/interfaces.d.ts）')
+  .option('--lang <语言>', 'E5：实现语言（目前仅 ts；指定后额外生成 transport clients）')
+  .option('--clients-output <路径>', 'E5：clients 目录（默认 <协议根>/impl-scaffold/clients/）')
   .action((opts) => {
     const ctx = resolveCtx(opts);
     const rootDir = ctx.protocolRoot;
@@ -1054,9 +1103,46 @@ program
       const outputPath = opts.output
         ? resolve(opts.output)
         : join(rootDir, 'impl-scaffold/interfaces.d.ts');
-      scaffoldInterfaces({ specs, outputPath });
+      // E5：--lang=ts 时读 bindings.yaml（E3 派生），用于生成 transport clients
+      let bindings: BindingConfig | undefined = undefined;
+      let effectiveBindings: BindingConfig | undefined = undefined;
+      const config = loadConfig(rootDir);
+      if (config.bindings) {
+        effectiveBindings = applyBindingEnvironment(config.bindings, undefined);
+        bindings = effectiveBindings;
+      }
+      const scaffoldOpts: import('../scaffolder/index.js').ScaffoldInterfacesOptions = {
+        specs,
+        outputPath,
+        protocolName: model.metadata.name,
+        protocolVersion: model.metadata.version,
+      };
+      if (opts.lang) {
+        const lang = opts.lang as 'ts' | 'go' | 'java';
+        if (lang !== 'ts') {
+          console.error(`--lang=${lang} 尚未支持（P1 范围仅 ts）`);
+          process.exit(2);
+        }
+        scaffoldOpts.lang = 'ts';
+        if (opts.clientsOutput) {
+          scaffoldOpts.clientsOutputDir = resolve(opts.clientsOutput);
+        }
+        if (bindings) {
+          scaffoldOpts.bindings = bindings;
+        } else {
+          console.warn('提示：未提供 bindings（E5 仍生成 interfaces.d.ts；clients 跳过）');
+        }
+      }
+      scaffoldInterfaces(scaffoldOpts);
       console.log(`接口骨架已生成于 ${outputPath}`);
       console.log(`  接口数: ${specs.length}`);
+      if (opts.lang === 'ts') {
+        const clientsDir = scaffoldOpts.clientsOutputDir ?? join(dirname(outputPath), 'clients');
+        console.log(`  E5 transport clients 已生成于 ${clientsDir}/（仅含对应 transport 类型）`);
+        if (!bindings) {
+          console.warn('  E5 注：未提供 bindings，clients 实际为空（接口骨架仍生成）');
+        }
+      }
       console.log('下一步：开发者填充实现逻辑，然后运行 protochain check-impl');
       process.exit(0);
     } catch (err) {
@@ -1184,6 +1270,8 @@ program
   .option('-d, --dir <目录>', '项目根目录', process.cwd())
   .option('--no-ai', '禁用 AI 辅助摘要')
   .option('--env <名称>', '绑定环境（bindings.environments；默认 defaultEnv）')
+  .option('--skip-sql-check', 'E4：跳过数据级不变量 SQL 校验（报告仍标注「已跳过」）')
+  .option('--mock', 'E6：mock 模式（无 impl 环境下跑模型层契约一致性）')
   .action(async (opts) => {
     const ctx = resolveCtx(opts);
     const rootDir = ctx.protocolRoot;
@@ -1228,12 +1316,64 @@ program
       const legacyExpectedResponses: Record<string, Record<string, unknown>> =
         buildLegacyExpectedFromModel(model, specs ?? []);
 
+      // ── E4：数据级不变量 SQL 校验 ──
+      let sqlInvariantCheck: import('../model/types.js').SqlInvariantCheckReport | undefined = undefined;
+      if (opts.skipSqlCheck) {
+        sqlInvariantCheck = skippedSqlInvariantCheck('--skip-sql-check 显式跳过');
+      } else {
+        const deferredPath = join(rootDir, 'derived/formal/formal-report.json');
+        const deferredRaw = existsSync(deferredPath)
+          ? JSON.parse(readFileSync(deferredPath, 'utf-8'))
+          : undefined;
+        const deferred: import('../model/types.js').DeferredSqlInvariant[] | undefined =
+          deferredRaw?.deferredToSqlValidation;
+        if (deferred && deferred.length > 0) {
+          const sqlCfg = loadSqlCheckConfigFromEnv();
+          if (sqlCfg) {
+            try {
+              sqlInvariantCheck = await runSqlInvariantCheck(deferred, sqlCfg);
+            } catch (err) {
+              sqlInvariantCheck = skippedSqlInvariantCheck(
+                `SQL 校验异常：${err instanceof Error ? err.message : String(err)}`
+              );
+            }
+          } else {
+            sqlInvariantCheck = skippedSqlInvariantCheck(
+              '未配置 storage 连接（PROTOCHAIN_SQL_*）'
+            );
+          }
+        } else {
+          sqlInvariantCheck = skippedSqlInvariantCheck(
+            '无数据级不变量（deferredToSqlValidation 为空）'
+          );
+        }
+      }
+
+      // ── E6：mock 模式（无 impl 跑模型层契约一致性） ──
+      let mockImplementation: ProtocolImplementationStub | undefined = undefined;
+      let mockTestToolRun: import('../model/types.js').TestToolRunReport | undefined = undefined;
+      if (opts.mock) {
+        // 动态导入：mock.ts 由 E6 任务创建；此处避免顶层循环依赖
+        const { buildMockImplementation, runMockVerification, resetSpy, getSpySnapshot } =
+          await import('../testtool/mock.js');
+        resetSpy();
+        mockImplementation = buildMockImplementation(model);
+        // 显式从 testCases 跑（mock 路径不依赖 test-tool 编译产物）
+        if (testCases) {
+          mockTestToolRun = await runMockVerification(model, testCases, mockImplementation);
+          const spy = getSpySnapshot();
+          console.log(`mock 模式：fixtures+spy 实现；用例 ${mockTestToolRun.passedCases}/${mockTestToolRun.executedCases} 通过；spy 触发 ${Object.keys(spy.counters).length} 个 action`);
+        } else {
+          console.log('mock 模式：test-cases.json 缺失，无法跑 mock verification');
+        }
+      }
+
       const report = await verify(
         model,
         {
           rootDir,
           testCases: testCases ?? undefined,
-          implementation: undefined,
+          implementation: mockImplementation,
           specs,
           bindings,
           protocolId: ctx.protocolId,
@@ -1242,6 +1382,11 @@ program
             : undefined,
           enableFieldLevelCompare: useFieldLevel,
           legacyExpectedResponses,
+          skipSqlCheck: opts.skipSqlCheck,
+          sqlInvariantCheck,
+          mockMode: opts.mock,
+          // E6：mock 模式下把 mockTestToolRun 作为权威层来源（确定性 + sha256 一致）
+          testToolRun: mockTestToolRun ?? undefined,
         },
         aiAdapter,
         { useAISummary: !!aiAdapter }
@@ -1774,6 +1919,7 @@ program
   .action(async (opts) => {
     const ctx = resolveCtx(opts);
     const rootDir = ctx.protocolRoot;
+    const protocolModelPath = ctx.modelPath;
     try {
       const result = await deriveBindings(
         {
@@ -1785,7 +1931,9 @@ program
           force: opts.force,
           silentMigration: opts.silentMigration,
         },
-        (rd) => parseProtocolFile(join(rd, 'protocol/model.md'))
+        // 修改单 #008 缺陷 4：复用 resolveProjectContext 的 modelPath，
+        // 多协议项目（protocol/<Pn>/model.md）与单协议（protocol/model.md）均支持。
+        () => parseProtocolFile(protocolModelPath)
       );
 
       const s = result.skeleton;
@@ -1829,16 +1977,77 @@ program
 
 program
   .command('derive-web')
-  .description('E7 P0：机械生成 Web 检阅界面静态站点（web/data.json + VitePress dist/）')
+  .description('E7 P0/B1：机械生成 Web 检阅界面静态站点（web/data.json + VitePress dist/）。--project 启用组合层视图（多协议项目）')
   .option('-d, --dir <目录>', '项目根目录', process.cwd())
   .option('--data-json <路径>', 'web/data.json 输出路径（默认 <dir>/web/data.json）')
   .option('--web-dir <路径>', '站点工程目录（默认 <dir>/web）')
   .option('--dist-dir <路径>', 'VitePress 产物目录（默认 <webDir>/docs/.vitepress/dist）')
   .option('--no-build', '跳过 VitePress build（仅写 web/data.json + .md，便于调试）')
+  .option('--project', '组合层视图模式（读 protocol/composition.md + 各子协议 specs.json；产出项目总览/依赖图/跨协议引用矩阵）')
   .option('-f, --force', '覆盖已存在 web/ 产物')
   .action(async (opts) => {
-    const rootDir = resolve(opts.dir);
     try {
+      if (opts.project) {
+        // E7-B1 组合层视图模式：作用于系统根（composition role）。
+        // 修正：#008 缺陷 4 修复时误用协议 role 的 resolveCtx，导致多协议项目
+        // 无 --protocol 直接报错、组合层 rootDir 落到协议根找不到 composition.md。
+        const compCtx = resolveCtx(opts, 'composition');
+        const result = await deriveProjectWeb({
+          rootDir: compCtx.systemRoot,
+          dataJsonPath: opts.dataJson ? resolveRelative(opts.dataJson, compCtx.systemRoot) : undefined,
+          webDir: opts.webDir ? resolveRelative(opts.webDir, compCtx.systemRoot) : undefined,
+          distDir: opts.distDir ? resolveRelative(opts.distDir, compCtx.systemRoot) : undefined,
+          buildProjectSite: opts.build !== false,
+          force: opts.force,
+        });
+        const v = result.data;
+        console.log('=== E7-B1 组合层 Web 检阅界面生成报告 ===');
+        console.log(`  项目: ${v.composition.systemName} (${v.composition.version})`);
+        console.log(`  变更类型: ${v.composition.changeType}`);
+        console.log(`  子协议数: ${v.protocols.length}`);
+        for (const p of v.protocols) {
+          console.log(`    - ${p.id} ${p.name} (v${p.version})：${p.interfaceCount} 接口${p.migrated ? ' [老格式迁移]' : ''}`);
+        }
+        console.log(`  依赖边: ${v.dependencyGraph.edges.length}`);
+        console.log(`  跨协议引用: ${v.crossRefs.length}`);
+        console.log(`  跨协议不变量: ${v.invariantSpans.length}`);
+        console.log(`  共享实体: ${v.sharedMatrix.sharedObjects.length}`);
+        console.log(`  跨协议观测接口: ${v.sharedMatrix.crossObservations.length}`);
+        console.log(`\n  web/data.json: ${result.dataJsonPath}`);
+        console.log(`  站点工程目录: ${result.webDir}`);
+        console.log(`  VitePress dist: ${result.distDir}`);
+        console.log(`  VitePress build: ${result.built ? '✓ 已生成 dist/index.html' : '✗ 未生成（见 warnings）'}`);
+        console.log('\n  安全边界：不读 bindings.yaml / 不读 process.env / 不调 AI / 不接触令牌环境变量');
+        console.log('  敏感字段脱敏: ' + SENSITIVE_FIELD_NAMES_REPORT);
+        if (result.warnings.length > 0) {
+          console.log('\n警告：');
+          for (const w of result.warnings) console.log(`  - ${w}`);
+        }
+        // 5 类组合层页面落盘校验
+        const docsDir = join(result.webDir, 'docs');
+        const requiredPages = [
+          join(docsDir, 'index.md'),
+          join(docsDir, 'protocols/index.md'),
+          join(docsDir, 'cross-refs.md'),
+          join(docsDir, 'cross-diff.md'),
+        ];
+        const missingPages = requiredPages.filter((p) => !existsSync(p));
+        const hasDataJson = existsSync(result.dataJsonPath);
+        if (!hasDataJson || missingPages.length > 0) {
+          if (missingPages.length > 0) {
+            console.error(
+              `错误：缺以下组合层页面:\n  - ${missingPages.join('\n  - ')}`
+            );
+          }
+          process.exit(1);
+        }
+        process.exit(0);
+      }
+
+      // 单协议模式（E7-P0 既有行为 + #008 缺陷 4：多协议经 --protocol / --dir <Pn> 定位）
+      const protoCtx = resolveCtx(opts);
+      const protocolModelPath = protoCtx.modelPath;
+      const rootDir = protoCtx.protocolRoot;
       const result = await deriveWeb(
         {
           rootDir,
@@ -1848,7 +2057,9 @@ program
           buildSite: opts.build !== false,
           force: opts.force,
         },
-        (rd) => parseProtocolFile(join(rd, 'protocol/model.md'))
+        // 修改单 #008 缺陷 4：使用 resolveProjectContext.modelPath，
+        // 多协议项目（protocol/<Pn>/model.md）与单协议（protocol/model.md）均支持。
+        () => parseProtocolFile(protocolModelPath)
       );
 
       const v = result.data;
@@ -1905,38 +2116,58 @@ const SENSITIVE_FIELD_NAMES_REPORT = 'tokenEnv/secretEnv/passwordEnv/keyEnv/user
 
 program
   .command('web-serve')
-  .description('E7 P0：起 web 检阅界面静态服务（基于 web/.vitepress/dist/；纯 stdlib http）')
+  .description('E7 P0/B1：起 web 检阅界面静态服务（基于 web/.vitepress/dist/；纯 stdlib http）。自动按 schemaVersion 检测单协议/组合层模式并切换探针路径')
   .option('-d, --dir <目录>', '项目根目录（默认 cwd）', process.cwd())
   .option('--dist-dir <路径>', 'VitePress dist 目录（默认 <dir>/web/docs/.vitepress/dist；与 derive-web outDir 一致）')
   .option('-p, --port <端口>', '监听端口', '5173')
   .option('-H, --host <host>', '监听 host', '127.0.0.1')
-  .option('--skip-probe', '跳过启动时 4 类 URL 探针（默认探针）')
+  .option('--skip-probe', '跳过启动时探针（默认按 schemaVersion 自动构造探针）')
   .action(async (opts) => {
     const rootDir = resolve(opts.dir);
     // E7-I1 修复：默认 distDir 与 derive-web outDir 对齐 = web/docs/.vitepress/dist
     const distDir = opts.distDir ? resolveRelative(opts.distDir, rootDir) : join(rootDir, 'web/docs/.vitepress/dist');
     try {
-      // E7-I2 修复：从 web/data.json 读真实接口 ID 构造探针路径（不再硬编码 IF_SYS_T1）
-      let probePaths: string[] | undefined = undefined;
+      // B1-I3 修复：按 web/data.json schemaVersion 区分模式（1.0=单协议 / 1.1=组合层）
+      // 单协议走 E7-I2 既有逻辑（interfaces[0].id）；组合层走 protocols[].id
+      let probePaths: string[] = []; // B1-I3 修复：缺省空数组而非 undefined（确保 --skip-probe 生效）
       if (!opts.skipProbe) {
         const dataJsonPath = join(rootDir, 'web/data.json');
-        const probeBase = ['/', '/interfaces/', '/test-cases', '/verification', '/diff'];
         if (existsSync(dataJsonPath)) {
           try {
             const dataRaw = JSON.parse(readFileSync(dataJsonPath, 'utf-8')) as {
+              schemaVersion?: string;
               interfaces?: Array<{ id: string }>;
+              protocols?: Array<{ id: string; firstInterfaceId?: string }>;
             };
-            const firstInterfaceId = dataRaw.interfaces?.[0]?.id;
-            if (firstInterfaceId) {
-              probePaths = [...probeBase, `/interfaces/${firstInterfaceId}`];
+            if (dataRaw.schemaVersion === '1.1') {
+              // B1-I3 + B1-I5 修复：组合层模式探针
+              // 顶层 + 共享页 + 每个子协议 + 每个子协议第一个接口详情页（验证目录式路由）
+              const probeBase = ['/', '/protocols/', '/cross-refs', '/cross-diff'];
+              const protos: string[] = [];
+              for (const p of dataRaw.protocols ?? []) {
+                // 目录式路由（VitePress cleanUrls: P1/index.md → /protocols/P1/）
+                protos.push(`/protocols/${p.id}/`);
+                // B1-I5：从 protocols[].firstInterfaceId 构造详情页探针
+                if (p.firstInterfaceId) {
+                  protos.push(`/protocols/${p.id}/${encodeURIComponent(p.firstInterfaceId)}`);
+                }
+              }
+              probePaths = [...probeBase, ...protos];
             } else {
-              probePaths = probeBase;
+              // 单协议模式（E7-P0 / E7-I2 既有逻辑）
+              const probeBase = ['/', '/interfaces/', '/test-cases', '/verification', '/diff'];
+              const firstInterfaceId = dataRaw.interfaces?.[0]?.id;
+              probePaths = firstInterfaceId
+                ? [...probeBase, `/interfaces/${firstInterfaceId}`]
+                : probeBase;
             }
           } catch {
-            probePaths = probeBase;
+            // JSON 解析失败：单协议兜底（向后兼容）
+            probePaths = ['/', '/interfaces/', '/test-cases', '/verification', '/diff'];
           }
         } else {
-          probePaths = probeBase;
+          // 无 data.json：兜底探针
+          probePaths = ['/'];
         }
       }
       const handle = await startServe({
@@ -1945,27 +2176,148 @@ program
         host: opts.host,
         probePaths,
       });
-      console.log('=== E7 P0 web serve ===');
+      console.log('=== E7 P0/B1 web serve ===');
       console.log(`  监听: http://${handle.address.host}:${handle.address.port}`);
       console.log(`  站点根: ${distDir}`);
       console.log(`  安全：不读 process.env / 不读 bindings.yaml / 不调 AI`);
-      console.log('\n四类页面已探针（全部 200）：');
-      console.log('  - /                            (首页)');
-      console.log('  - /interfaces/                 (接口列表)');
-      console.log('  - /interfaces/<id>             (接口详情，按 specs 实际接口 ID)');
-      console.log('  - /test-cases                  (测试用例浏览器)');
-      console.log('  - /verification                (双跑对比)');
-      console.log('  - /diff                        (模型 diff/impact)');
+      if (probePaths.length > 0) {
+        console.log(`\n探针（按 schemaVersion 自动选择 ${probePaths.length} 条；全部 200）：`);
+        for (const p of probePaths) console.log(`  - ${p}`);
+      } else {
+        console.log('\n探针：已跳过（--skip-probe）');
+      }
       console.log('\n按 Ctrl+C 退出');
       // 优雅退出
-      const shutdown = async () => {
-        console.log('\n关闭 web serve...');
-        await handle.close();
-        process.exit(0);
+      // 修复（web-serve Ctrl+C 多次仍不退出的问题）：
+      // 1. shuttingDown 标志位防 SIGINT/SIGTERM 重入（用户连续按 Ctrl+C
+      //    不会再触发第二次 shutdown，第一次调用尚未 await handle.close() 完成）
+      // 2. 设 2 秒硬超时：serve.ts close 已含 1 秒兜底；这里再兜 1 秒防
+      //    handle.close 异常（不应阻塞退出）
+      // 3. process.exit(0) 强制终止（即使有未关资源也清场）
+      let shuttingDown = false;
+      const shutdown = (signal: NodeJS.Signals): void => {
+        if (shuttingDown) {
+          // 重入：第一次还没结束就再按 Ctrl+C，立即强制退出
+          process.stderr.write(`\n[web-serve] 收到重复 ${signal}，强制退出\n`);
+          process.exit(130); // 128 + SIGINT(2)
+        }
+        shuttingDown = true;
+        process.stderr.write(`\n关闭 web serve...\n`);
+        const hardKill = setTimeout(() => {
+          process.stderr.write('[web-serve] 关闭超时（2s），强制退出\n');
+          process.exit(130);
+        }, 2000);
+        void handle.close().then(() => {
+          clearTimeout(hardKill);
+          process.exit(0);
+        }).catch((err: unknown) => {
+          clearTimeout(hardKill);
+          process.stderr.write(`[web-serve] 关闭异常：${err instanceof Error ? err.message : String(err)}\n`);
+          process.exit(1);
+        });
       };
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
       // 保持进程：等待关闭信号
+      await new Promise(() => {});
+    } catch (err) {
+      console.error(`错误：${err instanceof Error ? err.message : err}`);
+      process.exit(2);
+    }
+  });
+
+// ----- feedback-serve（E7-P1：在线编辑 + 一键执行 + 评审→修改单草稿） -----
+
+program
+  .command('feedback-serve')
+  .description(
+    'E7 P1：起「反馈闭环」服务（Express）— 在线编辑 scenarios / bindings + 一键 generate-cases / bind / verify + 评审→修改单草稿。' +
+    '服务进程 scrub 进程 env（删除 TOKEN/SECRET/PASSWORD/APIKEY 类键），子进程走白名单 env。'
+  )
+  .option('-d, --dir <目录>', '项目根目录（默认 cwd）', process.cwd())
+  .option('-p, --port <端口>', '监听端口（默认 5174；与 web-serve 5173 错开）', '5174')
+  .option('-H, --host <host>', '监听 host', '127.0.0.1')
+  .option('--skip-env-scrub', '跳过启动时 env scrub（仅用于回归测试）')
+  .action(async (opts) => {
+    const rootDir = resolve(opts.dir);
+    try {
+      // 显式计算 staticDir：本文件在 dist/cli/，static 在 src/webgen/feedback/static/
+      // dist ESM 下 fileURLToPath(import.meta.url) 可用；避免在 feedback index.ts 内部 import.meta 触发 ts-jest 报错
+      let staticDir: string | undefined;
+      try {
+        const thisFile = fileURLToPath(import.meta.url);
+        const here = pathDirname(thisFile);
+        const candidates = [
+          pathJoin(here, 'static'),
+          pathJoin(here, '..', 'static'),
+          pathJoin(here, '..', '..', 'src', 'webgen', 'feedback', 'static'),
+          pathJoin(here, '..', '..', '..', 'src', 'webgen', 'feedback', 'static'),
+        ];
+        for (const c of candidates) {
+          if (existsSync(c)) { staticDir = c; break; }
+        }
+      } catch { /* ignore - src 直接运行时 */ }
+      if (!staticDir) {
+        // 兜底：相对 process.cwd 探测
+        const candidates = [
+          pathJoin(process.cwd(), 'src', 'webgen', 'feedback', 'static'),
+          pathJoin(process.cwd(), 'dist', 'webgen', 'feedback', 'static'),
+        ];
+        for (const c of candidates) {
+          if (existsSync(c)) { staticDir = c; break; }
+        }
+      }
+      const handle = await startFeedbackServer({
+        rootDir,
+        port: Number(opts.port),
+        host: opts.host,
+        skipEnvScrub: !!opts.skipEnvScrub,
+        staticDir,
+      });
+      console.log('=== E7-P1 feedback-serve ===');
+      console.log(`  监听: http://${handle.address.host}:${handle.address.port}`);
+      console.log(`  实例根: ${rootDir}`);
+      console.log(`  安全：scrubbed ${handle.scrubbedKeys.length} 个敏感 env 键；子进程 env = filterEnvForChild 白名单`);
+      if (handle.scrubbedKeys.length > 0) {
+        console.log(`  Scrubbed 键名（已 redact 值）：`);
+        for (const k of handle.scrubbedKeys) console.log(`    - ${k}`);
+      }
+      console.log('\n  访问 /  → Dashboard');
+      console.log('  访问 /scenarios  → 在线编辑 scenarios');
+      console.log('  访问 /bindings   → 在线编辑 bindings');
+      console.log('  访问 /run        → 一键执行（子进程隔离）');
+      console.log('  访问 /review     → 评审→修改单草稿');
+      console.log('\n按 Ctrl+C 退出');
+
+      let shuttingDown = false;
+      const shutdown = (signal: NodeJS.Signals): void => {
+        if (shuttingDown) {
+          // 重复信号：直接强退，避免 hang 住用户终端
+          process.stderr.write(`\n[feedback-serve] 收到重复 ${signal}，立即退出\n`);
+          process.exit(130);
+        }
+        shuttingDown = true;
+        process.stderr.write(`\n关闭 feedback serve...\n`);
+        // 兜底硬超时 2 秒：超时直接 process.exit
+        const hardKill = setTimeout(() => {
+          process.stderr.write('[feedback-serve] 关闭超时 (2s)，立即退出\n');
+          process.exit(130);
+        }, 2000);
+        void handle.close().then(() => {
+          clearTimeout(hardKill);
+          process.exit(0);
+        }).catch((err: unknown) => {
+          clearTimeout(hardKill);
+          process.stderr.write(`[feedback-serve] 关闭异常：${err instanceof Error ? err.message : String(err)}\n`);
+          process.exit(1);
+        });
+      };
+      // SIGINT/SIGTERM 走同套兜底；signal == undefined 仅 process.exit(0) 上层触发
+      process.on('SIGINT', () => shutdown('SIGINT'));
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
+      // SIGQUIT / SIGHUP 也接 SIGINT 处理（CI / SSH 退出常见）
+      process.on('SIGQUIT', () => shutdown('SIGINT'));
+      process.on('SIGHUP', () => shutdown('SIGINT'));
       await new Promise(() => {});
     } catch (err) {
       console.error(`错误：${err instanceof Error ? err.message : err}`);

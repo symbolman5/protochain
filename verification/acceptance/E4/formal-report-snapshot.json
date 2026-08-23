@@ -1,0 +1,90 @@
+{
+  "passed": true,
+  "tool": "tla",
+  "suitabilityScore": 0.5,
+  "generatedSpec": "---- MODULE Protocol ----\nEXTENDS Naturals, Sequences\nVARIABLES state\n\n(* State space *)\nStates == {\"S1\", \"S2\", \"S3\", \"S4\", \"S5\", \"S6\"}\n\n(* Initial state *)\nInit == state = \"S1\"\n\n(* Next-state relation *)\nNext == \\* (transition disjunction)\n  (* : - -> S1 *) (* guard:  License  Node Node  P2 *)\n  /\\ TRUE/\\ TRUE\n  /\\ state' = \"S1\"\n\n  \\/ (* : S1 -> S2 *) (* guard: - *)\n  /\\ state = \"S1\"/\\ TRUE\n  /\\ state' = \"S2\"\n\n  \\/ (* : S2 -> S1 *) (* guard: Node   License  *)\n  /\\ state = \"S2\"/\\ TRUE\n  /\\ state' = \"S1\"\n\n  \\/ (* (active): S1 -> S3 *) (* guard: expire_time < now *)\n  /\\ state = \"S1\"/\\ TRUE\n  /\\ state' = \"S3\"\n\n  \\/ (* (paused): S2 -> S3 *) (* guard: expire_time < now *)\n  /\\ state = \"S2\"/\\ TRUE\n  /\\ state' = \"S3\"\n\n  \\/ (* (active): S1 -> S4 *) (* guard: / *)\n  /\\ state = \"S1\"/\\ TRUE\n  /\\ state' = \"S4\"\n\n  \\/ (* (paused): S2 -> S4 *) (* guard:  *)\n  /\\ state = \"S2\"/\\ TRUE\n  /\\ state' = \"S4\"\n\n  \\/ (* ticket: S1 -> S1 *) (* guard:  active  License  active  usability=usableticket  *)\n  /\\ state = \"S1\"/\\ TRUE\n  /\\ state' = \"S1\"\n\n  \\/ (* : - -> S5 *) (* guard: - *)\n  /\\ TRUE/\\ TRUE\n  /\\ state' = \"S5\"\n\n  \\/ (* : S5 -> S5 *) (* guard:  resource_id NA2 *)\n  /\\ state = \"S5\"/\\ TRUE\n  /\\ state' = \"S5\"\n\n  \\/ (* : S5 -> S5 *) (* guard:  *)\n  /\\ state = \"S5\"/\\ TRUE\n  /\\ state' = \"S5\"\n\n  \\/ (* : S5 -> S6 *) (* guard: Redis TTL  License ValidDuration *)\n  /\\ state = \"S5\"/\\ TRUE\n  /\\ state' = \"S6\"\n\n\n(* Invariant:  (id=INV1) *)\nINV1 == state \\in States\n\n(* Invariant:  (id=INV2) *)\nINV2 == TRUE\n\n(* Invariant:  (id=INV3) *)\nINV3 == TRUE\n\n(* Invariant: ticket (id=INV4) *)\nINV4 == TRUE\n\n(* Invariant: License (id=INV5) *)\nINV5 == TRUE\n\n(* Invariant:  (id=INV10) *)\nINV10 == TRUE\n\n(* Invariant:  (id=INV11) *)\nINV11 == TRUE\n\n(* Invariant:  (id=INV12) *)\nINV12 == TRUE\n\n(* Invariant:  (id=INV15) *)\nINV15 == TRUE\n\n(* Type invariant *)\nTypeInvariant == state \\in States\n\n(* Complete spec *)\nSpec == Init /\\ [][Next]_state\n\n(* Aggregate invariants *)\nAllInvariants == /\\ INV1\n  /\\ INV2\n  /\\ INV3\n  /\\ INV4\n  /\\ INV5\n  /\\ INV10\n  /\\ INV11\n  /\\ INV12\n  /\\ INV15\n\n=============================================",
+  "specFilePath": "/work/strangler-fig/modeling/protocol/P1/derived/formal/model.tla",
+  "rawOutput": "TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)\nWarning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the \"-XX:+UseParallelGC\" property.\n(Use the -nowarning option to disable this warning.)\nRunning breadth-first search Model-Checking with fp 19 and seed -5774342760709358324 with 1 worker on 6 cores with 6964MB heap and 64MB offheap memory [pid: 4093806] (Linux 6.8.0-136-generic amd64, Eclipse Adoptium 17.0.20 x86_64, MSBDiskFPSet, DiskStateQueue).\nParsing file /tmp/protochain-tlc-2Smgn1/Protocol.tla\nParsing file /tmp/Naturals.tla\nParsing file /tmp/Sequences.tla\nSemantic processing of module Naturals\nSemantic processing of module Sequences\nSemantic processing of module Protocol\nStarting... (2026-08-23 08:19:32)\nComputing initial states...\nFinished computing initial states: 1 distinct state generated at 2026-08-23 08:19:33.\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 5.5E-18\n23 states generated, 6 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 3.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 4 and the 95th percentile is 4).\nFinished in 00s at (2026-08-23 08:19:33)\n",
+  "toolExecuted": true,
+  "invariantResults": [
+    {
+      "invariantId": "AllInvariants",
+      "passed": true
+    }
+  ],
+  "deferredToSqlValidation": [
+    {
+      "invariantId": "INV2",
+      "expression": "TRUE",
+      "source": "guard",
+      "scopeStateIds": [
+        "S1"
+      ]
+    },
+    {
+      "invariantId": "INV3",
+      "expression": "TRUE",
+      "source": "guard",
+      "scopeStateIds": [
+        "S1",
+        "S2",
+        "S3",
+        "S4"
+      ]
+    },
+    {
+      "invariantId": "INV4",
+      "expression": "TRUE",
+      "source": "guard",
+      "scopeStateIds": [
+        "S1"
+      ]
+    },
+    {
+      "invariantId": "INV5",
+      "expression": "TRUE",
+      "source": "storage",
+      "storageRef": "forward_mapping_license",
+      "scopeStateIds": [
+        "S1",
+        "S2"
+      ]
+    },
+    {
+      "invariantId": "INV10",
+      "expression": "TRUE",
+      "source": "guard",
+      "scopeStateIds": [
+        "S1",
+        "S2"
+      ]
+    },
+    {
+      "invariantId": "INV11",
+      "expression": "TRUE",
+      "source": "guard",
+      "scopeStateIds": [
+        "S1",
+        "S2"
+      ]
+    },
+    {
+      "invariantId": "INV12",
+      "expression": "TRUE",
+      "source": "guard",
+      "scopeStateIds": [
+        "S1"
+      ]
+    },
+    {
+      "invariantId": "INV15",
+      "expression": "TRUE",
+      "source": "guard",
+      "scopeStateIds": [
+        "S5",
+        "S6"
+      ]
+    }
+  ],
+  "verifiedAt": "2026-08-23T00:19:33.378Z"
+}

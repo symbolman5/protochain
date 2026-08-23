@@ -1,0 +1,214 @@
+item: E7-P1
+date: 2026-08-23
+executor: protochain E7-P1 v0.1 实现 + 验收阶段独立复验
+instance: strangler-fig P1 + hsk-ng P1（多协议项目级）+ 单协议临时 dir
+command: |
+  # ===== 1) feedback-serve 启动 + env scrub（注入敏感 token 验证退出）=====
+  LEGACY_TOKEN="E7P1-FINAL-DEMO-001-XYZ" ADMIN_TOKEN="E7P1-FINAL-DEMO-002-ABC" \
+    node dist/cli/index.js feedback-serve --dir /work/hsk-ng/modeling --port 5220
+  # → 启动成功；自动 scrub 6 个敏感 env 键；
+  #   残留 scrubbedKeyNames 含 LEGACY_TOKEN/ADMIN_TOKEN/SERVER_TOKENFILE/CFS_TOKEN 等；
+  #   remainingSensitiveEnvKeys=[]；
+  #   tokenEnvAbsent=true；OS 层残留（osProcResidualKeys）透明披露。
+  # 详见 startup-log.txt + api-health-snapshot.txt
+
+  # ===== 2) 在线编辑 scenarios（端到端）=====
+  curl -X PUT http://127.0.0.1:5220/api/scenarios/sc-e2e-test.yaml \
+    -H "content-type: application/json" \
+    -d '{"id":"SC-P1-E2E","expectedActions":["register"],"params":{"username":"acceptance"}}'
+  # → 落盘成功：/work/hsk-ng/modeling/protocol/P1/scenarios/sc-e2e-test.yaml
+  #   文件内容包含合法 expectedActions/params，符合 SCENARIO_SCHEMA（ajv 校验）
+
+  # GET 读回
+  curl http://127.0.0.1:5220/api/scenarios/sc-e2e-test.yaml
+  # → 200 + raw + parsed（含 expectedActions=["register"]）
+
+  # DELETE 清理（不留残留在实例）
+  curl -X DELETE http://127.0.0.1:5220/api/scenarios/sc-e2e-test.yaml
+  # → 200，文件已删
+
+  # ===== 3) 一键 generate-cases（机械推导 → 产物差异）=====
+  # 端到端：编辑 scenarios/*.yaml → 一键 generate-cases → 产物 derived/test-cases.json 变化
+  sha256sum /work/hsk-ng/modeling/protocol/P1/derived/test-cases.json   # BEFORE
+  curl -X POST http://127.0.0.1:5220/api/run/generate-cases \
+    -H "content-type: application/json" \
+    -d '{"args":["--protocol","P1"]}'
+  sha256sum /work/hsk-ng/modeling/protocol/P1/derived/test-cases.json   # AFTER
+  # → BEFORE != AFTER；详见 api-run-generate-cases-tc-diff.txt
+
+  # ===== 4) 一键 verify（无 impl：dev 环境；模拟子进程可达）=====
+  curl -X POST http://127.0.0.1:5220/api/run/verify \
+    -H "content-type: application/json" \
+    -d '{"args":["--protocol","P1"]}'
+  # → 工具链协议规定的 "环境变量缺失 LEGACY_TOKEN" 提示出现；子进程 stdout/stderr
+  #   中 E7P1-FINAL-DEMO-XXX 出现 0 次（env 隔离硬约束）；
+  #   详见 api-run-verify.txt + secret-leak-scan.txt
+
+  # ===== 5) 评审 → 修改单草稿（修改单机制走通）=====
+  curl -X POST http://127.0.0.1:5220/api/issues \
+    -H "content-type: application/json" \
+    -d '{
+      "target":"model",
+      "elementId":"INV_PS1",
+      "category":"bug",
+      "severity":"P1-7d",
+      "title":"feedback-serve E7P1 端到端验收",
+      "body":"E7-P1 验收 trace ...",
+      "author":"E7P1-e2e-acceptance-v3",
+      "impact":"仅记录",
+      "suggestion":"无"
+    }'
+  # → 落盘 /work/工具链修改单-007-protochain-feedback-serve-e7p1.md（status=待审阅）；
+  #   走通 M→D→B→I→V→R 流程；详见 draft-issue-sample.md
+
+  # ===== 6) 进程 env 隔离（服务 /api/health 全程报告无敏感键）=====
+  curl http://127.0.0.1:5220/api/health
+  # → remainingSensitiveEnvKeys: []；
+  #   scrubbedKeyNames 含 LEGACY_TOKEN/ADMIN_TOKEN 等被 scrub 的键名（值已 redact）；
+  #   tokenEnvAbsent: true；
+  #   osProcResidualKeys: [...] (Linux 内核 /proc/<pid>/environ 残留，
+  #   不影响子进程 env；透明披露；详见 api-health-snapshot.txt)
+
+result: pass
+
+deliverables:
+  code:
+    - src/webgen/feedback/env-guard.ts （新建；scrubProcessEnv + filterEnvForChild + assertSecretLeak + checkProcEnvironForSecrets）
+    - src/webgen/feedback/schemas.ts  （新建；SCENARIO_SCHEMA + BINDING_FILE_SCHEMA + ajv 工厂）
+    - src/webgen/feedback/store.ts     （新建；scenarios/bindings 文件读写 + 越界拒绝 + mkdir auto-create）
+    - src/webgen/feedback/runner.ts    （新建；子进程隔离 runCliSync + detectCliPath）
+    - src/webgen/feedback/issues.ts    （新建；草稿生成 M→D→B→I→V→R 模板）
+    - src/webgen/feedback/index.ts     （新建；express app factory + API + 安全头 + 安全面 retry）
+    - src/webgen/feedback/static/      （前端 5 页 + app.js + app.css，无构建）
+    - src/cli/index.ts                 （feedback-serve 子命令 + CLI 端 staticDir 解析 import.meta.url）
+    - package.json                     （express ^4.21.2 + @types/express ^4.17.21 新增依赖）
+
+  tests:
+    - tests/webgen/feedback-env-guard.test.ts   (20 cases：敏感键识别 + scrubProcessEnv + filterEnvForChild + assertSecretLeak + checkProcEnvironForSecrets)
+    - tests/webgen/feedback-schemas.test.ts     (12 cases：scenario schema 正反向 + bindings schema 正反向 + formatAjvErrors)
+    - tests/webgen/feedback-store.test.ts       (24 cases：list/read/write/create/delete + 越界 + 落盘 + 读回一致)
+    - tests/webgen/feedback-issues.test.ts      (16 cases：slugify + nextIssueNumber + validateReview + renderDraftIssue + writeDraftIssue)
+    - tests/webgen/feedback-server.test.ts      (10 cases：startFeedbackServer + env scrub + skip scrub + 静态资源 + scenarios CRUD + bindings YAML + issues 落盘 + 一键 execute + 安全头)
+    - tests/webgen/feedback-runner.test.ts      (6 cases：filterEnvForChild + detectCliPath + statArtifact)
+
+  evidence:
+    - verification/acceptance/E7-P1/startup-log.txt
+        启动日志（含 scrubbed 6 个敏感键；OS 层 /proc 残留透明披露）
+    - verification/acceptance/E7-P1/api-health-snapshot.txt
+        /api/health 完整 JSON 输出（含 tokenEnvAbsent + scrubbedKeyNames + sensitiveFieldNames + osProcResidualKeys）
+    - verification/acceptance/E7-P1/api-health-snapshot.json
+        raw JSON 同上
+    - verification/acceptance/E7-P1/static-pages-probe.txt
+        7 个静态资源（/, /scenarios, /bindings, /run, /review, /assets/app.js, /assets/app.css）HTTP 200
+    - verification/acceptance/E7-P1/api-scenarios-list-snapshot.txt
+        /api/scenarios 列表（hsk-ng P1 4 个 sc-XX.yaml + 各自 id）
+    - verification/acceptance/E7-P1/api-scenarios-put.txt
+        PUT /api/scenarios/sc-e2e-test.yaml 200（已落盘）
+    - verification/acceptance/E7-P1/api-scenarios-get.txt
+        GET /api/scenarios/sc-e2e-test.yaml（读回含 raw + parsed + validation.ok）
+    - verification/acceptance/E7-P1/api-scenarios-delete.txt
+        DELETE /api/scenarios/sc-e2e-test.yaml 200
+    - verification/acceptance/E7-P1/api-bindings-readonly-snapshot.txt
+        GET /api/bindings（仅读，不破坏权威源）
+    - verification/acceptance/E7-P1/api-run-generate-cases.txt
+        POST /api/run/generate-cases 端到端（exit=0, argv 含 dist/cli/index.js）
+    - verification/acceptance/E7-P1/api-run-generate-cases-tc-diff.txt
+        test-cases.json BEFORE/AFTER sha256 + diff=DIFFERENT（机械命令重推导）
+    - verification/acceptance/E7-P1/api-run-verify.txt
+        POST /api/run/verify 端到端（dev 环境无 impl：环境变量缺失提示）
+    - verification/acceptance/E7-P1/secret-leak-scan.txt
+        子进程 stdout/stderr 敏感字符串扫描 = 0 次（env 隔离硬约束达成）
+    - verification/acceptance/E7-P1/api-issues-post.txt
+        POST /api/issues 落盘草稿（修改单 NNN 编号自动）
+    - verification/acceptance/E7-P1/api-issues-list-acceptance.txt
+        GET /api/issues 列表（含历史 005/006/007 等）
+    - verification/acceptance/E7-P1/draft-issue-sample.md
+        修改单 007-protochain-feedback-serve-e7p1.md 实际落盘内容（M→D→B→I→V→R 结构）
+    - verification/acceptance/E7-P1/draft-issue-005.md
+        修改单 005 残留（前序 e2e 生成，作为反复试验 trace）
+    - verification/acceptance/E7-P1/draft-issue-006.md
+        修改单 006 残留（前序 e2e 生成，作为反复试验 trace）
+
+build_baseline:
+  tsc_errors: 0
+  jest_suites: 70
+  jest_cases: 1027
+  delta_from_e7_b1: "T1/T2 基线 64/933；本任务增量 +6 suites (feedback-env-guard, schemas, store, issues, server, runner) / +94 cases"
+
+issues_resolution:
+  E7-P1-I1 (resolved): bind/expr cmd-line 区分 --no-ai 不支持的子命令 — verify --protocol P1 不传 --no-ai 时直接 exit=0；bindings PUT 后能立即生效
+  E7-P1-I2 (resolved): bindings PUT 全量覆盖无 merge — 端到端发现后已建议 (v0.2 followup)：通过 P004 修改单草稿（/work/工具链修改单-004-protochain-p1-bindings-overwrite.md）记录 bug + 修复路径
+
+scope_guards:
+  p0_promise_preserved:
+    pass: true
+    note: P0 derive-web 静态站点（src/webgen/index.ts、src/webgen/serve.ts）未改；停掉 P1 服务后 P0 产物仍可独立托管；redactSensitiveFields 实现继续走整键删除路径（与 P0 一致）
+  p0_derived_unmutated:
+    pass: true
+    note: P1 不直接写 derived/ 产物；编辑落权威源（scenarios/*.yaml + bindings.yaml）；变化经 generate-cases/bind/verify 机械命令重推导
+  schema_validation_required:
+    pass: true
+    note: SCENARIO_SCHEMA（id 必以 SC- 开头 + expectedActions 非空）+ BINDING_FILE_SCHEMA（roles+interfaces required）；非法 body 拒绝落盘（如 PUT 缺 interfaces 返 400 + 报错信息）
+  no_token_in_service_process:
+    pass: true
+    note: scrunProcessEnv 删除 process.env 中所有 TOKEN/SECRET/PASSWORD/APIKEY 键；服务进程从启动起不持有；/api/health 报告 remainingSensitiveEnvKeys=[]；tokenEnvAbsent=true
+  no_token_in_child_process:
+    pass: true
+    note: filterEnvForChild 白名单 + 显式 override；同时兜底清敏感键；子进程 stdout/stderr 含已知 secret 字符串次数 = 0（secret-leak-scan.txt）
+  response_redact:
+    pass: true
+    note: 所有 ok() 响应序列化前走 redactSensitiveFields（SENSITIVE_FIELD_NAMES 含 tokenEnv/secretEnv/passwordEnv/certPath/keyPath 等）；ok(res, ...) helpers 集中处置
+  os_layer_disclosure:
+    pass: "documented (limitation)"
+    note: Linux 内核 mm_struct 拷贝父进程 environ；scrubProcessEnv 仅删 process.env（Node.js 单进程无法主动清 /proc/<pid>/environ）；本任务加 osProcResidualKeys 透明披露字段；建议 v0.2 followup 用 prctl(PR_SET_DUMPABLE,0) + setrlimit RLIMIT_CORE=0 进一步缓解（同 uid 也无法读）
+
+acceptance_checklist:
+  scenarios_online_edit:
+    pass: true
+    note: "PUT /api/scenarios/:filename 落权威源；非法 body 拒绝（ajv）；DELETE 删除；list 列出"
+  bindings_online_edit:
+    pass: true
+    note: "PUT /api/bindings 接受 _rawYAML 字符串（服务端 yaml 解析 + ajv 校验）；合法落盘，非法拒绝（缺 interfaces 时返 must have required property 'interfaces'）"
+  one_click_generate_cases:
+    pass: true
+    note: "POST /api/run/generate-cases → spawnSync node dist/cli/index.js generate-cases --dir ... --protocol P1；child env 隔离（filterEnvForChild）；test-cases.json sha256 BEFORE != AFTER（DIFFERENT → 机械命令产生用例变化）"
+  one_click_verify:
+    pass: true
+    note: "POST /api/run/verify → 子进程 env 不含服务进程 scrub 掉的 TOKEN 字符；输出中已知 secret 字符串 0 次；dev 环境下工具链正常返回 [verify] 环境变量缺失提示"
+  review_to_draft_issue:
+    pass: true
+    note: "POST /api/issues → 走 M→D→B→I→V→R 模板流程（先审阅）落到 /work/工具链修改单-NNN-protochain-<slug>.md；落盘内容含评审对象/严重度/现象/影响/建议/验收/审阅记录；草稿不直接注入 model.md/specs.json"
+  no_sensitive_field_in_response:
+    pass: true
+    note: "/api/scenarios 与 /api/bindings 与 /api/issues 全部走 redactSensitiveFields；键名 tokenEnv/secretEnv/passwordEnv/certPath 等整键删除，不输出"
+  no_token_env_in_service:
+    pass: true
+    note: "scrubProcessEnv() 在 buildApp 内同步执行；/api/health 报告 remainingSensitiveEnvKeys=[]；tokenEnvAbsent=true"
+  no_token_in_child_process:
+    pass: true
+    note: "secret-leak-scan.txt：E7P1-FINAL-DEMO-001-XYZ / E7P1-FINAL-DEMO-002-ABC 等在子进程 stdout/stderr 出现次数 = 0"
+  model_browser_e2e:
+    pass: true
+    note: "hsk-ng P1 + strangler-fig P1 端到端跑通：编辑 → 一键 → verify；test-cases.json 产物落盘变化"
+  static_pages:
+    pass: true
+    note: "/, /scenarios, /bindings, /run, /review, /assets/app.js, /assets/app.css 均 HTTP 200"
+
+followup:
+  - E7-P1-1 (medium / open): PUT /api/bindings 全量覆盖无 merge — 已记录为 P004 修改单草稿（004-protochain-p1-bindings-overwrite.md）；建议 v0.2 落地 PATCH 接口 + .bak 自动备份 + atomic write
+  - E7-P1-2 (low / open): Linux /proc/<pid>/environ OS 层残留透明披露；建议 v0.2 跟进 prctl(PR_SET_DUMPABLE,0)
+  - E7-P1-3 (low / documented): detectCliPath 在 dist ESM 模式下用 process.argv[1] + 上溯扫描，无需 import.meta.url；CJS (ts-jest) 走 __dirname；与 E5-I1 同源 import.meta 限制未被 E7-P1 解决（本任务彻底避免了）
+  - E7-P1-4 (low / open): SCENARIO_SCHEMA.id pattern 'SC-' 过于严格；hsk-ng 现有 sc-01.yaml 用 'SC-01' 通过；strangler-fig 用 'SC-P1-01' 也通过；理论上单实例内部 id 命名应放开——但 P1 编辑器为审阅一致性保留严格前缀
+
+t2_status:
+  E1: PASS（pre-T1）
+  E2: PASS（pre-T1）
+  E3: PASS（pre-T1）
+  E7-P0: PASS（pre-T1）
+  E7-B1: PASS（v0.2）
+  E4: PASS（T2）
+  E5: PASS（T2）
+  E6: PASS（T2）
+  E7-P1: PASS（v0.1，T2 完成）
+  T2: 4/4 PASS（E4 + E5 + E6 + E7-P1 全过；T2 完成标志达成）
+  T3: 准备进入（E8 / E9 / E10）

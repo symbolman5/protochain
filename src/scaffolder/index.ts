@@ -11,9 +11,9 @@
  */
 
 import { copyFileSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { join, relative, sep, dirname } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
-import type { InterfaceSpec, ProtochainConfig } from '../model/types.js';
+import type { InterfaceSpec, ProtochainConfig, BindingConfig } from '../model/types.js';
 
 // ============================================================================
 // init：生成协议项目骨架
@@ -441,6 +441,24 @@ export interface ScaffoldInterfacesOptions {
   specs: InterfaceSpec[];
   /** 输出文件路径（默认 impl-scaffold/interfaces.d.ts） */
   outputPath?: string;
+  /**
+   * E5：impl 语言（目前仅 'ts'）。指定时除 interfaces.d.ts 外额外生成
+   *   clients/{http,kafka,nsq}.ts；方法名与 bindings.yaml 的 action 100% 对齐。
+   */
+  lang?: 'ts' | 'go' | 'java';
+  /**
+   * E5：bindings 配置（用于生成 http/kafka/nsq client）；
+   *   缺省时跳过 client 生成（保留旧行为）。
+   */
+  bindings?: BindingConfig;
+  /**
+   * E5：client 文件输出根目录（默认 <rootDir>/impl-scaffold/clients/）。
+   * 当指定为绝对路径时直接使用。
+   */
+  clientsOutputDir?: string;
+  /** E5：协议名/版本（写入模板头部注释） */
+  protocolName?: string;
+  protocolVersion?: string;
 }
 
 export function scaffoldInterfaces(options: ScaffoldInterfacesOptions): string {
@@ -453,7 +471,115 @@ export function scaffoldInterfaces(options: ScaffoldInterfacesOptions): string {
     }
     writeFileSync(outputPath, code, 'utf-8');
   }
+
+  // ── E5：--lang=ts → 额外生成 transport clients ──
+  if (options.lang === 'ts') {
+    const tsClients = generateTsClients({
+      specs: options.specs,
+      bindings: options.bindings,
+      protocolName: options.protocolName ?? '(unnamed)',
+      protocolVersion: options.protocolVersion ?? '0.0.0',
+    });
+    const baseDir = options.clientsOutputDir
+      ? options.clientsOutputDir
+      : outputPath
+        ? dirname(outputPath) + '/clients'
+        : 'impl-scaffold/clients';
+    if (!existsSync(baseDir)) mkdirSync(baseDir, { recursive: true });
+    for (const [name, content] of Object.entries(tsClients)) {
+      writeFileSync(join(baseDir, name), content, 'utf-8');
+    }
+  }
+
   return code;
+}
+
+/**
+ * E5：生成 TS transport 客户端（http/kafka/nsq 三传输）。
+ *
+ * 关键红线：
+ *  - 方法名 = bindings.yaml `interfaces[].action`（100% 一致）；
+ *  - http/kafka/nsq 三个文件覆盖范围（http 必有；kafka/nsq 仅当 bindings 出现对应
+ *    transport 类型才生成）；
+ *  - 模板相对路径从此文件所在目录解析（编译后位置变化不影响）。
+ */
+export function generateTsClients(opts: {
+  specs: InterfaceSpec[];
+  bindings: BindingConfig | undefined;
+  protocolName: string;
+  protocolVersion: string;
+}): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!opts.bindings) return out;
+
+  // 模板目录：源码内 templates/ts/，相对 __dirname（CLI 编译产物 dist/scaffolder/）
+  //   调试态：src/scaffolder/templates/ts
+  //   生产态：dist/scaffolder/templates/ts（tsc 不复制资源，需 build 时同步；
+  //           此处用候选解析，缺失则抛清晰错误）
+  const templateDir = resolveTemplatesDir();
+
+  const replace: Array<[RegExp, string]> = [
+    [/\{PROTOCOL_NAME\}/g, opts.protocolName],
+    [/\{PROTOCOL_VERSION\}/g, opts.protocolVersion],
+  ];
+
+  // 1) http.ts：所有 http 类型的 binding
+  const httpBindings = opts.bindings.interfaces.filter(
+    (b) => (b.transport as { type?: string } | undefined)?.type === 'http'
+  );
+  if (httpBindings.length > 0) {
+    const tpl = readTemplate(templateDir, 'http.ts.tmpl');
+    out['http.ts'] = applyTemplate(tpl, replace);
+  }
+
+  // 2) kafka.ts
+  const kafkaBindings = opts.bindings.interfaces.filter(
+    (b) => (b.transport as { type?: string } | undefined)?.type === 'kafka'
+  );
+  if (kafkaBindings.length > 0) {
+    const tpl = readTemplate(templateDir, 'kafka.ts.tmpl');
+    out['kafka.ts'] = applyTemplate(tpl, replace);
+  }
+
+  // 3) nsq.ts
+  const nsqBindings = opts.bindings.interfaces.filter(
+    (b) => (b.transport as { type?: string } | undefined)?.type === 'nsq'
+  );
+  if (nsqBindings.length > 0) {
+    const tpl = readTemplate(templateDir, 'nsq.ts.tmpl');
+    out['nsq.ts'] = applyTemplate(tpl, replace);
+  }
+
+  return out;
+}
+
+/** 模板目录解析：src/templates/ 或 dist/templates/ 双候选。
+ * 与 instanceTemplateDir 同款守卫（typeof __dirname），避免 import.meta 在 CJS 转换上下文不可用 */
+function resolveTemplatesDir(): string {
+  const candidates: string[] = [
+    typeof __dirname !== 'undefined' ? join(__dirname, 'templates', 'ts') : '',
+    join(process.cwd(), 'src', 'scaffolder', 'templates', 'ts'),
+  ].filter((s) => s.length > 0);
+  for (const c of candidates) {
+    if (existsSync(join(c, 'http.ts.tmpl'))) return c;
+  }
+  throw new Error(
+    `E5 模板目录未找到（已查 ${ candidates.join(' / ') }）。请确保 src/scaffolder/templates/ts/ 存在且 http.ts.tmpl/kafka.ts.tmpl/nsq.ts.tmpl 三个文件齐备。`
+  );
+}
+
+function readTemplate(dir: string, name: string): string {
+  const path = join(dir, name);
+  if (!existsSync(path)) {
+    throw new Error(`E5 模板缺失: ${path}`);
+  }
+  return readFileSync(path, 'utf-8');
+}
+
+function applyTemplate(tpl: string, replace: Array<[RegExp, string]>): string {
+  let out = tpl;
+  for (const [re, v] of replace) out = out.replace(re, v);
+  return out;
 }
 
 function generateInterfaceTypes(specs: InterfaceSpec[]): string {

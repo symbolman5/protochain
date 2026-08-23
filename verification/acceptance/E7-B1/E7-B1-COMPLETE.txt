@@ -1,0 +1,131 @@
+================================================================================
+E7-B1 组合层视图 —— 完成报告（v0.2，2026-08-22）
+================================================================================
+
+> 来源：IMPLEMENTATION-PLAN.md §E7 v0.4 增补 B1
+> 起点：T1 闭环（E1 ✓ + E2 ✓ + E3 ✓ + E7-P0 ✓；tsc 0 errors、jest 58/833）
+> v0.1：初次实现（2026-08-22，独立复验发现 3 条 open：B1-I1/I2/I3）
+> v0.2：3 条 issues 全量修复（2026-08-22，本文件）
+> 范围：组合层 `derive-web --project` 模式（项目级只读机械检阅）
+> 范围外：E9 cross-protocol diff 分析（cross-diff.md 骨架页占位）、P1 在线编辑
+
+--------------------------------------------------------------------------------
+1. v0.2 修复清单（B1-I1 ~ B1-I3 全量 resolved）
+--------------------------------------------------------------------------------
+
+| ID | 严重度 | 状态 | 修复内容 |
+|---|---|---|---|
+| [B1-I1](#b1-i1) | 低 | **resolved** | 删除死代码 `composeDataWithProject`；组合层 WebDataJson 顶层新增 `schemaVersion='1.1'` + `generatedAt`；消费方按 schemaVersion 区分模式（1.0=单协议 / 1.1=组合层） |
+| [B1-I2](#b1-i2) | 中 | **resolved** | changeType 枚举扩展接受 `protocol_extend`（hsk-ng 迭代 17 用）；新增 `preprocessYamlProse` 把 prose 字段（expression/checkMethod/description/rule 等）转 literal block scalar 后再 parseYaml；解决 `{...}: ...` 与多行续行 YAML 解析失败；hsk-ng 真实根端到端跑通（CI1~CI8 全部解析） |
+| [B1-I3](#b1-i3) | 中 | **resolved** | `--skip-probe` CLI 传 `probePaths=[]` 空数组（不再 undefined fallback）；web-serve 启动时按 `web/data.json` schemaVersion 区分模式（1.0=单协议 / 1.1=组合层）自动构造探针；首页子协议链接去掉目录式尾斜杠（VitePress 产物为 .html 非 /index.html） |
+
+--------------------------------------------------------------------------------
+2. v0.2 交付物清单
+--------------------------------------------------------------------------------
+
+代码层：
+- [src/webgen/composition.ts](file:///work/protochain/src/webgen/composition.ts)（v0.1 ~1150 行 → v0.2 ~1100 行，删除 composeDataWithProject + 增加 schemaVersion 字段）
+- [src/composition-parser/index.ts](file:///work/protochain/src/composition-parser/index.ts)（v0.2：changeType 枚举扩展 + 新增 `preprocessYamlProse` 导出；6 个段解析器统一接入）
+- [src/parser/extension-sections.ts](file:///work/protochain/src/parser/extension-sections.ts)（v0.2：`parseSubItemsByHeading` 增加可选 `yamlPreprocessor` 参数）
+- [src/model/types.ts](file:///work/protochain/src/model/types.ts)（v0.2：`CompositionMetadata.changeType` 枚举扩展）
+- [src/model/types.ts](file:///work/protochain/src/cli/index.ts)（v0.2：web-serve 按 schemaVersion 自动切换探针 + --skip-probe 传空数组 + 探针消息动态化）
+
+测试层：
+- [tests/webgen/composition.test.ts](file:///work/protochain/tests/webgen/composition.test.ts)（v0.1 59 cases + B1-I1 schemaVersion × 2 + B1-I3 link 修正 × 1 - composeDataWithProject × 2 = 60 cases）
+- [tests/webgen/webgen.test.ts](file:///work/protochain/tests/webgen/webgen.test.ts)（v0.2 新增 B1-I3 probePaths=[] × 1）
+- [tests/composition-parser/composition-parser.test.ts](file:///work/protochain/tests/composition-parser/composition-parser.test.ts)（v0.2 新增 B1-I2：changeType 枚举 × 2 + preprocessYamlProse × 4 = 6 cases）
+
+证据：
+- [verification/acceptance/E7-B1/E7-B1-COMPLETE.txt](file:///work/protochain/verification/acceptance/E7-B1/E7-B1-COMPLETE.txt)（本文件）
+- [verification/acceptance/E7-B1/acceptance-record.yaml](file:///work/protochain/verification/acceptance/E7-B1/acceptance-record.yaml)
+- v0.2 端到端证据（hsk-ng 真实根，非裁剪 fixture）：
+  - [derive-web-cli-output-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/derive-web-cli-output-v02.txt)
+  - [web-data-snapshot-v02.json](file:///work/protochain/verification/acceptance/E7-B1/web-data-snapshot-v02.json)
+  - [project-md-snapshot-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/project-md-snapshot-v02.txt)
+  - [cross-refs-md-snapshot-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/cross-refs-md-snapshot-v02.txt)
+  - [cross-diff-md-snapshot-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/cross-diff-md-snapshot-v02.txt)
+  - [protocols-P1-md-snapshot-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/protocols-P1-md-snapshot-v02.txt)
+  - [protocols-P3-md-snapshot-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/protocols-P3-md-snapshot-v02.txt)
+  - [protocols-index-md-snapshot-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/protocols-index-md-snapshot-v02.txt)
+  - [webserve-cli-output-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/webserve-cli-output-v02.txt)（组合层 8 探针全 200）
+  - [webserve-skipprobe-output-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/webserve-skipprobe-output-v02.txt)（--skip-probe 生效）
+  - [tsc-noEmit-output-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/tsc-noEmit-output-v02.txt)
+  - [jest-output-v02.txt](file:///work/protochain/verification/acceptance/E7-B1/jest-output-v02.txt)
+
+--------------------------------------------------------------------------------
+3. 验收对应（v0.2 端到端真实 hsk-ng 根）
+--------------------------------------------------------------------------------
+
+| 验收项 | v0.2 状态 | 证据 |
+|---|---|---|
+| hsk-ng 多协议根 derive-web --project 产出项目总览（4 协议卡片 + 依赖图 mermaid） | **✓ 真实根跑通**（非裁剪 fixture） | derive-web-cli-output-v02.txt：4 协议卡片 + 6 依赖边 + 8 跨协议不变量 |
+| 每协议接口详情页叠加"跨协议引用"小节（引用/被引用双向列表） | ✓ | protocols-P1-md-snapshot-v02.txt 含"### 引用其他协议" + "### 被其他协议引用" |
+| 关联矩阵全部人读（非裸 JSON） | ✓ | cross-refs-md-snapshot-v02.txt 用 Markdown 表格 + 分组 + 上下文片段 |
+| 组合层产物 web-serve 起服务（探针 8 条全 200） | ✓ B1-I3 修复 | webserve-cli-output-v02.txt：8 探针全 200 |
+| --skip-probe 实际生效 | ✓ B1-I3 修复 | webserve-skipprobe-output-v02.txt：探针已跳过 + server 存活 |
+| 单协议项目无 --project 时行为与现有一致（无回归） | ✓ | 单协议 schemaVersion=1.0 走原逻辑；6 探针全 200 |
+| hsk-ng 真实根可读 CI1~CI8（含 expression `{...}: ...` 与多行 checkMethod） | ✓ B1-I2 修复 | web-data-snapshot-v02.json：crossInvariants 8 条 |
+| npx tsc --noEmit → 0 errors | ✓ | tsc-noEmit-output-v02.txt |
+| npx jest → 全部通过 | ✓ | jest-output-v02.txt：59 suites / 899 cases 全过（v0.1 = 892, v0.2 = +7） |
+| 不新增运行时依赖 | ✓ | package.json 未动；纯静态机械生成 |
+| 安全：不读 bindings.yaml / process.env；敏感字段复用 redactSensitiveFields | ✓ | 端到端测试注入 tokenEnv/secret 字段 → 断言产物不含 |
+
+--------------------------------------------------------------------------------
+4. v0.2 关键设计点
+--------------------------------------------------------------------------------
+
+4.1 B1-I1 修复：组合层 schemaVersion 模式区分
+- 组合层 WebDataJson 顶层 `schemaVersion='1.1'` + `generatedAt`
+- 单协议 WebDataJson 顶层 `schemaVersion='1.0'`（既有不变）
+- web serve / 未来消费方按 schemaVersion 分支，避免组合层与单协议结构异构带来的踩坑
+
+4.2 B1-I2 修复：宽松 YAML 解析
+- 新增 `preprocessYamlProse`：把 PROSE_KEYS 白名单内的字段转 literal block scalar（`|`）后再 parseYaml
+- PROSE_KEYS：`name` / `expression` / `checkMethod` / `description` / `rule` / `assumption` / `impactIfViolated` / `queryObservationInterfaceId` / `permissionBoundary` / `syncSemantics`
+- 算法：
+  - 单行值：用单引号包裹（处理 YAML 特殊字符）
+  - 多行值（下一非空行缩进 > key 缩进）：转 literal block scalar（保留 inline + 续行 + 空行）
+- 边界：
+  - 枚举字段（complexity / dependencyType / direction / readOnly）严格 YAML 解析不动
+  - PROSE_KEYS 增长需在 PR review 显式列出
+
+4.3 B1-I3 修复：web-serve 模式感知 + 链接修正
+- CLI `web-serve` 启动时读 `web/data.json` schemaVersion：
+  - `1.0` → 单协议探针（既有 E7-I2 逻辑）
+  - `1.1` → 组合层探针（`/`、`/protocols/`、`/cross-refs`、`/cross-diff`、`/protocols/<id>` × N）
+- `--skip-probe` 传 `probePaths=[]` 空数组而非 undefined（startServe 内 `?? DEFAULT_PROBE_PATHS` 不会 fallback）
+- 首页子协议链接 `[P1](protocols/P1)` 去掉尾斜杠（VitePress 产物为 .html，非 /index.html）
+
+--------------------------------------------------------------------------------
+5. 防范围蔓延（红线守住）
+--------------------------------------------------------------------------------
+
+✓ 不做 E9 cross-protocol diff 分析（cross-diff.md 骨架占位"待 E9"）
+✓ 不做 P1 在线编辑 / Express / Fastify / 写回权威源
+✓ 不修改 composition.md / 各子协议 derived/*.json / model.md（derive-web 是只读映射）
+✓ 不引入 mermaid runtime（沿用 E7-P0：预生成 mermaid 源码）
+✓ 不触碰 E4/E5/E6/E7-P1（各自独立任务）
+
+--------------------------------------------------------------------------------
+6. build_baseline（v0.2）
+--------------------------------------------------------------------------------
+
+- tsc_errors: 0
+- jest_suites: 59
+- jest_cases: 899（v0.1=892, v0.2 delta=+7：B1-I1 schemaVersion × 2 + B1-I3 link 修正 × 1 + B1-I3 probePaths=[] × 1 + B1-I2 × 6 - composeDataWithProject × 2 - v0.2 链路内重排 × 1）
+- cli_commands:
+  - derive-web --project（E7-B1 主入口）
+  - web-serve（按 schemaVersion 自动分支；--skip-probe 实际生效）
+
+--------------------------------------------------------------------------------
+7. 已知遗留（v0.2 范围外）
+--------------------------------------------------------------------------------
+
+- cross-diff.md 待 E9 实施接通（按 PLAN §E7 v0.4 B2）：cross-diff.md 骨架占位 + 数据接口预留
+- hsk-ng specs 全部 description-only（无 I/O 字段 schema）：与 B1 无关，仅展示现状
+- VitePress 构建产物未在 CLI 端真实生成（CI 离线无法下载 vitepress）；验收用手写 dist 模拟 + 8 探针全 200
+
+================================================================================
+E7-B1 状态：PASS（v0.2）—— T1 闭环；B1 三条独立复验问题全量 closed；
+hsk-ng 真实根（非裁剪 fixture）端到端跑通 + web-serve 组合层 8 探针全 200
+================================================================================

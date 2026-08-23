@@ -1,0 +1,97 @@
+item: E7-P0
+date: 2026-08-22（v0.5 修复版）
+executor: protochain E7 P0 自动化实现 + 独立复验 + v0.5 全量修复
+instance: approval-flow（fixtures/approval-flow.md）+ saas-real-P4-push-node.md（大协议场景）
+command: |
+  # 1) 派生 specs（前置）
+  protochain derive-specs --dir /tmp/e7p0-v05
+  # 2) 派生 web 站点（带 VitePress build；本验证用 --no-build 跳过，离线无法下载 vitepress）
+  protochain derive-web --dir /tmp/e7p0-v05 --no-build
+  # 3) 静态服务（手写 dist/ 模拟 VitePress 产物；E7-I1 修复后默认 distDir = web/docs/.vitepress/dist）
+  protochain web-serve --dir /tmp/e7p0-v05 --port 5176
+  # 4) 畸形 URL 探针（E7-I3 修复后应 400 且 server 仍存活）
+  curl http://127.0.0.1:5176/%zz  # → 400
+  curl http://127.0.0.1:5176/      # → 200
+result: pass
+v0_5_fixes:
+  - E7-I1（distDir 不一致）→ web-serve 默认改为 web/docs/.vitepress/dist
+  - E7-I2（探针硬编码 IF_SYS_T1）→ 改为从 web/data.json 读真实接口 ID 构造；新增 --skip-probe
+  - E7-I3（畸形 URL 进程崩溃）→ resolveStaticPath + handleRequest 双层 try/catch 兜底；畸形 → 400
+  - E7-I4（死代码 basicPages）→ 删除；exit 改为 existsSync 5 类页面校验
+  - E7-I5（占位恒真断言）→ 改为注入真实敏感键 tokenEnv/secretEnv 端到端断言
+  - E7-I6（redact 行为与口径不符）→ 改为整键删除（非 [REDACTED] 替换）
+  - E7-I7（missing vs corrupt 混淆）→ readOptionalJsonWithStatus 区分；warning 文案区分
+  - E7-I8（--force no-op）→ deriveWeb 写产物前 existsSync 检查；未传 force → 抛"web 产物已存在；如需覆盖请传 --force"
+evidence:
+  - verification/acceptance/E7-P0/design-notes.md
+  - verification/acceptance/E7-P0/derive-web-cli-output.txt
+  - verification/acceptance/E7-P0/web-data-snapshot.json (sha256 重新生成见下方)
+  - verification/acceptance/E7-P0/web-public-data-snapshot.json
+  - verification/acceptance/E7-P0/index-md-snapshot.txt
+  - verification/acceptance/E7-P0/interfaces-index-md-snapshot.txt
+  - verification/acceptance/E7-P0/interface-detail-IF_SYS_T1-snapshot.txt
+  - verification/acceptance/E7-P0/test-cases-md-snapshot.txt
+  - verification/acceptance/E7-P0/verification-md-snapshot.txt
+  - verification/acceptance/E7-P0/diff-md-snapshot.txt
+  - verification/acceptance/E7-P0/vitepress-config-snapshot.txt
+  - verification/acceptance/E7-P0/web-serve-startup-log.txt
+  - verification/acceptance/E7-P0/web-serve-probe-results.txt（含畸形 URL 探针）
+  - tests/webgen/webgen.test.ts（37 cases 全过，含 7 项 v0.5 新增修复测试）
+  - npx tsc --noEmit → 0 errors
+  - npx jest → 58 suites / 833 cases 全过
+
+build_baseline:
+  tsc_errors: 0
+  jest_suites: 58
+  jest_cases: 833
+  jest_v04_to_v05_delta: "+7 cases（E7-I2/I3/I5/I7/I8 修复测试）"
+  cli_commands:
+    - derive-web（新增，E7-P0）
+    - web-serve（新增，E7-P0）
+
+acceptance_checklist:
+  derive_web_100_percent_mechanical:
+    pass: true
+    note: src/webgen/index.ts 不导入 ai/、不读 process.env、不读 bindings.yaml；纯机械映射 derived/*.json + model.md
+  web_data_json_and_static_site_落盘:
+    pass: true
+    note: web/data.json 22 KB（含 12 接口 + 协议元数据 + 状态机图 + redactionNotice）+ web/docs/*.md 5 类页面 + web/docs/.vitepress/config.ts；exit 判定显式 existsSync 5 类页面（E7-I4 修复）
+  protochain_web_serve_起服务:
+    pass: true
+    note: E7-I1 修复后默认 distDir 与 derive-web outDir 对齐（web/docs/.vitepress/dist）；web-serve 启动 + 6 URL 探针全 200
+  四类页面人读_非裸_json:
+    pass: true
+    note: 接口详情用表格展示 requestSchema/responseSchema（5 字段+必填）；test-cases 用表格展示路径+状态+验证；verification 用 sideBySide 并排展示 legacy vs impl；diff 用表格展示 metadataChanges/derivableChanges + humanReadable 映射
+  p0_无运行时依赖:
+    pass: true
+    note: package.json 未新增 vitepress 运行时依赖；web serve 用 stdlib http.createServer；MIME/path-traversal 拦截纯 ESM 实现；E7-I3 修复后畸形 URL 不崩进程（顶层 try/catch）
+  安全_不接触_authConfig_token_等:
+    pass: true
+    note: SENSITIVE_FIELD_NAMES_REPORT 列出 11 类敏感字段名（tokenEnv/secretEnv/passwordEnv/keyEnv/usernameEnv/certPath/keyPath/caPath/token/secret/password/apiKey）；redactSensitiveFields 整键删除（E7-I6 修复）；CLI 报告与 web/data.json 顶部 redactionNotice 均显式声明；端到端测试注入真实敏感键 → 断言敏感值 + 敏感键名均不出现（E7-I5 修复）
+
+scope_guards:
+  no_runtime_dependencies:
+    pass: true
+    note: 仅 devDependency vitepress（站点工程内 web/package.json，独立维护）
+  no_p1_features:
+    pass: true
+    note: 不实现 mock 服务 / 团队协作 / 环境管理 / Apifox 克隆 / 模型侧输入管理
+  no_token_env_access:
+    pass: true
+    note: src/webgen/ 全模块不调用 process.env；web serve 进程不读 env
+  no_authority_source_mutation:
+    pass: true
+    note: derive-web 是只读映射；不写 derived/* 任何文件；不写 model.md；E7-I8 修复后 --force 守卫生效
+
+followup: 无（v0.5 全部 8 条 issues 已 resolved）
+
+t1_status:
+  E1: PASS（pre-T1 已就绪；本次 T1 启动基线为 E1+E2+E3 已 ✓）
+  E2: PASS（specs.json schemaVersion=1.0；ajv 全过）
+  E3: PASS（bindings.skeleton.yaml 生成率 ≥ 80%；bind --skeleton 兼容）
+  E7-P0: PASS（本任务；v0.5 含 8 条 issues 全量修复）
+  T1 完成标志:
+    - specs.json 过 ajv: true
+    - m-check  拦下 019 单 INV-PS1: pre-T1（E1 验收项；本次未复测）
+    - derive-bindings 生成率 ≥ 80%: pre-T1（E3 验收项；本次未复测）
+    - Web 静态站点可访问: true（6 URL × 200；畸形 URL → 400 不崩进程）

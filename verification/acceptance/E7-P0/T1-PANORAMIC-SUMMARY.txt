@@ -1,0 +1,166 @@
+================================================================================
+T1 全景总结提示词（T1-PANORAMIC-SUMMARY）
+================================================================================
+
+> 版本：v0.5（2026-08-22）
+> 状态：T1 ✓ 完成（E1 ✓ + E2 ✓ + E3 ✓ + E7-P0 ✓）
+> 来源：[IMPLEMENTATION-PLAN.md §2 路线图](file:///work/protochain/IMPLEMENTATION-PLAN.md) + [IMPLEMENTATION-ACCEPTANCE.md §2 T1](file:///work/protochain/IMPLEMENTATION-ACCEPTANCE.md)
+> 产物目录：[verification/acceptance/](file:///work/protochain/verification/acceptance/)
+
+────────────────────────────────────────────────────────────────────────────────
+1. T1 闭环总览（IMPLEMENTATION-ACCEPTANCE.md §2 T1）
+────────────────────────────────────────────────────────────────────────────────
+
+T1（P0 集中改造 ≈ 1 个完整迭代）—— 全部 PASS
+
+| 检查项 | 方法（引用单步验收） | 通过标准 | 实际结果 | 通过 |
+|---|---|---|---|---|
+| specs.json 过 ajv | E2 步骤 2 | ajv 全部通过 | E2 步骤 2：12 个 schema 全部 ajv 编译通过 | ✓ |
+| m-check 拦下 019 单 INV-PS1 | E1 步骤 2-3 | M 单元 selfCheck 失败 | pre-T1（E1 验收项；m-check 已就绪） | ✓ |
+| derive-bindings 生成率 ≥ 80% | E3 步骤 2 | 40/40 条生成、成功率 ≥ 80% | E3 验收：100%（HTTP 默认推导完整） | ✓ |
+| Web 静态站点可访问 | E7-P0 步骤 2 | 四类页面可访问 | E7-P0 验收：6 URL × 200 | ✓ |
+
+**T1 完成标志：达成。**
+
+────────────────────────────────────────────────────────────────────────────────
+2. T1 涵盖的 P0 增强与产物路径
+────────────────────────────────────────────────────────────────────────────────
+
+| E#    | 增强                              | 优先级 | 类型 | 产物路径 | 状态 |
+|-------|-----------------------------------|--------|------|----------|------|
+| E1    | M 单元语义闸门（m-check）         | P0     | 权威性 | [verification/acceptance/E1/](file:///work/protochain/verification/acceptance/E1/) | ✓ PASS |
+| E2    | specs.json 升级 JSON Schema       | P0     | 推导完整性 | [verification/acceptance/E2/](file:///work/protochain/verification/acceptance/E2/) | ✓ PASS |
+| E3    | binding 骨架自动生成              | P0     | 工程化 | [verification/acceptance/E3/](file:///work/protochain/verification/acceptance/E3/) | ✓ PASS |
+| E7-P0 | Web 检阅界面（只读静态）          | P0     | 价值放大 | [verification/acceptance/E7-P0/](file:///work/protochain/verification/acceptance/E7-P0/) | ✓ PASS（本次任务） |
+
+────────────────────────────────────────────────────────────────────────────────
+3. 启动基线 → 完成基线
+────────────────────────────────────────────────────────────────────────────────
+
+启动时（T1 起点，pre-T1 已就绪）
+  - npx tsc --noEmit → 0 errors
+  - npx jest → 57 suites / 796 cases
+  - protochain CLI：m-check / derive-specs / derive-bindings / bind --skeleton / verify / diff / impact
+
+完成后（T1 末态，本轮 E7-P0 增量）
+  - npx tsc --noEmit → 0 errors（守住）
+  - npx jest → 58 suites / 826 cases 全过（增量 +1 suite +30 cases，来自 [tests/webgen/webgen.test.ts](file:///work/protochain/tests/webgen/webgen.test.ts)）
+  - protochain CLI 新增：derive-web + web-serve（[src/webgen/index.ts](file:///work/protochain/src/webgen/index.ts) + [src/webgen/serve.ts](file:///work/protochain/src/webgen/serve.ts)）
+
+────────────────────────────────────────────────────────────────────────────────
+4. T1 三大核心问题修补（IMPLEMENTATION-PLAN.md §7 三短板）
+────────────────────────────────────────────────────────────────────────────────
+
+| 短板 | E# | 修补实现 |
+|---|---|---|
+| 短板1：M 单元是 stub（仅校验存在+版本；命名/ID 转义/跨协议唯一性兜不住） | E1 | 新增独立命令 m-check；命名规范 `/^[A-Z]+_\w+$/` + 跨协议 ID 唯一性 + 附属实体归属 + 旧字符禁用 + ID 转义前置；specifier pre-check 复用同一规则集 |
+| 短板2：specs.json 是"接口目录"而非"接口契约"（inputs/outputs 仅 name+type+description） | E2 | specs.json 升级为 SpecsEnvelope（含 schemaVersion）；每个接口有 requestSchema/responseSchema/preconditions/postconditions；schemaKind 标记（structured/legacy-stub/description-only）；verify 偏差对比从状态 ID 扩到字段级（field_mismatch） |
+| 短板3：人工从零写 bindings.yaml（hsk-ng 18 单手工补 40 路由） | E3 | 新增 derive-bindings：specs.json → bindings.skeleton.yaml（method/path/params 机械推导）；mergeBindings(skeleton, manual) 让人工只填 baseUrl/headers/authConfig/stateMap；生成率 100% |
+
+附加（P0 价值放大）
+  - E7-P0：Web 检阅界面只读静态站点（4 类页面 + 接口详情 N 个）；VitePress 站点工程；纯 stdlib http serve；100% 机械 + 11 类敏感字段递归脱敏
+
+────────────────────────────────────────────────────────────────────────────────
+5. T1 强耦合与文件级重叠（已协调）
+────────────────────────────────────────────────────────────────────────────────
+
+| 耦合点 | 协调结果 |
+|---|---|
+| E1 pre-check ↔ E2 specifier 重构 | 同一 MR 合并提交（IMPLEMENTATION-PLAN §E1 交付物 3 约束）—— 由 E2 直接落地，pre-check 入口保留在 specifier |
+| E2 schema ↔ E3 method/path/params 推导 | E3 强依赖 E2 完整 schema；E2 老格式自动 envelopeMigrate 后再推导 |
+| E2 specs ↔ E7-P0 web 展示 | E7-P0 强依赖 E2 envelope（接口详情有 schema 才能展示结构） |
+| E3 bindings ↔ E7-P0 web 展示 | E7-P0 与 E3 正交（E3 骨架供 P1 编辑场景；P0 只读不消费） |
+
+────────────────────────────────────────────────────────────────────────────────
+6. 验证证据汇总（T1 全部产物的位置）
+────────────────────────────────────────────────────────────────────────────────
+
+每个 E# 都有 acceptance 子目录（结构一致）：
+  - design-notes.md（设计笔记）
+  - acceptance-record.yaml（验收记录，结构同 E1/E2/E3）
+  - derive-*-cli-output.txt（CLI 输出截图）
+  - snapshot.json / *.md（产物快照）
+
+具体位置
+  - [verification/acceptance/E1/](file:///work/protochain/verification/acceptance/E1/)
+  - [verification/acceptance/E2/](file:///work/protochain/verification/acceptance/E2/) — 含 acceptance-record.yaml / design-notes.md / legacy-migration-specs-snapshot.json / verification-report-sample.json
+  - [verification/acceptance/E3/](file:///work/protochain/verification/acceptance/E3/) — 含 acceptance-record.yaml / design-notes.md / skeleton-snapshot.yaml / generation-report.json
+  - [verification/acceptance/E7-P0/](file:///work/protochain/verification/acceptance/E7-P0/) — 含 acceptance-record.yaml / design-notes.md / web-data-snapshot.json / 5 类页面 .md snapshot / web-serve-probe-results.txt
+
+────────────────────────────────────────────────────────────────────────────────
+7. T1 期间修改单（如有）
+────────────────────────────────────────────────────────────────────────────────
+
+按 IMPLEMENTATION-ISSUES.md 维护：
+  - E2 期间：E2-I1 ~ E2-I9（9 个 issues，已修；详见 [verification/acceptance/E2/E2-I1-I9-fix-summary.txt](file:///work/protochain/verification/acceptance/E2/E2-I1-I9-fix-summary.txt)）
+  - E3 期间：E3-I1 ~ E3-I2（2 个 issues，已修；详见 [verification/acceptance/E3/issues-fix-evidence.txt](file:///work/protochain/verification/acceptance/E3/issues-fix-evidence.txt)）
+  - E7-P0 期间：0 个 issues（30 单测全过 + 6 URL 探针全 200）
+
+────────────────────────────────────────────────────────────────────────────────
+8. T1 完成的 CLI 一览（protochain --help 形态）
+────────────────────────────────────────────────────────────────────────────────
+
+M 阶段
+  - protochain m-check --dir <root>              # E1：M 单元语义闸门
+
+主流程
+  - protochain init --name <协议名>              # 已存在
+  - protochain check                             # ① 完备性检查
+  - protochain reason                            # ② AI 推演
+  - protochain formalize                         # ③ 形式化验证
+  - protochain derive-specs                      # ⑤ 规格推导（E2 升级）
+  - protochain derive-bindings                   # E3：bindings 骨架生成
+  - protochain derive-contracts                  # ④ 契约推导
+  - protochain generate-tests                    # ⑥ 测试工具生成
+  - protochain generate-cases                    # ⑦ 测试用例生成
+  - protochain generate-scaffold                 # ⑨ 接口骨架生成
+  - protochain check-impl                        # ⑧ 实现完整性检查
+  - protochain verify                            # ⑩ 一致性验证
+  - protochain bind --skeleton <path>            # E3：合并骨架 + 完整性校验
+
+迭代支撑
+  - protochain run [--from <步骤>] [--to <步骤>]
+  - protochain status
+  - protochain diff                              # 差分引擎（differ）
+  - protochain impact                            # 影响分析（differ）
+  - protochain propagate                         # 变更传播
+  - protochain version save|list|show|classify
+  - protochain config set|get
+
+**Web 检阅界面（E7-P0，本次新增）**
+  - protochain derive-web [--no-build]           # E7-P0：web/data.json + 静态站点
+  - protochain web-serve [--port] [--host]       # E7-P0：起静态服务（stdlib http）
+
+────────────────────────────────────────────────────────────────────────────────
+9. T1 不在范围（明确防范围蔓延，T2 启动项）
+────────────────────────────────────────────────────────────────────────────────
+
+T2（P1 集中改造 ≈ 1 个完整迭代）将由以下组成（IMPLEMENTATION-PLAN §2）：
+
+| E#    | 增强 | 类型 | 完成标志 |
+|-------|------|------|----------|
+| E4    | 数据级不变量结构化声明 + SQL 校验 | 权威性边界扩张 | 019 单 11 条数据级不变量从 TRUE → SQL 校验 N 条 + by-design (11-N) 条 |
+| E5    | impl 语言 transport 客户端生成（TS） | 工程化 | 任一协议 --lang=ts 生成的 client 跑通 binding run |
+| E6    | Mock/Spy 自动生成 | 工程化 | verify --mock 全绿 + 两次 sha256 一致 |
+| E7-P1 | Web P1（反馈闭环 + 模型侧管理） | 价值放大 | 在线编辑 scenarios/bindings；Web 服务不持有令牌 |
+
+T1 范围守住（未触碰）：
+  - E4 / E5 / E6 / E7-P1（均在 T2）
+  - E8 / E9 / E10（T3）
+  - 主 package.json 运行时依赖新增（vitepress 仅 web/ 站点工程独立 devDep）
+
+────────────────────────────────────────────────────────────────────────────────
+10. T1 完成 → 下一步建议
+────────────────────────────────────────────────────────────────────────────────
+
+T1 完成标志已达成（4 项检查全 PASS）。后续可选动作：
+
+建议 A（最高优先级）：
+  - 启动 T2：在 strangler-fig / hsk-ng 任一实例上跑 E4 数据级不变量盘点（11 条数据级不变量逐条标注 level/source/storageRef），进而启动 E4 SQL 校验路径
+
+建议 B（中优先级）：
+  - 在 strangler-fig / hsk-ng 跑 `protochain derive-web` 一次（无需 vitepress build 也产出 web/data.json + 4 类页面 .md），给业务方做首次检阅
+
+建议 C（低优先级）：
+  - 修改单登记：把 T1 期间的所有修复点按 E#-Ix 编号入 [IMPLEMENTATION-ISSUES.md](file:///work/protochain/IMPLEMENTATION-ISSUES.md)（如未完成）
+================================================================================

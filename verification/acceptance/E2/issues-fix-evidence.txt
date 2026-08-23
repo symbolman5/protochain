@@ -1,0 +1,6 @@
+$ npx jest 2>&1 | tail -5
+
+Test Suites: 56 passed, 56 total
+Tests:       748 passed, 748 total
+Snapshots:   0 total
+Time:        5.179 s

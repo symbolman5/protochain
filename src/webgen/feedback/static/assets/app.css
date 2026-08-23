@@ -1,0 +1,35 @@
+:root {
+  color-scheme: light;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, "Microsoft YaHei", sans-serif;
+  --fg: #1a1a1a;
+  --bg: #fafafa;
+  --accent: #0a6cf1;
+  --warn: #b3261e;
+}
+body { margin: 0; background: var(--bg); color: var(--fg); }
+header { padding: 12px 24px; border-bottom: 1px solid #e3e3e3; background: #fff; }
+header h1 { margin: 0 0 8px 0; font-size: 1.25rem; }
+nav a { margin-right: 14px; color: var(--accent); text-decoration: none; }
+nav a[href]:hover { text-decoration: underline; }
+main { padding: 16px 24px; max-width: 1024px; margin: 0 auto; }
+section { background: #fff; border: 1px solid #e3e3e3; border-radius: 6px; padding: 14px 18px; margin-bottom: 14px; }
+section h2 { margin-top: 0; font-size: 1.05rem; }
+table { border-collapse: collapse; width: 100%; }
+table th, table td { border: 1px solid #e3e3e3; padding: 6px 10px; vertical-align: top; }
+table th { background: #f0f3f8; text-align: left; }
+form label { display: block; margin: 10px 0; }
+form input[type=text], form select, form textarea { display: block; width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+button { padding: 7px 16px; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 4px; cursor: pointer; }
+button.secondary { background: #fff; color: var(--accent); }
+button:hover { opacity: 0.9; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+.actions button { margin-right: 8px; }
+.formActions { margin-top: 12px; display: flex; gap: 10px; }
+.warn { color: var(--warn); }
+pre { background: #f3f3f7; padding: 8px 10px; border-radius: 4px; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+dl dt { display: inline-block; width: 130px; font-weight: 600; vertical-align: top; }
+dl dd { display: inline-block; margin: 0; }
+details summary { cursor: pointer; margin: 6px 0; }
+.ok { background: #e8f4ec; padding: 8px 10px; border-radius: 4px; border-left: 3px solid #1c8c44; }
+.err { background: #fdecea; padding: 8px 10px; border-radius: 4px; border-left: 3px solid var(--warn); }

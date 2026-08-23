@@ -1,0 +1,28 @@
+=== E7-P1 feedback-serve ===
+  监听: http://127.0.0.1:5220
+  实例根: /work/hsk-ng/modeling
+  安全：scrubbed 6 个敏感 env 键；子进程 env = filterEnvForChild 白名单
+  Scrubbed 键名（已 redact 值）：
+    - ADMIN_TOKEN
+    - LEGACY_TOKEN
+    - SERVER_TOKENFILE
+    - TRAE_JWT_TOKEN_PATH
+    - TRAE_USER_CLOUDIDE_TOKEN_BLOB
+    - CFS_TOKEN
+
+  访问 /  → Dashboard
+  访问 /scenarios  → 在线编辑 scenarios
+  访问 /bindings   → 在线编辑 bindings
+  访问 /run        → 一键执行（子进程隔离）
+  访问 /review     → 评审→修改单草稿
+
+按 Ctrl+C 退出
+
+--- 服务进程 env 检查（/proc/$PID/environ；含 OS 层残留）---
+ADMIN_TOKEN=<scrubbed-by-spawn-process.env-delete>
+LEGACY_TOKEN=<scrubbed-by-spawn-process.env-delete>
+SERVER_TOKENFILE=<scrubbed-by-spawn-process.env-delete>
+TRAE_JWT_TOKEN_PATH=<scrubbed-by-spawn-process.env-delete>
+TRAE_USER_CLOUDIDE_TOKEN_BLOB=<scrubbed-by-spawn-process.env-delete>
+CFS_TOKEN=<scrubbed-by-spawn-process.env-delete>
+(OS 层残留为正常：scrubProcessEnv 只能影响 process.env，/proc 由 Linux 内核保留父进程传入的副本)

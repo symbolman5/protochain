@@ -1,0 +1,128 @@
+{
+    "ok": true,
+    "data": {
+        "ok": true,
+        "dir": "/work/hsk-ng/modeling/protocol/P1/scenarios",
+        "files": [
+            {
+                "filename": "sc-01.yaml",
+                "id": "SC-01",
+                "parsed": {
+                    "id": "SC-01",
+                    "name": "P1 \u6dfb\u52a0\u8282\u70b9-\u6ce8\u9500\uff08S0\u2192S1\u2192S4\uff09",
+                    "expectedActions": [
+                        "register",
+                        "deregister"
+                    ],
+                    "setup": [
+                        {
+                            "action": "purge_server",
+                            "params": {
+                                "serverId": "node-a"
+                            }
+                        }
+                    ],
+                    "params": {
+                        "name": "node-a",
+                        "hostDomain": "node-a.local",
+                        "internalIp": "10.0.0.1",
+                        "publicIp": "203.0.113.1"
+                    }
+                }
+            },
+            {
+                "filename": "sc-02.yaml",
+                "id": "SC-02",
+                "parsed": {
+                    "id": "SC-02",
+                    "name": "P1 \u6dfb\u52a0-\u7ed1\u5b9a-\u4e0b\u7ebf-\u6ce8\u9500\uff08S0\u2192S1\u2192S2\u2192S1\u2192S4\uff09",
+                    "expectedActions": [
+                        "register",
+                        "bind",
+                        "goOffline",
+                        "deregister"
+                    ],
+                    "setup": [
+                        {
+                            "action": "purge_server",
+                            "params": {
+                                "serverId": "node-b"
+                            }
+                        }
+                    ],
+                    "params": {
+                        "name": "node-b",
+                        "hostDomain": "node-b.local",
+                        "internalIp": "10.0.0.2",
+                        "publicIp": "203.0.113.2",
+                        "version": "0.3.0",
+                        "tunnelPort": 20000,
+                        "httpPort": 80,
+                        "httpsPort": 443,
+                        "managementPort": 9443
+                    }
+                }
+            },
+            {
+                "filename": "sc-03.yaml",
+                "id": "SC-03",
+                "parsed": {
+                    "id": "SC-03",
+                    "name": "P1 \u6dfb\u52a0-\u7ed1\u5b9a-\u505c\u7528-\u542f\u7528\uff08S0\u2192S1\u2192S2\u2192S3\u2192S2\uff09",
+                    "expectedActions": [
+                        "register",
+                        "bind",
+                        "disable",
+                        "enable"
+                    ],
+                    "setup": [
+                        {
+                            "action": "purge_server",
+                            "params": {
+                                "serverId": "node-c"
+                            }
+                        }
+                    ],
+                    "params": {
+                        "name": "node-c",
+                        "hostDomain": "node-c.local",
+                        "internalIp": "10.0.0.3",
+                        "publicIp": "203.0.113.3",
+                        "version": "0.3.0",
+                        "tunnelPort": 20000
+                    }
+                }
+            },
+            {
+                "filename": "sc-04.yaml",
+                "id": "SC-04",
+                "parsed": {
+                    "id": "SC-04",
+                    "name": "P1 \u6dfb\u52a0-\u7ed1\u5b9a-\u505c\u7528-\u6ce8\u9500\uff08S0\u2192S1\u2192S2\u2192S3\u2192S4\uff09",
+                    "expectedActions": [
+                        "register",
+                        "bind",
+                        "disable",
+                        "deregister"
+                    ],
+                    "setup": [
+                        {
+                            "action": "purge_server",
+                            "params": {
+                                "serverId": "node-d"
+                            }
+                        }
+                    ],
+                    "params": {
+                        "name": "node-d",
+                        "hostDomain": "node-d.local",
+                        "internalIp": "10.0.0.4",
+                        "publicIp": "203.0.113.4",
+                        "version": "0.3.0",
+                        "tunnelPort": 20000
+                    }
+                }
+            }
+        ]
+    }
+}

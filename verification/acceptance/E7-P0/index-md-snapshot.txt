@@ -1,0 +1,54 @@
+# 审批流协议
+
+> 协议版本：**1.0.0** | 检阅时间：2026-08-22T14:59:25.528Z
+
+规范申请人提交审批请求、审批人审批的协作流程，确保审批结果可追溯且满足时效约束
+
+## 总览
+
+| 指标 | 值 |
+| --- | --- |
+| 角色数 | 3 |
+| 系统接口 | 5 |
+| 观测接口 | 7 |
+| 测试用例 | 0 |
+| 验证通过 / 失败 | 0 / 0 |
+
+## 快速跳转
+
+- [接口列表](interfaces/) — 12 个接口的请求/响应结构与守卫
+- [测试用例浏览器](test-cases) — 路径覆盖度与偏差
+- [验证报告对比](verification) — legacy vs impl 双跑对账
+- [模型 diff / impact](diff) — 变更 → 受影响步骤/产物
+
+## 状态机图（mermaid）
+
+```mermaid
+stateDiagram-v2
+    S1 : S1: 草稿 (初始)
+    S2 : S2: 待审批
+    S3 : S3: 已通过 (终态)
+    S4 : S4: 已驳回 (终态)
+    S5 : S5: 已撤回 (终态)
+    S1 --> S2 : submit[form_valid]
+    S2 --> S3 : approve[has_request]
+    S2 --> S4 : reject[has_request]
+    S2 --> S5 : withdraw[has_request]
+    S2 --> S1 : timeout_return[deadline_exceeded]
+```
+
+> 复制上述 mermaid 段落到 <https://mermaid.live> 可渲染。
+
+## 角色
+
+| ID | 名称 | 类型 |
+| --- | --- | --- |
+| applicant | 申请人 | consensus |
+| approver | 审批人 | participant |
+| system | 系统 | participant |
+
+## 安全边界
+
+- 本产物由 derive-web 机械生成；不含 authConfig.token/secret/password 等敏感字段。
+- 本产物不读取 bindings.yaml；不读取进程环境变量。
+- P0 范围仅只读展示；编辑能力在 P1 提供。

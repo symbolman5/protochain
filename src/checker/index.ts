@@ -23,8 +23,13 @@ import type {
   MechanicalCheckResult,
   CompletenessReport,
   PendingCrossProtocolRef,
+  ContractLayerInput,
+  ContractEntry,
+  ErrorResponseDef,
+  JSONSchema,
 } from '../model/types.js';
 import { decomposeStateMachines } from '../model/state-machines.js';
+import Ajv from 'ajv';
 
 export function checkCompleteness(
   model: SourceProtocolModel
@@ -53,6 +58,16 @@ export function checkCompleteness(
   // 4. 扩展校验规则（决策8 扩展段启用后的 7 条规则）
   // ----------------------------------------------------------------------
   checkExtendedRules(model, referenceIssues);
+
+  // ----------------------------------------------------------------------
+  // 5. E2.1：契约层 contracts[] schema 自检（ajv 编译）
+  // ----------------------------------------------------------------------
+  checkContractSchemas(model, referenceIssues);
+
+  // ----------------------------------------------------------------------
+  // 5b. E11：错误契约一致性校验（唯一性 / 命名 / 异常路径↔契约闭合 / 5xx warning）
+  // ----------------------------------------------------------------------
+  checkErrorContracts(model, fieldIssues, referenceIssues);
 
   // ----------------------------------------------------------------------
   // 5. 跨协议引用收集（① 阶段标记，①-C 阶段在 composition-checker 校验）
@@ -777,7 +792,226 @@ function checkExtendedRules(
 }
 
 // ============================================================================
+// E2.1：契约层 contracts[] schema 自检（ajv 编译）
+// ============================================================================
+
+/**
+ * 校验契约层 contracts[] 中每条 requestSchema / responseSchema 是否可被 ajv 编译。
+ * - 触发条件：model.contractInput?.contracts 非空
+ * - 失败：在 referenceIssues 推 errorIssue（schema 不可编译）
+ * - 成功：issues 不变
+ *
+ * 注：ajv 自检是「schema 是否合法」的最强信号；contract 引用 transition.action 但
+ * action 不存在另由 ID 交叉引用段负责（不重复）。
+ */
+function checkContractSchemas(
+  model: SourceProtocolModel,
+  issues: CheckIssue[]
+): void {
+  const contractInput: ContractLayerInput | undefined = model.contractInput;
+  const contracts = contractInput?.contracts;
+  if (!contracts || contracts.length === 0) return;
+
+  const ajv = new Ajv({ allErrors: true, strict: false });
+
+  for (let i = 0; i < contracts.length; i++) {
+    const c = contracts[i];
+    if (c.requestSchema) {
+      compileOrReport(ajv, c.requestSchema, `contracts[${i}].requestSchema`, c.interface, issues);
+    }
+    if (c.responseSchema) {
+      compileOrReport(ajv, c.responseSchema, `contracts[${i}].responseSchema`, c.interface, issues);
+    }
+    if (c.preconditions) {
+      checkExpressionSchemas(ajv, c.preconditions, `contracts[${i}].preconditions`, c.interface, issues);
+    }
+    if (c.postconditions) {
+      checkExpressionSchemas(ajv, c.postconditions, `contracts[${i}].postconditions`, c.interface, issues);
+    }
+    if (c.sideEffects) {
+      checkExpressionSchemas(ajv, c.sideEffects, `contracts[${i}].sideEffects`, c.interface, issues);
+    }
+  }
+}
+
+function compileOrReport(
+  ajv: Ajv,
+  schema: JSONSchema,
+  path: string,
+  iface: string,
+  issues: CheckIssue[]
+): void {
+  try {
+    ajv.compile(schema as object);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    issues.push(
+      errorIssue(
+        `契约层 contracts[${iface}] 的 ${path} 不可被 ajv 编译：${msg}`,
+        `contractInput.contracts.${iface}.${path}`,
+        iface
+      )
+    );
+  }
+}
+
+function checkExpressionSchemas(
+  ajv: Ajv,
+  exprs: import('../model/types.js').SchemaExpression[],
+  path: string,
+  iface: string,
+  issues: CheckIssue[]
+): void {
+  for (let i = 0; i < exprs.length; i++) {
+    const e = exprs[i];
+    if (e.kind === 'json-schema' && e.schema) {
+      compileOrReport(ajv, e.schema, `${path}[${i}].schema`, iface, issues);
+    }
+  }
+}
+
+// ============================================================================
 // 跨协议引用收集（① 阶段标记，①-C 阶段校验）
+// ============================================================================
+
+// ============================================================================
+// E11：错误契约一致性校验
+// ============================================================================
+
+/**
+ * E11 错误契约检查（新增，纯机械）：
+ * - R-E1：协议内 errorCode 唯一（异常路径 + 契约 errorResponses 合并去重）
+ * - R-E2：errorCode 命名规范 `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`（snake_case）
+ * - R-E3：异常路径声明的 errorCode 至少被一个契约 errorResponses 引用（否则 error）
+ * - R-E4：契约引用的 errorCode 必须能在异常路径中找到（否则 error；可追溯到 EX-id）
+ * - R-E5：httpStatus 5xx → warning（system_fault 不建模为业务错误）
+ * 全部为纯机械检查，老协议无 errorCode 列 / 无 errorResponses 段则整段降级空跑。
+ */
+export function checkErrorContracts(
+  model: SourceProtocolModel,
+  fieldIssues: CheckIssue[],
+  referenceIssues: CheckIssue[]
+): void {
+  const exceptions: ExceptionPathDef[] = model.derivable.exceptions ?? [];
+  const contracts: ContractEntry[] = model.contractInput?.contracts ?? [];
+
+  // 收集异常路径声明的 errorCode
+  const exceptionErrorCodes: string[] = [];
+  for (const ex of exceptions) {
+    if (ex.errorCode) exceptionErrorCodes.push(ex.errorCode);
+  }
+
+  // 收集契约层 errorResponses 内的 errorCode
+  const contractEntries: Array<{ iface: string; er: ErrorResponseDef }> = [];
+  for (const c of contracts) {
+    for (const er of c.errorResponses ?? []) {
+      contractEntries.push({ iface: c.interface, er });
+    }
+  }
+  const contractErrorCodes: string[] = contractEntries.map((c) => c.er.errorCode);
+
+  // ── R-E1：错误码唯一性（每个错误码在各上下文内仅出现一次）──
+  // 唯一性分别检查两个上下文：
+  // - 异常路径 declarations（errorCode 字段）：同一 errorCode 在异常路径中只能声明一次
+  // - 契约 errorResponses references：同一 errorCode 在契约 errorResponses 中只能引用一次
+  // 注：异常路径声明 + 契约引用同一 errorCode 是合法模式（不在此处报 duplicate）
+  const seenException = new Set<string>();
+  const exceptionDup: string[] = [];
+  for (const code of exceptionErrorCodes) {
+    if (seenException.has(code)) exceptionDup.push(code);
+    else seenException.add(code);
+  }
+  if (exceptionDup.length > 0) {
+    for (const code of Array.from(new Set(exceptionDup))) {
+      referenceIssues.push(
+        errorIssue(
+          `异常路径中错误码 "${code}" 重复声明（同一 errorCode 只能声明一次）`,
+          'derivable.exceptions.errorCode',
+          code
+        )
+      );
+    }
+  }
+
+  const seenContract = new Set<string>();
+  const contractDup: string[] = [];
+  for (const code of contractErrorCodes) {
+    if (seenContract.has(code)) contractDup.push(code);
+    else seenContract.add(code);
+  }
+  if (contractDup.length > 0) {
+    for (const code of Array.from(new Set(contractDup))) {
+      referenceIssues.push(
+        errorIssue(
+          `契约 errorResponses 中错误码 "${code}" 重复声明（同一 errorCode 在契约中只能引用一次）`,
+          'contractInput.contracts.errorResponses',
+          code
+        )
+      );
+    }
+  }
+
+  // ── R-E2：命名规范 snake_case ──
+  const snakeCaseRe = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
+  const allDeclared = new Set<string>();
+  for (const code of exceptionErrorCodes) allDeclared.add(code);
+  for (const code of contractErrorCodes) allDeclared.add(code);
+  for (const code of allDeclared) {
+    if (!snakeCaseRe.test(code)) {
+      referenceIssues.push(
+        errorIssue(
+          `错误码 "${code}" 命名不符合 snake_case 规范（正则: ^[a-z][a-z0-9]*(_[a-z0-9]+)*$）`,
+          'derivable.exceptions.errorCode',
+          code
+        )
+      );
+    }
+  }
+
+  // ── R-E3：异常路径声明的每个 errorCode 必须被至少一个契约引用 ──
+  const referencedCodes = new Set(contractErrorCodes);
+  for (const code of Array.from(new Set(exceptionErrorCodes))) {
+    if (!referencedCodes.has(code)) {
+      referenceIssues.push(
+        errorIssue(
+          `异常路径声明的错误码 "${code}" 未在契约层 contracts[].errorResponses 引用（缺少契约覆盖）`,
+          'derivable.exceptions.errorCode',
+          code
+        )
+      );
+    }
+  }
+
+  // ── R-E4：契约引用的 errorCode 必须能在异常路径中找到 ──
+  const declaredCodes = new Set(exceptionErrorCodes);
+  for (const code of Array.from(new Set(contractErrorCodes))) {
+    if (!declaredCodes.has(code)) {
+      referenceIssues.push(
+        errorIssue(
+          `契约层 contracts[].errorResponses 引用了协议未声明的错误码 "${code}"（异常路径缺失 errorCode）`,
+          'contractInput.contracts.errorResponses',
+          code
+        )
+      );
+    }
+  }
+
+  // ── R-E5：httpStatus 5xx warning（system_fault 不建模为业务错误）──
+  for (const e of contractEntries) {
+    if (e.er.httpStatus >= 500) {
+      fieldIssues.push(
+        warningIssue(
+          `契约 ${e.iface} 的 errorResponses[${e.er.id}] httpStatus=${e.er.httpStatus} 属 5xx；5xx 是系统故障（system_fault），不应建模为业务错误`,
+          `contractInput.contracts.${e.iface}.errorResponses`,
+          e.er.errorCode
+        )
+      );
+    }
+  }
+}
+
+// ============================================================================
+// 跨协议引用收集（① 阶段标记，①-C 阶段在 composition-checker 校验）
 // ============================================================================
 
 /**

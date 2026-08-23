@@ -1,0 +1,40 @@
+{
+    "ok": true,
+    "data": {
+        "service": "protochain-feedback",
+        "rootDir": "/work/hsk-ng/modeling",
+        "remainingSensitiveEnvKeys": [],
+        "scrubbedKeyNames": [
+            "[REDACTED-FAMILY] ADMIN_TOKEN=<0 bytes>",
+            "[REDACTED-FAMILY] LEGACY_TOKEN=<0 bytes>",
+            "[REDACTED-FAMILY] SERVER_TOKENFILE=<0 bytes>",
+            "[REDACTED-FAMILY] TRAE_JWT_TOKEN_PATH=<0 bytes>",
+            "[REDACTED-FAMILY] TRAE_USER_CLOUDIDE_TOKEN_BLOB=<0 bytes>",
+            "[REDACTED-FAMILY] CFS_TOKEN=<0 bytes>"
+        ],
+        "sensitiveFieldNames": [
+            "tokenEnv",
+            "secretEnv",
+            "passwordEnv",
+            "keyEnv",
+            "usernameEnv",
+            "certPath",
+            "keyPath",
+            "caPath",
+            "token",
+            "secret",
+            "password",
+            "apiKey"
+        ],
+        "tokenEnvAbsent": true,
+        "osProcResidualKeys": [
+            "ADMIN_TOKEN",
+            "LEGACY_TOKEN",
+            "SERVER_TOKENFILE",
+            "TRAE_JWT_TOKEN_PATH",
+            "TRAE_USER_CLOUDIDE_TOKEN_BLOB",
+            "CFS_TOKEN"
+        ],
+        "osProcResidualDisclosure": "OS/kernel \u5185\u5b58\uff1broot \u6216\u540c uid \u53ef\u8bfb\uff1b\u4e0d\u5f71\u54cd\u5b50\u8fdb\u7a0b env"
+    }
+}

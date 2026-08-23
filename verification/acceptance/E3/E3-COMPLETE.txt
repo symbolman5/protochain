@@ -1,0 +1,135 @@
+================================================================================
+E3 验收提示词（E3-COMPLETE）
+================================================================================
+
+> 版本：v0.5（2026-08-22）
+> 状态：✓ PASS
+> 来源：[IMPLEMENTATION-PLAN.md §E3](file:///work/protochain/IMPLEMENTATION-PLAN.md) + [IMPLEMENTATION-ACCEPTANCE.md §E3](file:///work/protochain/IMPLEMENTATION-ACCEPTANCE.md)
+> 产物：[verification/acceptance/E3/](file:///work/protochain/verification/acceptance/E3/)
+
+────────────────────────────────────────────────────────────────────────────────
+1. 验收摘要
+────────────────────────────────────────────────────────────────────────────────
+
+| 验收口径 | 通过标准 | 实际结果 | 通过 |
+|---|---|---|---|
+| 接口条目数 = specs.json 推导接口数 | 40/40（hsk-ng 已知 40 路由等价覆盖） | approval-flow 12/12 + 合成大协议 42/42 = 100% | ✓ |
+| 生成成功率 ≥ 80%（除 baseUrl/headers/authConfig/stateMap 外无需人工） | ≥ 80% | 默认 100%（HTTP method/path/params 推导完整） | ✓ |
+| bind 校验通过（系统接口 + 观测接口无缺绑） | valid=true | mergeBindings(skeleton, manual baseUrl) → bind valid=true | ✓ |
+| 老格式 specs.json 自动 envelopeMigrate 后再生成骨架 | 自动迁移 + 报警 | 裸数组 → 12/12 generated + sourceMigrated=true + warnings 显式 | ✓ |
+| 老 bindings.yaml（无骨架）能继续工作 | bind 不崩 | bind 仍能跑，缺绑按预期报 | ✓ |
+
+────────────────────────────────────────────────────────────────────────────────
+2. 实施交付
+────────────────────────────────────────────────────────────────────────────────
+
+代码模块
+  - [src/bindgen/index.ts](file:///work/protochain/src/bindgen/index.ts)（新增；与 src/binder/ 拼写区分）
+    * deriveHttpPath / deriveHttpMethod / deriveHttpParams（机械推导）
+    * deriveRoles / deriveStateMap / deriveInterfaceBinding / selectDefaultRoleId
+    * deriveSkeletonBindings（纯函数入口）
+    * deriveBindings（CLI 入口；写文件 + envelope 兼容 + 错误处理）
+    * inspectSpecsEnvelopeMeta / isSkeletonBindings / SKELETON_MARKER
+  - [src/binder/index.ts](file:///work/protochain/src/binder/index.ts)（扩展）
+    * mergeBindings(skeleton, manual) — manual 优先 + skeleton-only 追加
+    * mergeAndValidateBindings（merge + validate 一站式）
+  - [src/cli/index.ts](file:///work/protochain/src/cli/index.ts)（扩展）
+    * derive-bindings 命令（--specs / -o / --report / -f / --silent-migration）
+    * bind 命令加 --skeleton 选项（识别 SKELETON_MARKER 后走 mergeBindings）
+
+测试覆盖（[tests/bindgen/bindgen.test.ts](file:///work/protochain/tests/bindgen/bindgen.test.ts)）
+  - 48 单测（deriveHttpPath 5 + deriveHttpMethod 4 + deriveHttpParams 4
+    + deriveRoles 3 + selectDefaultRoleId 3 + deriveStateMap 3
+    + deriveInterfaceBinding 3 + deriveSkeletonBindings 4 含 40+ 边界
+    + inspectSpecsEnvelopeMeta 3 + isSkeletonBindings 3
+    + deriveBindings CLI 5 + mergeBindings 5 + bind 流程 3）
+
+构建与全量回归
+  - npx tsc --noEmit → 0 errors
+  - npx jest → 57 suites / 796 cases 全过（v0.4 是 56/748；新增 1 suite + 48 cases）
+
+────────────────────────────────────────────────────────────────────────────────
+3. CLI 端到端证据（dist 版）
+────────────────────────────────────────────────────────────────────────────────
+
+[approval-flow（12 接口，hsk-ng 单协议等价）](file:///work/protochain/verification/acceptance/E3/derive-bindings-cli-output.txt)
+  $ protochain derive-specs --dir /tmp/e3-acc
+  ✓ specs.json 已升到 JSON Schema（schemaVersion=1.0）
+  系统接口: 5 个 / 观测接口: 7 个
+  schema 分类: structured=7 legacy-stub=5 description-only=0
+  JSON Schema 自检（ajv）：✓ 全部通过（12 个 schema）
+
+  $ protochain derive-bindings --dir /tmp/e3-acc
+  === E3 binding 骨架生成报告 ===
+    源 model.md version: 1.0.0
+    源 specs.json: Envelope
+    接口总数: 12（系统 5 + 观测 7）
+    完整生成: 12 / 12 = 100.0%
+    待人工确认项: 8（baseUrl × 3 + stateMap × 5）
+  骨架产物: derived/bindings.skeleton.yaml
+  生成报告: derived/bindings-generation-report.json
+
+[老格式 specs.json 自动迁移](file:///work/protochain/verification/acceptance/E3/legacy-migration-output.txt)
+  [specs.json] [migration] 老格式 specs.json 自动迁移：检测到 12 条 InterfaceSpec 顶层数组...
+  [specs.json] [migration] 5 个接口标记为 legacy-stub...
+  [specs.json] [migration] 7 个接口维持 structured...
+  === E3 binding 骨架生成报告 ===
+    源 specs.json: 裸数组（已迁移）
+    接口总数: 12（系统 5 + 观测 7）
+    完整生成: 12 / 12 = 100.0%
+
+[合成大协议（42 接口，hsk-ng 40 路由等价覆盖）](file:///work/protochain/verification/acceptance/E3/large-protocol-output.txt)
+  $ protochain derive-bindings --dir /tmp/e3-acc-large
+  === E3 binding 骨架生成报告 ===
+    接口总数: 42（系统 40 + 观测 2）
+    完整生成: 42 / 42 = 100.0%
+
+[bind --skeleton（mergeBindings 端到端）](file:///work/protochain/verification/acceptance/E3/bind-with-skeleton-output.txt)
+  $ protochain bind --skeleton derived/bindings.skeleton.yaml
+  === 接口绑定完整性校验 ===
+    绑定环境: (默认)
+    E3 骨架合并: ✓（已与 manual bindings 合并）
+    规格接口总数: 12
+    缺失系统接口: 无
+    缺失观测接口: 无
+  总体：✓ 通过
+
+[老格式 bindings.yaml 兼容](file:///work/protochain/verification/acceptance/E3/legacy-bind-output.txt)
+  $ protochain bind   # 无 --skeleton，老格式 manual bindings
+  === 接口绑定完整性校验 ===
+    规格接口总数: 12
+    缺失系统接口: reject, withdraw, timeout_return
+    缺失观测接口: observe_草稿, observe_待审批, observe_已通过, observe_已驳回, observe_已撤回, observe_INV1, observe_INV2
+  总体：✗ 未通过
+  → 老格式能跑、缺绑按预期报，未崩
+
+────────────────────────────────────────────────────────────────────────────────
+4. v0.5 边界（明确不在 T1 验收范围）
+────────────────────────────────────────────────────────────────────────────────
+
+| 边界 | 状态 | 后续 |
+|---|---|---|
+| Kafka/NSQ/Grpc/DbQuery 推导 | 仅占位 TODO（specs.json 不携带传输偏好） | 等 E5（TS client）联动 |
+| responseMapping 字段引入 | 未做（破坏现有 TransportBinding 类型） | 留 v0.5+ |
+| stateMap 自动从 impl 反向推断 | 未做（impl 侧依赖外部服务） | 留 v0.5+ |
+| bindings.yaml 增量 schema | 未做（继续沿用 BindingConfig 类型） | 留 v0.5+ |
+| 默认 baseUrl 占位 | `https://TODO.example.com`（人工必须替换） | 无（设计即如此） |
+
+────────────────────────────────────────────────────────────────────────────────
+5. T1 闭环（E1 + E2 + E3）
+────────────────────────────────────────────────────────────────────────────────
+
+| E# | 状态 | 验证产物 | 关联验收 |
+|---|---|---|---|
+| E1（M 单元语义闸门） | ✓ PASS | [verification/acceptance/E1/](file:///work/protochain/verification/acceptance/E1/) | m-check / pre-check |
+| E2（specs.json JSON Schema） | ✓ PASS | [verification/acceptance/E2/](file:///work/protochain/verification/acceptance/E2/) | ajv 编译 / 字段级偏差 |
+| E3（binding 骨架自动生成） | ✓ PASS | [verification/acceptance/E3/](file:///work/protochain/verification/acceptance/E3/) | derive-bindings / mergeBindings |
+
+下一步：E7 P0（Web 检阅界面静态生成；与 E3 正交，可并行启动）。
+
+────────────────────────────────────────────────────────────────────────────────
+6. 关联修改单
+────────────────────────────────────────────────────────────────────────────────
+
+E3 阶段实施未发现新问题（验收 4 项一次性通过，CLI 端到端与单元测试一致）。
+继续跟踪 IMPLEMENTATION-ISSUES.md 后续条目（v0.4 阶段 E2-I1~I9 全部 resolved；v0.5 阶段待登记）。

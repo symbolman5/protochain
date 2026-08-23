@@ -223,6 +223,26 @@ export interface InvariantDef {
   // 扩展
   declaredBy: string;                  // 必须是共识方角色ID
   invariantClass: 'intra_protocol' | 'cross_protocol' | 'cross_instance';  // 扩展
+  // ── E4 扩展：数据级不变量声明 ──
+  /**
+   * 校验层级（默认 state-machine，由遗留 model.md 无 level 列时补全）：
+   * - state-machine：进入 TLA+ 形式化验证；
+   * - data：数据级（SQL/存储相关），不进 TLA+，归入 formal-report.json 的
+   *         `deferredToSqlValidation` 段，由 verify 的 SQL 校验路径承接。
+   */
+  level?: 'state-machine' | 'data';
+  /**
+   * 数据级不变量的"实现侧责任"分类：
+   * - storage：保证来自数据库（schema 唯一约束/外键/类型检查等）；
+   * - guard：保证来自业务代码守卫（impl.service.go 等）。
+   * 仅 level=data 时有效。
+   */
+  source?: 'storage' | 'guard';
+  /**
+   * 数据级不变量关联的存储表名（仅 level=data && source=storage 时必填）。
+   * 用于 verify 阶段生成"对该表该表达式的只读 SELECT"语句。
+   */
+  storageRef?: string;
 }
 
 export interface TimingDef {
@@ -253,6 +273,13 @@ export interface ExceptionPathDef {
   transitionIds: string[];
   /** 恢复策略 */
   recovery?: string;
+  /**
+   * E11：本异常路径对应的协议错误码（协议内唯一，snake_case）。
+   * - 命名规则：`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`
+   * - 必须至少被一个契约层 contracts[].errorResponses 引用（闭合校验由 checker 负责）
+   * 缺省视为兼容老协议（不报错）。
+   */
+  errorCode?: string;
 }
 
 // ============================================================================
@@ -318,14 +345,65 @@ export interface SubsidiaryEntityDef {
 }
 
 /**
- * 契约层 —— 从 Markdown 解析后仅用于跨层一致性校验
- * 不作为模型的可编辑部分（设计决策：契约是从规格投影的产物）
+ * 契约层 —— 从 Markdown 解析后用于一致性校验与 specifier 字段消费（E2.1）
+ *
+ * 设计决策：
+ * - parties / expectedInformationFields 仍作为「校验输入」存在（E2 设计）
+ * - contracts[] 是 E2.1 新增字段：每项对应一个 transition 派生接口，
+ *   声明 requestSchema / responseSchema（结构化），specifier 据此消费
  */
 export interface ContractLayerInput {
   /** 契约方（角色 ID 列表） */
   parties: string[];
   /** 期望的信息契约条目（用于校验推导出的契约是否覆盖） */
   expectedInformationFields?: string[];
+  /**
+   * E2.1：每个接口的契约条目（按 interface 名字 / sourceId 对齐）
+   * - requestSchema / responseSchema 形态符合 JSON Schema（与 InterfaceSpec 同子集）
+   * - preconditions / postconditions / sideEffects 可为结构化表达式或字符串列表
+   * 缺省 → 不影响 specifier（兼容老协议）
+   */
+  contracts?: ContractEntry[];
+}
+
+/**
+ * E11：单条接口错误响应契约（挂在契约层 contracts[].errorResponses）
+ * - id: 契约内唯一（如 ERR-01）
+ * - errorCode: 协议错误码，与 ExceptionPathDef.errorCode 对齐
+ * - httpStatus: 期望传输状态码（4xx 业务错误；5xx 不在此声明，见 system_fault 边界）
+ * - bodySchema: 错误体 JSON Schema（可被 ajv 编译）
+ */
+export interface ErrorResponseDef {
+  id: string;
+  errorCode: string;
+  httpStatus: number;
+  bodySchema?: JSONSchema;
+  description?: string;
+}
+
+/**
+ * E2.1：契约层单条接口契约
+ * - interface: 与 transition.action 对齐的契约名（如 register / bind）
+ * - requestSchema / responseSchema: 结构化字段定义（可被 ajv 编译）
+ * - preconditions / postconditions / sideEffects: 可选结构化表达式（数组形式）
+ * - errorResponses: E11 接口错误响应契约列表（每个 errorCode 引用异常路径声明的错误码）
+ */
+export interface ContractEntry {
+  interface: string;
+  /** 对应的源 ID（如 transitionId）；缺省等于 interface */
+  sourceId?: string;
+  requestSchema?: JSONSchema;
+  responseSchema?: JSONSchema;
+  preconditions?: SchemaExpression[];
+  postconditions?: SchemaExpression[];
+  sideEffects?: SchemaExpression[];
+  /**
+   * E11：接口错误响应契约（specifier 投影到 InterfaceSpec.errorResponses）
+   * 缺省视为兼容老协议（不报错）。
+   */
+  errorResponses?: ErrorResponseDef[];
+  /** 可选描述 */
+  description?: string;
 }
 
 /**
@@ -365,7 +443,12 @@ export interface CompositionModel {
 export interface CompositionMetadata {
   systemName: string;
   version: string;
-  changeType: 'protocol_tweak' | 'paradigm_renegotiation';
+  /** changeType 枚举（B1-I2 修复）：扩展接受 protocol_extend
+   *  - protocol_tweak：常规修订（小版本号变更）
+   *  - paradigm_renegotiation：范式重协商（破坏性，需要共识）
+   *  - protocol_extend：协议扩展（迭代新增子协议；hsk-ng 迭代 17 引入）
+   */
+  changeType: 'protocol_tweak' | 'paradigm_renegotiation' | 'protocol_extend';
   previousVersion?: string;
 }
 
@@ -636,8 +719,22 @@ export interface FormalReport {
   toolExecuted?: boolean;
   /** 不变量验证结果 */
   invariantResults: InvariantVerifyResult[];
+  /**
+   * E4：被推迟到 SQL 校验的数据级不变量列表（level=data）。
+   * 这些项不进入 TLA+；verify 阶段由 SQL 校验路径（src/sqlcheck/）承接。
+   */
+  deferredToSqlValidation?: DeferredSqlInvariant[];
   /** 验证时间戳 */
   verifiedAt: string;
+}
+
+/** E4：被推迟到 SQL 校验路径的数据级不变量条目（formal-report.json 段） */
+export interface DeferredSqlInvariant {
+  invariantId: string;
+  expression: string;
+  source: 'storage' | 'guard';
+  storageRef?: string;
+  scopeStateIds?: string[];
 }
 
 export interface InvariantVerifyResult {
@@ -695,6 +792,20 @@ export interface InterfaceSpec {
   schemaKind?: 'structured' | 'legacy-stub' | 'description-only';
   /** 降级理由列表（如 'guard 自然语言未机械提取'） */
   schemaDegradedReasons?: string[];
+  /**
+   * E2.1：契约层字段消费来源标识（contracts[] 中对应的 interface 名）。
+   * 若该字段非空，表示该 spec 的 requestSchema/responseSchema 由契约层提供
+   * （schemaKind 通常为 structured）。缺省表示按 guard 派生（兼容老协议）。
+   */
+  contractSource?: string;
+  /**
+   * E11：接口错误响应契约（契约层 contracts[].errorResponses 投影）。
+   * - 字段形态：每个错误响应含 id/errorCode/httpStatus/bodySchema
+   * - binder 校验时「specs.errorResponses[].errorCode 必须全部命中 bindings.errorMap」
+   * - verifier 按 errorMap 归类（命中/未命中/5xx → system_fault）
+   * 缺省视为兼容老协议（无错误契约）。
+   */
+  errorResponses?: ErrorResponseDef[];
 }
 
 // ============================================================================
@@ -981,8 +1092,77 @@ export interface VerificationReport {
   authoritative: AuthoritativeVerification;
   /** 可选辅助层：自然语言摘要（AI 生成，非权威） */
   auxiliary?: AuxiliarySummary;
+  // ── E4 扩展：数据级不变量 SQL 校验 + by-design 段 ──
+  /**
+   * 数据级不变量 SQL 校验结果段：
+   * - ran：是否实际跑了 SQL 校验（false 表示 --skip-sql-check 或 storage 未连接）；
+   * - skippedReason：跳过的具体原因；
+   * - items：每条数据级不变量的校验结果。
+   */
+  sqlInvariantCheck?: SqlInvariantCheckReport;
+  /**
+   * 由 impl 守卫保证、工具链不可消除的不可测试项（level=data && source=guard）。
+   * E4 验收要求：在 verify 报告中显式列出，不静默。
+   */
+  byDesignNotTestedByToolchain?: ByDesignNotTestedItem[];
+  /**
+   * E11：错误契约验证汇总（按错误码 / 未命中 / 系统故障聚合）。
+   * - matched：errorCode → 命中 errorMap 且符合契约/期望 的次数
+   * - unmapped：未命中 errorMap 的错误响应（error_mismatch 偏差）
+   * - systemFault：5xx/504 计数（不建模为业务错误，可观测可报告）
+   * 缺省视为兼容老协议。
+   */
+  errorSummary?: ErrorSummary;
   /** 验证时间戳 */
   verifiedAt: string;
+}
+
+/**
+ * E11：错误契约验证汇总段。
+ * - matched：errorCode → 命中 errorMap 次数
+ * - unmapped：未命中的错误响应（按 action 记）
+ * - systemFault：5xx/504 系统故障计数（与业务错误分开统计）
+ * - expected：场景层声明的期望错误（scenario.expectedError）统计
+ */
+export interface ErrorSummary {
+  matched: Record<string, number>;
+  unmapped: Array<{ action: string; httpStatus?: number; protocolErrorCode?: string; systemCode?: unknown }>;
+  systemFault: number;
+  /** 期望错误命中：场景层 expectedError 命中数；用于"错误场景断言通过"统计 */
+  expected?: Record<string, number>;
+}
+
+/** E4：SQL 校验报告 */
+export interface SqlInvariantCheckReport {
+  /** 是否真实跑了 SQL 校验 */
+  ran: boolean;
+  /** 跳过原因（ran=false 时必填） */
+  skippedReason?: string;
+  /** 真实执行的连接（Dsn / Driver 脱敏形式；不暴露密码） */
+  connection?: { driver: 'mysql' | 'postgres'; host: string; port: number; database: string };
+  /** 各条 SQL 校验条目 */
+  items: SqlInvariantCheckItem[];
+}
+
+/** E4：单条 SQL 校验条目 */
+export interface SqlInvariantCheckItem {
+  invariantId: string;
+  passed: boolean;
+  /** 生成的只读 SELECT 语句（脱敏后或原样，记日志用） */
+  sql: string;
+  /** 实际查询结果行数（COUNT/SUM 等聚合返回 1 行；UNIQUE 违反返回违反计数） */
+  rowCount?: number;
+  /** 失败的说明（如：UNIQUE 违反 → 重复行数） */
+  failureReason?: string;
+}
+
+/** E4：by-design 段条目（impl 守卫保证，工具链不可消除） */
+export interface ByDesignNotTestedItem {
+  invariantId: string;
+  expression: string;
+  reason: string;
+  /** 守卫所在的源码位置（人工登记，例如 "service.go L695-707"） */
+  guardLocation?: string;
 }
 
 export interface AuthoritativeVerification {
@@ -1029,8 +1209,20 @@ export interface Deviation {
   expected: string;
   /** 实际值 */
   actual: string;
-  /** 偏差类型 */
-  kind: 'state_mismatch' | 'invariant_violation' | 'timing_violation' | 'missing_action' | 'field_mismatch';
+  /**
+   * 偏差类型。
+   * - state_mismatch / invariant_violation / timing_violation / missing_action / field_mismatch：原有
+   * - error_mismatch（E11）：错误响应未命中 errorMap（业务错误未声明或字段名不匹配）
+   * - unexpected_error（E11）：该步场景期望成功，但实际收到业务错误
+   */
+  kind:
+    | 'state_mismatch'
+    | 'invariant_violation'
+    | 'timing_violation'
+    | 'missing_action'
+    | 'field_mismatch'
+    | 'error_mismatch'
+    | 'unexpected_error';
   /** 路径内失败步骤索引（0-based；setup 阶段为 -1） */
   stepIndex?: number;
   /** 传输层状态码（HTTP 等） */
@@ -1542,6 +1734,20 @@ export interface BindingEnvironment {
   roles?: Record<string, Partial<RoleBinding>>;
 }
 
+/** E11：错误映射条目：协议错误码 → 真实系统错误表达 */
+export interface ErrorMapEntry {
+  /** 期望 HTTP 状态码（4xx 业务错误；缺省不校验） */
+  httpStatus?: number;
+  /** 真实系统错误码（缺省 = 协议错误码） */
+  systemCode?: string;
+  /** 错误体中承载错误码的字段路径（如 code / err.code / msg.code） */
+  bodyField?: string;
+  /** 系统错误码值（与 systemCode 不同名时使用；缺省 = systemCode） */
+  bodyFieldValue?: string;
+  /** 非 HTTP 传输（kafka/nsq 消息）内的错误码字段路径 */
+  messageField?: string;
+}
+
 export interface BindingConfig {
   roles: Record<string, RoleBinding>;
   interfaces: InterfaceBinding[];
@@ -1552,6 +1758,14 @@ export interface BindingConfig {
    * 如 { S1: "offline", S2: "online" }。缺省时仅接受状态 ID / 状态名。
    */
   stateMap?: Record<string, string>;
+  /**
+   * E11：错误映射表（与 stateMap 同构）。
+   * - 协议错误码（异常路径声明）→ 真实系统错误表达
+   * - binder 校验 specs.errorResponses[].errorCode 必须命中此处（缺失即 valid=false）
+   * - verifier 按此判定错误响应是否符合契约
+   * 缺省视为兼容老协议。
+   */
+  errorMap?: Record<string, ErrorMapEntry>;
   /** 多环境绑定：默认环境名（bind/verify 未指定 --env 时使用） */
   defaultEnv?: string;
   /** 环境覆盖表：共享 roles/interfaces，每个环境覆盖角色 baseUrl 与 authConfig 等 */
@@ -1571,6 +1785,14 @@ export interface BindingValidationReport {
   missingSystem: string[];
   missingObservation: string[];
   warnings: string[];
+  /**
+   * E11：specs 中声明但 bindings.errorMap 未命中的 errorCode 列表。
+   * - 缺失即 valid=false（与"观测接口缺绑"同纪律）
+   * - 任何 errorCode 在 errorMap 中但未声明 → warning（可能残留）
+   */
+  unmappedErrorCodes?: string[];
+  /** E11：errorMap 中声明但 specs/异常路径未声明的 errorCode 列表（warning） */
+  extraErrorCodes?: string[];
 }
 
 // ============================================================================

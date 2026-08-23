@@ -1,0 +1,65 @@
+E6 Mock/Spy 自动生成 —— 验收完成
+
+═══════════════════════════════════════════════════════════════════════
+基线（验收阶段独立复跑）
+═══════════════════════════════════════════════════════════════════════
+  npx tsc --noEmit          → 0 errors
+  npx jest                 → 64 suites / 933 cases 全部通过
+  （T1 基线 59/899；本任务增量至 64/933。验收阶段修复 E5 引入的 jest 回归后全绿）
+
+═══════════════════════════════════════════════════════════════════════
+fixtures 来源决策（任务前置，必须记录）
+═══════════════════════════════════════════════════════════════════════
+  定案：fixtures 源 = model.md TRANSITIONS（derived/protocol-model.ts 同源数组）
+  依据（决策前已读三源）：
+    - templates/.../test-cases.schema.json 是空壳（仅 version）
+    - 实例 test-cases.json 为 {paths:[...]} 结构，无 expectedResults
+    - scenarios/*.yaml 无 expectedResponse / expectations 字段
+    → 三源均无可用 fixtures；TRANSITIONS 含 from→to+guard+effects，静态可机械消费，
+      与 protocol-model.ts 同源 → fixtures 与模型不漂移（模型改动→重推导→自动同步）
+
+═══════════════════════════════════════════════════════════════════════
+strangler-fig P1 端到端验收（无 impl 环境）
+═══════════════════════════════════════════════════════════════════════
+  1. generate-tests --emit=mock
+     → derived/test-tool/mocks.ts（fixtures + spy；来源 model.md v0.3.0）
+     → 每个 action 返回 fixtures 固定值（nextState + effects）+ calls[] 计数
+     → 导出 buildMockImplementation / getSpySnapshot / resetSpy
+  2. verify --mock --no-ai（连续两次）
+     → mock 模式：fixtures+spy 实现；用例 10/10 通过；spy 触发 5 个 action
+     → 一致性验证：✓ 通过 19/19（失败 0 / 跳过 0）
+     → SQL 校验（E4）: 通过 1 / 失败 7（by-design 段 7 项，与 E4 验收一致）
+     → 两次输出 sha256 一致：d67b67127f951ca31b25d3bd0287a670bdcf56b03412fa47a4dab4577e3885ca
+  3. mock 返回值与 fixtures 完全一致
+     → buildMockImplementation 静态查 TRANSITIONS（list[0].to / .effects）
+     → verify --mock 逐路径断言 nextState===transition.to → 全绿即证明一致
+
+═══════════════════════════════════════════════════════════════════════
+确定性说明（E6-I2）
+═══════════════════════════════════════════════════════════════════════
+  - --no-ai：两次输出 byte-level 一致（sha256 相同）→ 无 AI 随机性
+  - 默认（config.ai 启用时）：AI 摘要措辞随机 → 两次 sha256 不等；
+    AI 摘要标注「非权威」，确定性承诺覆盖工具链核心输出（--no-ai 域）
+
+═══════════════════════════════════════════════════════════════════════
+代码改动汇总
+═══════════════════════════════════════════════════════════════════════
+  - src/testtool/mock.ts（新建）    buildMockImplementation / runMockVerification / spy
+  - src/testgen/index.ts            generateMockCode（--emit=mock → mocks.ts）
+  - src/verifier/index.ts           mockMode（verify --mock 模型层契约一致性）
+  - src/cli/index.ts                generate-tests --emit=mock / verify --mock
+
+═══════════════════════════════════════════════════════════════════════
+单测覆盖
+═══════════════════════════════════════════════════════════════════════
+  - tests/testtool/mock.test.ts   5 cases（deterministic 生成 / mock 全绿 / spy / 确定性 / reset）
+  - tests/transport/mock-connection.test.ts   mock 连接适配兼容
+
+═══════════════════════════════════════════════════════════════════════
+T2 进度
+═══════════════════════════════════════════════════════════════════════
+  3/4 PASS（E4 + E5 + E6 PASS；E7-P1 在线编辑留给独立任务）
+
+═══════════════════════════════════════════════════════════════════════
+结论：E6 PASS（v0.1；验收阶段补齐验收证据并复验通过）
+═══════════════════════════════════════════════════════════════════════

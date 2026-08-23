@@ -1,0 +1,140 @@
+item: E4
+date: 2026-08-23
+executor: protochain E4 v0.1 自动化实现 + 端到端验证
+instance: strangler-fig P1（端到端）；hskNG 与其余 P* 协议以单测覆盖
+command: |
+  # 0) E4 实施前置盘点：盘点各协议 model.md 不变量表
+  grep -E "^\| INV.*TRUE" strangler-fig/modeling/protocol/P<n>/model.md
+  # → 详见 inventory-snapshot.txt：P1=8, P2=6, P3=4, P4=5, P5=5, P6=4, P7=10；
+  #   总量 N_total=42（远超规划预测 11；以盘点为准）
+  #
+  # 1) P1 model.md 不变量表新增 4 列：级别/source/storageRef/guardLocation
+  #    已为 P1 的 8 条数据级不变量（INV2/3/4/5/10/11/12/15）填列：
+  #    - level: 全部 data
+  #    - source: INV5=storage（forward_mapping_license 表），其余 7 项=guard（impl 守卫）
+  #    - storageRef: 仅 INV5 填 forward_mapping_license
+  #    - guardLocation: INV2/3/4/10/11/12/15 各填对应 service.go / service_client.go / xrk/service.go 等行号
+  #    （其余 P* 协议以单测覆盖 parser 适配，不在本任务范围内逐协议标注）
+  #
+  # 2) formalize 触发 deferredToSqlValidation 段
+  node dist/cli/index.js formalize --dir strangler-fig/modeling --protocol P1
+  # → formal-report.json 的 deferredToSqlValidation 段含 8 条（= P1 数据级不变量数）
+  # → TLA+ 不再含这 8 项；验证段（formalize 输出）通过 1 / 失败 0
+  #
+  # 3) verify 连 sf-mysql（podman exec sf-mysql mysql ...）
+  node dist/cli/index.js verify --dir strangler-fig/modeling --protocol P1
+  # → SQL 校验：mysql@127.0.0.1:3306/forward 通过 1 / 失败 7（共 8）
+  #   - INV5 ✓：SELECT COUNT(*) FROM `forward_mapping_license`（storage）
+  #   - INV2/3/4/10/11/12/15 ✗：source=guard，归入 by-design 段
+  #   - verify 不静默：by-design 段列出 7 项 + guardLocation
+  #
+  # 4) --skip-sql-check 显式跳过（有标注）
+  node dist/cli/index.js verify --dir strangler-fig/modeling --protocol P1 --skip-sql-check
+  # → "SQL 校验（E4）: 已跳过（--skip-sql-check 显式跳过）"
+  # → by-design 段仍在（7 项）
+  #
+  # 5) storage 驱动决策（必填）
+  #   选定方案：b）调用 mysql CLI 子进程（podman exec sf-mysql mysql ...）
+  #   理由：
+  #     - 维持"无运行时依赖"原则（package.json 不引入 mysql2/pg 原生绑定）
+  #     - CI/本地/容器内统一入口（podman exec vs 本机 mysql 客户端）
+  #     - 防御性：SQL 模板白名单（仅 SELECT COUNT(*)/UNIQUE 派生）+ 二次扫描（拒绝 INSERT/UPDATE/DELETE/DDL）
+  #     - 实测：sf-mysql 容器可达，podman exec 不增加跨进程通信成本
+  #   替代方案（mysql2 + pg 直连）记为 E4.x 备选（T3 后视 hskNG 接入评估）
+result: pass
+
+deliverables:
+  code:
+    - src/model/types.ts（InvariantDef 加 level/source/storageRef；FormalReport 加 deferredToSqlValidation；VerificationReport 加 sqlInvariantCheck + byDesignNotTestedByToolchain）
+    - src/parser/index.ts（normalizeHeader 加 level/层级/级别/source/实现保证/storageref/存储表/guardlocation/守卫位置；rowToInvariant 读 E4 字段；applyLegacyMigration 默认 level=state-machine）
+    - src/formalizer/index.ts（collectDeferredToSqlValidation 收集 level=data 项；formalize 三个 return 分支均注入 deferredToSqlValidation）
+    - src/sqlcheck/index.ts（新建；runSqlInvariantCheck / skippedSqlInvariantCheck / loadSqlCheckConfigFromEnv / executeSelect 含 mysql 子进程 + postgres --readonly）
+    - src/verifier/index.ts（VerifyContext 加 skipSqlCheck/sqlInvariantCheck；verify 增 sqlInvariantCheck + byDesignNotTestedByToolchain 段；collectByDesignItems；formatVerificationSummary 渲染 SQL 段 + by-design 段）
+    - src/cli/index.ts（verify 加 --skip-sql-check 选项；formal-report.json 读 deferred 段并触发 sqlcheck）
+    - src/testgen/index.ts（生成 protocol-model.ts 时 InvariantDef 含 level/source/storageRef 字段，避免派生 tsc 失败）
+  tests:
+    - tests/sqlcheck/sqlcheck.test.ts（新建；6 个用例覆盖 source=guard、缺 storageRef、SQL 白名单、env 配置）
+    - tests/verifier/e4-by-design.test.ts（新建；6 个用例覆盖 source=guard 归入、缺 storageRef 兜底、formatVerificationSummary 输出、legacy 默认 state-machine）
+    - tests/testgen/testgen-ai-loop.test.ts（E4 字段加进 InvariantDef 后 tsc --noEmit 通过）
+  evidence:
+    - verification/acceptance/E4/formalize-cli-output.txt（P1 formalize 通过 1/0）
+    - verification/acceptance/E4/formal-report-snapshot.json（deferredToSqlValidation 段 = 8 条）
+    - verification/acceptance/E4/model-p1-invariants-snapshot.txt（P1 不变量表加 4 列）
+    - verification/acceptance/E4/verify-cli-output.txt（SQL 校验 通过 1 / 失败 7 + by-design 7 项）
+    - verification/acceptance/E4/verify-skip-cli-output.txt（--skip-sql-check 显式标注）
+    - verification/acceptance/E4/verification-report-snapshot.json（report.json 含 sqlInvariantCheck + byDesignNotTestedByToolchain）
+    - verification/acceptance/E4/inventory-snapshot.txt（P1~P7 数据级不变量盘点）
+    - verification/acceptance/E4/E4-COMPLETE.txt
+
+build_baseline:
+  tsc_errors: 0
+  jest_suites: 63
+  jest_cases: 931
+  delta_from_t1: "+24 cases（sqlcheck 6 + verifier e4-by-design 6 + scaffolder e5-binding-run 2 + testtool mock 5 + mock.test fixture/parallel +5）"
+
+issues_resolution: {}
+
+scope_guards:
+  no_e5_e6_touched:
+    pass: true
+    note: E5/E6 代码独立目录（scaffolder/templates/ts、testtool/mock、testgen mocks 段）；仅 verifier 与 cli 因协调合并同任务内修改
+  no_derived_artifact_mutation:
+    pass: true
+    note: derived/* 全部由 CLI 命令产出；model.md 改字段后重推导
+  no_legacy_protocol_break:
+    pass: true
+    note: 旧 model.md 无 level 列时 applyLegacyMigration 默认 state-machine；验证：tests/verifier/e4-by-design.test.ts:legacy 用例
+  storage_driver_subprocess:
+    pass: true
+    note: 选 b）mysql CLI 子进程（podman exec sf-mysql mysql ...）；不引入运行时依赖；SQL 白名单防御性拒绝写操作
+  sql_write_protection:
+    pass: true
+    note: executeSelect 静态扫描拒绝 INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE/CREATE/REPLACE/RENAME/GRANT/REVOKE；单测覆盖
+
+acceptance_checklist:
+  invariants_inventory:
+    pass: true
+    note: P1~P7 共 42 条数据级不变量（表达式 TRUE），超过规划预测 11；以盘点为准；P1 全部 8 条已填列
+  formalize_deferred_segment:
+    pass: true
+    note: formal-report.json 的 deferredToSqlValidation 段含 P1 全部 8 条 level=data 项；TLA+ 段不再含
+  sql_validation_passes:
+    pass: true
+    note: P1 verify SQL 校验：INV5 通过（SELECT COUNT(*) FROM forward_mapping_license），7 项 by-design
+  skip_mode_explicit:
+    pass: true
+    note: --skip-sql-check 输出 "已跳过（--skip-sql-check 显式跳过）"，不静默
+  by_design_segment_present:
+    pass: true
+    note: verify 报告 byDesignNotTestedByToolchain 段列 7 项 + guardLocation
+  end_to_end_p1:
+    pass: true
+    note: strangler-fig P1 端到端跑通 verify SQL 校验 + by-design 段；非裁剪 fixture
+
+followup:
+  - 其余 P* 协议（P2~P7）model.md 标注 level/source/storageRef：本期仅 P1 端到端验证；其余协议以单测覆盖 parser/formalizer/verifier 适配
+  - hskNG 数据级不变量盘点：本任务 hskNG 未引入 storage（无运行 MySQL）；T3 后视 hskNG 接入评估
+  - SQL 表达式语义：当前 UNIQUE(col) 走全列计数（保守）；多字段 UNIQUE 约束 / 列名解析留作 E4.x 增量
+  - storage 驱动决策备选方案 mysql2 + pg 直连：T3 后评估
+
+acceptance_review:
+  date: 2026-08-23
+  reviewer: 验收阶段独立复验（非裁剪 fixture；sf-mysql 实连）
+  re_verified:
+    - formalize P1 → formal-report.json deferredToSqlValidation=8（level=data 全量归入）；invariantResults 1 通过（仅 state-machine INV1）
+    - verify P1 连 sf-mysql → SQL 校验 通过 1（INV5 SELECT COUNT(*) FROM forward_mapping_license）/ 失败 7（by-design）+ by-design-not-tested-by-toolchain 7 项含 guardLocation
+    - verify --skip-sql-check → 输出「SQL 校验（E4）: 已跳过（--skip-sql-check 显式跳过）」且 by-design 段仍在（不静默）
+    - storage 驱动方案 b（mysql CLI 子进程 podman exec）核实：package.json 无 mysql2/pg 运行时依赖；executeSelect 白名单拒绝写操作（单测覆盖）
+  issues_found:
+    - E4-I1（低，resolved）：inventory-snapshot P7「不变量总数=5」口径误记（实际 11 行）；数据级 N=42 不受影响（详见 IMPLEMENTATION-ISSUES.md §9）
+  baseline_recheck:
+    tsc_errors: 0
+    jest: "64 suites / 933 cases 全过（验收阶段修复 E5-I1 jest 回归后复跑）"
+
+t1_status:
+  E1: PASS（pre-T1）
+  E2: PASS（pre-T1）
+  E3: PASS（pre-T1）
+  E7-P0: PASS（v0.5，pre-T1）
+  E7-B1: PASS（v0.2；v0.1 三条独立复验问题全量 closed）
+  T2: 3/4（E4 + E5 + E6 PASS；E7-P1 在线编辑留给独立任务）

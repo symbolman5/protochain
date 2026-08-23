@@ -92,6 +92,127 @@ export function parseCompositionContent(
 }
 
 // ----------------------------------------------------------------------------
+// B1-I2 修复：宽松 YAML 解析（composition.md 段内含 `{...}: ...` / 多行 / 中英混排）
+// ----------------------------------------------------------------------------
+//
+// 设计动机：composition.md 的"跨协议不变量/跨协议时序/外部依赖/观测接口/对象
+// 状态切面/安全前提"等段的 YAML 含长 prose（如 expression=`forall op in {...}: ...`、
+// checkMethod 多行含 `,` `:`），js-yaml 严格解析会抛错（"Nested mappings are not
+// allowed in compact mappings" 等）。
+//
+// 解决：在 parseSubItemsByHeading 之前对 YAML 文本做"宽松化预处理"——识别已知的
+// prose 字段（`expression` / `checkMethod` / `description` / `rule` /
+// `assumption` / `impactIfViolated`），把它们转为 literal block scalar（`|`）形式
+// 后再 parseYaml()。
+//
+// 边界：
+// - 已声明的枚举字段（`complexity` / `dependencyType` / `direction` / `readOnly`）
+//   严格 YAML 解析不动；如值非法仍由各 parser 校验抛错
+// - 字段名白名单（PROSE_KEYS）只在本模块内增长；新增字段需在 PR review 显式列出
+
+/** prose 字段名白名单（值允许含特殊字符；预处理为 literal block scalar） */
+const PROSE_KEYS = new Set([
+  'name',
+  'expression',
+  'checkMethod',
+  'description',
+  'rule',
+  'assumption',
+  'impactIfViolated',
+  'queryObservationInterfaceId', // 可选字段，单行 prose
+  'permissionBoundary',
+  'syncSemantics',
+]);
+
+/**
+ * 将 YAML 代码块文本中的 prose 字段值转为 literal block scalar（`|`）
+ *
+ * 算法（按行扫描）：
+ * 1. 遇 `^(\s*)(<key>):\s*(.*)$` 且 key 在 PROSE_KEYS：
+ *    - 若行尾有非空内容（单行值）：用单引号包裹
+ *    - 若行尾为空：把后续缩进 ≥ key 缩进 + 2 的连续行收集为 block scalar，改写为 `|\n <lines>`
+ * 2. 其它行原样保留
+ *
+ * 注：缩进保持与原 key 一致；block scalar 末尾换行由 yaml 包自动 trim。
+ */
+export function preprocessYamlProse(yamlText: string): string {
+  const lines = yamlText.split('\n');
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const m = line.match(/^(\s*)([A-Za-z_][\w-]*):\s*(.*)$/);
+    if (m && PROSE_KEYS.has(m[2])) {
+      const indent = m[1];
+      const key = m[2];
+      const inline = m[3];
+      // B1-I2 修复：判定是否多行值——看紧接下一非空行是否比 key 缩进更深。
+      // 若是，按 literal block scalar 处理（inline 作为首行 + 续行）；否则按单行值单引号包裹。
+      let isMultiline = false;
+      for (let j = i + 1; j < lines.length; j++) {
+        const peek = lines[j];
+        if (peek.trim() === '') continue; // 跳过空行
+        // 缩进比较：peek 的前导空白数 > key 的前导空白数 → 多行值
+        const peekIndent = peek.match(/^\s*/)?.[0].length ?? 0;
+        if (peekIndent > indent.length) {
+          isMultiline = true;
+        }
+        break;
+      }
+      if (isMultiline) {
+        // 多行值：转为 literal block scalar
+        const blockLines: string[] = inline ? [inline] : [];
+        let j = i + 1;
+        while (j < lines.length) {
+          const child = lines[j];
+          // 空行：属于 block 内容
+          if (child.trim() === '') {
+            blockLines.push('');
+            j++;
+            continue;
+          }
+          // 缩进 > key 缩进：属于本 key 的 block 内容
+          const childIndentLen = child.match(/^\s*/)?.[0].length ?? 0;
+          if (childIndentLen > indent.length) {
+            // 去掉最小缩进（保留 child 内部相对缩进）
+            blockLines.push(child.slice(indent.length + 2)); // 去掉 key 的缩进 + 2 个额外缩进（YAML block scalar 要求）
+            j++;
+            continue;
+          }
+          // 缩进 ≤ key 缩进且非空：遇到下一同级/上级 key，结束
+          break;
+        }
+        // 输出 block scalar（YAML literal block：所有内容至少比 key 多 2 缩进）
+        const blockBaseIndent = ' '.repeat(indent.length + 2);
+        out.push(`${indent}${key}: |`);
+        for (const b of blockLines) {
+          if (b === '') {
+            // 空行直接保留（YAML block scalar 内空行用缩进的换行表示）
+            out.push(blockBaseIndent);
+          } else {
+            // 非空行：保留去除最小缩进后的内容 + 前置缩进
+            out.push(blockBaseIndent + b);
+          }
+        }
+        i = j;
+      } else if (inline !== '') {
+        // 单行值：单引号包裹
+        out.push(`${indent}${key}: '${inline.replace(/'/g, "''")}'`);
+        i++;
+      } else {
+        // 显式空值
+        out.push(line);
+        i++;
+      }
+    } else {
+      out.push(line);
+      i++;
+    }
+  }
+  return out.join('\n');
+}
+
+// ----------------------------------------------------------------------------
 // 段落定位辅助
 // ----------------------------------------------------------------------------
 
@@ -131,9 +252,14 @@ function parseCompositionMetadata(sections: Section[]): CompositionMetadata {
     );
   }
   const changeType = raw.changeType as string | undefined;
-  if (changeType !== 'protocol_tweak' && changeType !== 'paradigm_renegotiation') {
+  // B1-I2 修复：changeType 枚举扩展接受 protocol_extend（hsk-ng 迭代 17 引入）
+  if (
+    changeType !== 'protocol_tweak' &&
+    changeType !== 'paradigm_renegotiation' &&
+    changeType !== 'protocol_extend'
+  ) {
     throw new ParseError(
-      `系统元数据 changeType 必须是 protocol_tweak 或 paradigm_renegotiation，实际为 ${changeType}`,
+      `系统元数据 changeType 必须是 protocol_tweak / paradigm_renegotiation / protocol_extend，实际为 ${changeType}`,
       '系统元数据'
     );
   }
@@ -264,7 +390,9 @@ function parseCrossInvariants(sections: Section[]): CrossInvariantDef[] {
         checkMethod: requireString(r, 'checkMethod', '跨协议不变量'),
         complexity,
       };
-    }
+    },
+    // B1-I2 修复：跨协议不变量含 expression/checkMethod prose 字段
+    preprocessYamlProse
   );
 }
 
@@ -290,7 +418,9 @@ function parseCrossTiming(sections: Section[]): CrossTimingDef[] {
         span: asStringArray(r.span, `跨协议时序.${id}.span`),
         boundMs: typeof boundMs === 'number' ? boundMs : undefined,
       };
-    }
+    },
+    // B1-I2 修复：跨协议时序含 rule prose
+    preprocessYamlProse
   );
 }
 
@@ -327,7 +457,9 @@ function parseExternalDependencies(sections: Section[]): ExternalDependencyDef[]
       const qoi = optionalString(r, 'queryObservationInterfaceId');
       if (qoi) result.queryObservationInterfaceId = qoi;
       return result;
-    }
+    },
+    // B1-I2 修复：外部依赖含 syncSemantics/impactOnFailure prose
+    preprocessYamlProse
   );
 }
 
@@ -367,7 +499,9 @@ function parseObservationInterfaces(sections: Section[]): ObservationInterfaceDe
         readOnly: true as const,
         observable,
       };
-    }
+    },
+    // B1-I2 修复：观测接口含 scope/permissionBoundary prose
+    preprocessYamlProse
   );
 }
 
@@ -414,7 +548,9 @@ function parseObjectStateFacets(sections: Section[]): ObjectStateFacetDef[] {
         facets,
         crossFacetConstraints,
       };
-    }
+    },
+    // B1-I2 修复：对象状态切面含 description/expression prose（嵌套）
+    preprocessYamlProse
   );
 }
 
@@ -438,7 +574,9 @@ function parseSecurityAssumptions(sections: Section[]): SecurityAssumptionDef[] 
         description: requireString(r, 'description', `安全前提.${id}`),
         impactIfViolated: requireString(r, 'impactIfViolated', `安全前提.${id}`),
       };
-    }
+    },
+    // B1-I2 修复：安全前提含 assumption/description/impactIfViolated prose
+    preprocessYamlProse
   );
 }
 

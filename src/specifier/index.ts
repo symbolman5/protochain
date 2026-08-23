@@ -21,6 +21,7 @@ import type {
   ResourcePoolDef,
   SchemaExpression,
   JSONSchema,
+  ContractEntry,
 } from '../model/types.js';
 import {
   fieldsToObjectSchema,
@@ -63,14 +64,17 @@ export function specify(
   const derivable = model.derivable;
   let specs: InterfaceSpec[];
 
+  // E2.1：契约层 contracts[] → Map（degraded 模式也消费，但 schemaKind 仍 description-only）
+  const contractMap = buildContractMap(model.contractInput?.contracts);
+
   if (derivable.degraded) {
-    specs = specifyDegraded(model, options);
+    specs = specifyDegraded(model, options, contractMap);
   } else {
     specs = [];
 
-    // 1. 系统接口：从 transitions 推导
+    // 1. 系统接口：从 transitions 推导（E2.1：合并契约层 contracts[] 字段）
     for (const t of derivable.transitions) {
-      specs.push(deriveSystemInterface(t, derivable));
+      specs.push(deriveSystemInterface(t, derivable, contractMap));
     }
 
     // 2. 观测接口：从 states 推导（状态观测）
@@ -146,8 +150,12 @@ export type { SpecsEnvelope };
 
 function deriveSystemInterface(
   t: TransitionDef,
-  derivable: DerivableLayer
+  derivable: DerivableLayer,
+  contractMap?: Map<string, ContractEntry>
 ): InterfaceSpec {
+  // E2.1：契约层 contracts[] 按 interface / sourceId 对齐；命中即合并到 spec
+  const contract = findContractForTransition(t, contractMap);
+
   const inputs: FieldSpec[] = [];
 
   // currentState 输入（注意：transition 的 from 含多种状态时仍只产生一个 currentState 字段，
@@ -166,7 +174,8 @@ function deriveSystemInterface(
   // - guard 是单标识符谓词（form_valid / has_request 等自然语言谓词）→ guard params 不进 requestSchema 必填
   //   因为「谓词名」本身就是 guard 表达式，不应同时作为请求输入字段
   // - guard 是结构化表达式（`x > 0` / `count == 1 && flag` 等）→ guard params 进 requestSchema 必填
-  if (t.guard && !isIdentifierPredicate(t.guard)) {
+  // E2.1：契约层存在 requestSchema 时，guard params 跳过（契约字段是权威输入）
+  if (!contract?.requestSchema && t.guard && !isIdentifierPredicate(t.guard)) {
     const guardParams = extractGuardParams(t.guard);
     for (const param of guardParams) {
       const f: FieldSpec = {
@@ -198,38 +207,75 @@ function deriveSystemInterface(
   }
 
   // ── E2：构造 JSON Schema ──
-  const requestSchema: JSONSchema = fieldsToObjectSchema(requestInputFields, {
-    forceRequired: ['currentState'],
-  });
-  // currentState 强制 string + enum（E2-I7：currentState enum 含 `-` 占位 + 全部真实状态）
-  if (requestSchema.properties?.currentState) {
-    requestSchema.properties.currentState = {
-      ...stateEnumCurrent,
-      description: `当前状态（期望 ${t.from.join('/')}，可选枚举值: ${(stateEnumCurrent.enum ?? []).join('/')}）`,
-    };
+  // E2.1：契约层 requestSchema / responseSchema 优先覆盖 guard 派生 inputs
+  let requestSchema: JSONSchema;
+  let responseSchema: JSONSchema;
+  if (contract?.requestSchema) {
+    // 契约层声明 → 直接采用契约 schema；同步补齐 currentState 强制约束（保留协议层必备）
+    requestSchema = mergeContractRequestSchema(contract.requestSchema, stateEnumCurrent, t.from);
+    // 重置 inputs：契约 schema 已有 currentState（合并时补齐），不再重复
+    inputs.length = 0;
+    for (const f of schemaPropertiesToFields(requestSchema, `${t.action} 契约层请求字段`)) {
+      inputs.push(f);
+    }
+  } else {
+    requestSchema = fieldsToObjectSchema(requestInputFields, {
+      forceRequired: ['currentState'],
+    });
+    if (requestSchema.properties?.currentState) {
+      requestSchema.properties.currentState = {
+        ...stateEnumCurrent,
+        description: `当前状态（期望 ${t.from.join('/')}，可选枚举值: ${(stateEnumCurrent.enum ?? []).join('/')}）`,
+      };
+    }
   }
-  // nextState 强制 string + enum（E2-I7：不含 `-`，必须是真实状态 ID）
-  const responseSchema: JSONSchema = fieldsToObjectSchema(outputs, {
-    forceRequired: ['nextState'],
-  });
-  const stateEnumNext = stateEnumSchema(derivable.states);
-  if (responseSchema.properties?.nextState) {
-    responseSchema.properties.nextState = {
-      ...stateEnumNext,
-      description: `转移后状态（期望: ${t.to}，可选枚举值: ${(stateEnumNext.enum ?? []).join('/')}）`,
-    };
+
+  if (contract?.responseSchema) {
+    // 契约层声明 → 直接采用契约 schema；保留 nextState 强制约束
+    responseSchema = mergeContractResponseSchema(
+      contract.responseSchema,
+      stateEnumSchema(derivable.states),
+      t.to
+    );
+    outputs.length = 0;
+    for (const f of schemaPropertiesToFields(responseSchema, `${t.action} 契约层响应字段`)) {
+      outputs.push(f);
+    }
+  } else {
+    responseSchema = fieldsToObjectSchema(outputs, {
+      forceRequired: ['nextState'],
+    });
+    const stateEnumNext = stateEnumSchema(derivable.states);
+    if (responseSchema.properties?.nextState) {
+      responseSchema.properties.nextState = {
+        ...stateEnumNext,
+        description: `转移后状态（期望: ${t.to}，可选枚举值: ${(stateEnumNext.enum ?? []).join('/')}）`,
+      };
+    }
   }
 
   // ── E2：结构化前置/后置/副作用 ──
-  const preconditions: SchemaExpression[] = [];
-  const guardExpr = tryParseGuardSchema(t.guard);
-  if (guardExpr) {
-    preconditions.push(guardExpr);
-  } else if (t.guard) {
-    preconditions.push({ kind: 'description-only', description: t.guard });
+  let preconditions: SchemaExpression[] = [];
+  if (contract?.preconditions && contract.preconditions.length > 0) {
+    preconditions = contract.preconditions.slice();
+  } else if (!contract?.requestSchema && !contract?.responseSchema) {
+    // E2.1：契约层未提供 requestSchema/responseSchema 时，guard 派生补 precondition；
+    // 提供契约 schema 时契约层是权威，guard 不再被回填（避免因自然语言 guard 拉低 schemaKind）
+    const guardExpr = tryParseGuardSchema(t.guard);
+    if (guardExpr) {
+      preconditions.push(guardExpr);
+    } else if (t.guard) {
+      preconditions.push({ kind: 'description-only', description: t.guard });
+    }
   }
-  const postconditionExpressions: SchemaExpression[] = effectsToExpressions(t.effects);
-  const sideEffects: SchemaExpression[] = effectsToExpressions(t.effects);
+  const postconditionExpressions: SchemaExpression[] =
+    contract?.postconditions && contract.postconditions.length > 0
+      ? contract.postconditions.slice()
+      : effectsToExpressions(t.effects);
+  const sideEffects: SchemaExpression[] =
+    contract?.sideEffects && contract.sideEffects.length > 0
+      ? contract.sideEffects.slice()
+      : effectsToExpressions(t.effects);
 
   // ── E2：schemaKind 分类 + 降级理由 ──
   const schemaKind = classifySchemaKind({
@@ -241,8 +287,14 @@ function deriveSystemInterface(
   });
   const schemaDegradedReasons: string[] = [];
   if (schemaKind !== 'structured') {
-    if (t.guard && !guardExpr) {
+    if (!contract && t.guard && !tryParseGuardSchema(t.guard)) {
       schemaDegradedReasons.push(`guard 表达式 "${t.guard}" 未机械提取为 JSON Schema`);
+    }
+  }
+  // E2.1 标记：契约层字段消费来源
+  if (contract) {
+    if (schemaKind === 'structured') {
+      // 不增加 degradedReasons（structured 即合规）
     }
   }
 
@@ -262,6 +314,13 @@ function deriveSystemInterface(
     sideEffects,
     schemaKind,
     schemaDegradedReasons,
+    // E2.1：契约层来源标识（消费方可观测）
+    contractSource: contract?.interface,
+    // E11：接口错误响应契约（命中契约的 errorResponses 投影到 spec；无契约时为空）
+    errorResponses:
+      contract?.errorResponses && contract.errorResponses.length > 0
+        ? contract.errorResponses.slice()
+        : undefined,
   };
 }
 
@@ -278,6 +337,129 @@ function extractGuardParams(guard: string): string[] {
   ]);
   const identifiers = guard.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) ?? [];
   return Array.from(new Set(identifiers.filter((id) => !keywords.has(id.toLowerCase()))));
+}
+
+// ============================================================================
+// E2.1：契约层 contracts[] 消费（合并到 spec）
+// ============================================================================
+
+/**
+ * 把契约层 contracts[] 数组按 interface + sourceId 索引到 Map，便于 O(1) 查找。
+ * - 主键：interface 名
+ * - 同时记一份 sourceId → entry（当 transition.id 被显式声明时）
+ */
+function buildContractMap(contracts: ContractEntry[] | undefined): Map<string, ContractEntry> {
+  const map = new Map<string, ContractEntry>();
+  if (!contracts) return map;
+  for (const c of contracts) {
+    if (!c.interface) continue;
+    map.set(c.interface, c);
+    if (c.sourceId) {
+      map.set(c.sourceId, c);
+    }
+  }
+  return map;
+}
+
+/**
+ * 在契约 map 中按 transition 查找匹配条目（对齐 interface / sourceId / action / id）
+ * 优先级：sourceId 显式匹配 > interface == action > interface == transition.id
+ */
+function findContractForTransition(
+  t: TransitionDef,
+  map?: Map<string, ContractEntry>
+): ContractEntry | undefined {
+  if (!map) return undefined;
+  return (
+    (t.id && map.get(t.id)) ||
+    (t.action && map.get(t.action)) ||
+    undefined
+  );
+}
+
+/**
+ * 把契约层 requestSchema 与协议层 currentState 强制约束合并。
+ * - 契约 schema 已是权威；保留契约的 properties / required
+ * - currentState 必须存在（协议必备），其 schema 用协议层 stateEnum 强制
+ */
+function mergeContractRequestSchema(
+  contractSchema: JSONSchema,
+  stateEnum: JSONSchema,
+  fromStates: string[]
+): JSONSchema {
+  const merged: JSONSchema = {
+    ...contractSchema,
+    type: contractSchema.type ?? 'object',
+    properties: { ...(contractSchema.properties ?? {}) },
+    required: contractSchema.required ? [...contractSchema.required] : [],
+  };
+  // currentState 强制约束（协议必备）
+  merged.properties = merged.properties ?? {};
+  merged.properties.currentState = {
+    ...stateEnum,
+    description: `当前状态（期望 ${fromStates.join('/')}，可选枚举值: ${(stateEnum.enum ?? []).join('/')}）`,
+  };
+  if (!merged.required || !merged.required.includes('currentState')) {
+    merged.required = [...(merged.required ?? []), 'currentState'];
+  }
+  return merged;
+}
+
+function mergeContractResponseSchema(
+  contractSchema: JSONSchema,
+  stateEnum: JSONSchema,
+  toState: string
+): JSONSchema {
+  const merged: JSONSchema = {
+    ...contractSchema,
+    type: contractSchema.type ?? 'object',
+    properties: { ...(contractSchema.properties ?? {}) },
+    required: contractSchema.required ? [...contractSchema.required] : [],
+  };
+  // nextState 强制约束（协议必备）
+  merged.properties = merged.properties ?? {};
+  merged.properties.nextState = {
+    ...stateEnum,
+    description: `转移后状态（期望: ${toState}，可选枚举值: ${(stateEnum.enum ?? []).join('/')}）`,
+  };
+  if (!merged.required || !merged.required.includes('nextState')) {
+    merged.required = [...(merged.required ?? []), 'nextState'];
+  }
+  return merged;
+}
+
+/**
+ * JSONSchema properties → FieldSpec[]
+ * 仅取叶子字段（properties 嵌套递归暂不展开为多层结构，保持与现有 spec 形态一致）
+ */
+function schemaPropertiesToFields(
+  schema: JSONSchema,
+  baseDescription: string
+): FieldSpec[] {
+  if (!schema.properties) return [];
+  const requiredSet = new Set(schema.required ?? []);
+  return Object.entries(schema.properties).map(([name, prop]) => {
+    // 数组/对象/嵌套 → 描述形式保留
+    const type = fieldTypeFromJsonSchema(prop);
+    return {
+      name,
+      type,
+      description:
+        prop.description ?? `${baseDescription}（字段 ${name}，类型 ${type}）`,
+      required: requiredSet.has(name) || schema.required?.includes(name),
+    } satisfies FieldSpec;
+  });
+}
+
+function fieldTypeFromJsonSchema(s: JSONSchema): string {
+  if (s.type === 'array') {
+    const innerType = s.items?.type ?? 'any';
+    return `array<${innerType}>`;
+  }
+  if (s.type) return s.type;
+  // 无 type：若 enum 存在 → string 兜底
+  if (s.enum) return 'string';
+  return 'any';
 }
 
 // ============================================================================
@@ -381,13 +563,14 @@ function deriveInvariantObservationInterface(inv: InvariantDef): InterfaceSpec {
 
 function specifyDegraded(
   model: SourceProtocolModel,
-  options: SpecifyOptions
+  options: SpecifyOptions,
+  contractMap?: Map<string, ContractEntry>
 ): InterfaceSpec[] {
   const specs: InterfaceSpec[] = [];
   const derivable = model.derivable;
 
   for (const t of derivable.transitions) {
-    const spec = deriveSystemInterface(t, derivable);
+    const spec = deriveSystemInterface(t, derivable, contractMap);
     if (options.degradedAIAssist) spec.degradedAssist = true;
     // 退化模式下，默认标 description-only（model 来源未必可靠）
     spec.schemaKind = 'description-only';

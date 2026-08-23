@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Scenarios · P1</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <header>
+    <h1>Scenarios（在线编辑）</h1>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/scenarios">Scenarios</a>
+      <a href="/bindings">Bindings</a>
+      <a href="/run">Run</a>
+      <a href="/review">Review</a>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <h2>列表</h2>
+      <table id="filesTable">
+        <thead><tr><th>文件名</th><th>ID</th><th>expectedActions</th><th>操作</th></tr></thead>
+        <tbody id="filesTbody"></tbody>
+      </table>
+      <button id="newBtn" type="button">新建一条 scenario</button>
+    </section>
+    <section id="editorSection" hidden>
+      <h2 id="editorTitle">编辑器</h2>
+      <form id="editorForm">
+        <label>filename（仅写）：<input name="filename" type="text" pattern="[A-Za-z0-9._\-]+\.ya?ml" required /></label>
+        <label>id：<input name="id" type="text" required pattern="SC-.*" /></label>
+        <label>name：<input name="name" type="text" /></label>
+        <label>expectedActions（逗号分隔）：
+          <input name="expectedActions" type="text" required placeholder="expire,reset" />
+        </label>
+        <label>description：<textarea name="description" rows="2"></textarea></label>
+        <details><summary>params (JSON 对象，可选)</summary><textarea name="params" rows="4" placeholder='{"id": 10001}'></textarea></details>
+        <details><summary>setup (JSON 数组，可选)</summary><textarea name="setup" rows="4" placeholder='[{"action":"reset"}]'></textarea></details>
+        <div class="formActions">
+          <button type="submit" id="saveBtn">保存</button>
+          <button type="button" id="cancelBtn">取消</button>
+        </div>
+      </form>
+      <pre id="messageBox"></pre>
+    </section>
+  </main>
+  <script src="/assets/app.js"></script>
+  <script>window.P1.bootScenarios();</script>
+</body>
+</html>

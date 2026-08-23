@@ -1,0 +1,71 @@
+E5 transport 客户端生成（仅 TS）—— 验收完成
+
+═══════════════════════════════════════════════════════════════════════
+基线
+═══════════════════════════════════════════════════════════════════════
+  npx tsc --noEmit          → 0 errors
+  npx jest                 → 63 suites / 931 cases 全部通过
+
+═══════════════════════════════════════════════════════════════════════
+fixtures 来源决策（E6 任务的 E5 邻接）
+═══════════════════════════════════════════════════════════════════════
+  fixtures 源选 model.md TRANSITIONS（derived/protocol-model.ts 同源数组）
+  依据：
+    - test-cases.json 仅含 transitionIds/expectedActions（无 expectedResults）
+    - scenarios/*.yaml 同样不含 expectedResponse 字段
+    - TRANSITIONS 是 model.md 静态可机械消费的确定性数据
+    - 与 protocol-model.ts 同源 → fixtures 与模型不漂移
+
+═══════════════════════════════════════════════════════════════════════
+交付物
+═══════════════════════════════════════════════════════════════════════
+  1) src/scaffolder/templates/ts/ 三个模板（独立文件）：
+     - http.ts.tmpl   fetch 封装；HttpClient.invoke<T>(action, args)
+                     URL/init 构造（path 替换 + query 编码 + body 序列化 + auth 注入）
+                     错误归一化（HttpError 含 status + body）
+                     listActions() / diffActionNames() 校验辅助
+     - kafka.ts.tmpl  kafkajs 封装；send(topic, payload) + subscribe(topic, handler) + close()
+                     brokersEnv 走环境变量（解耦 secret 进代码）
+     - nsq.ts.tmpl    nsqjs 封装；publish(topic, payload) + subscribe(topic, handler) + close()
+                     nsqdTcpEnv 走环境变量
+  2) src/scaffolder/index.ts
+     - scaffoldInterfaces 加 lang='ts' | 'go' | 'java' 选项
+     - generateTsClients 按 bindings.transport.type 过滤（http/kafka/nsq）
+     - resolveTemplatesDir 兼容 ESM/CJS（__dirnameCompat 用 import.meta.url）
+  3) src/cli/index.ts
+     - generate-scaffold 加 --lang <lang> / --clients-output <path>
+     - --lang=go/java 拒绝（P1 红线：仅 ts）
+     - bindings.yaml 从 loadConfig 读取并应用 env（applyBindingEnvironment）
+
+═══════════════════════════════════════════════════════════════════════
+hskNG P1 端到端验收
+═══════════════════════════════════════════════════════════════════════
+  命令：node dist/cli/index.js generate-scaffold --lang=ts --protocol P1 \
+        --dir /work/hsk-ng/modeling --clients-output ./clients
+  产物：clients/http.ts（252 行）
+  bindings.yaml P1 协议接口数：28
+  http.ts 模板完整性：
+    ✓ class HttpClient
+    ✓ async invoke<T = unknown>(action: string, args: Record<string, unknown>)
+    ✓ listActions(): string[]
+    ✓ diffActionNames(clientActions, bindingActions) 为空集
+    ✓ method/path/params 序列化（URLSearchParams + JSON.stringify + encodeURIComponent）
+    ✓ auth 注入（bearer / api_key / basic）
+    ✓ 错误归一化（HttpError + status + body）
+    ✓ 模板占位 {PROTOCOL_NAME}/{PROTOCOL_VERSION} 已替换
+  tsc 编译：tsc --noEmit --target es2022 --module commonjs --types node → 0 errors
+
+═══════════════════════════════════════════════════════════════════════
+单测覆盖
+═══════════════════════════════════════════════════════════════════════
+  tests/scaffolder/e5-ts-clients.test.ts     5 cases（生成 / 多传输 / 缺 bindings / 占位 / http-only）
+  tests/scaffolder/e5-binding-run.test.ts    2 cases（端到端 dispatch + tsc 编译）
+
+═══════════════════════════════════════════════════════════════════════
+T2 进度
+═══════════════════════════════════════════════════════════════════════
+  3/4 PASS（E4 + E5 + E6 PASS；E7-P1 在线编辑留给独立任务）
+
+═══════════════════════════════════════════════════════════════════════
+结论：E5 PASS（v0.1；P1 范围仅 ts，Go/Java 见 E5.1/E5.2 增量项）
+═══════════════════════════════════════════════════════════════════════

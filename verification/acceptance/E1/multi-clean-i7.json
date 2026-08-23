@@ -1,0 +1,48 @@
+{
+  "passed": false,
+  "modelVersion": "1.0.0",
+  "modelName": "用户与配额协议",
+  "rules": [
+    {
+      "ruleId": "M001",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M002",
+      "passed": false,
+      "issues": [
+        {
+          "ruleId": "M002",
+          "severity": "error",
+          "elementId": "traffic_quota",
+          "elementType": "subsidiaryEntity",
+          "elementPath": "derivable (peer P2-另一个协议 同名)",
+          "message": "subsidiaryEntity ID \"traffic_quota\" 在子协议 P2-另一个协议 中已存在，跨协议 ID 必须唯一",
+          "suggestion": "将本协议的 \"traffic_quota\" 重命名为 \"用户与配额协议-traffic_quota\" 形式"
+        }
+      ]
+    },
+    {
+      "ruleId": "M003",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M004",
+      "passed": true,
+      "issues": []
+    },
+    {
+      "ruleId": "M005",
+      "passed": true,
+      "issues": []
+    }
+  ],
+  "summary": {
+    "errors": 1,
+    "warnings": 0,
+    "infos": 0
+  },
+  "checkedAt": "2026-08-22T11:46:47.167Z"
+}

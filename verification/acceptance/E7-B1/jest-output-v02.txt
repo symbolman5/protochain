@@ -1,0 +1,65 @@
+PASS tests/verifier/verifier-binding.test.ts
+PASS tests/verifier/binding-verify.test.ts
+PASS tests/webgen/composition.test.ts
+PASS tests/webgen/webgen.test.ts
+PASS tests/scaffolder/init-runner.test.ts
+PASS tests/integration/saas-real-e2e.test.ts
+PASS tests/specifier/specifier-e2.test.ts
+PASS tests/bindgen/bindgen.test.ts
+PASS tests/steps/specify-step-e2.test.ts
+PASS tests/composition-parser/composition-parser.test.ts
+PASS tests/casegen/casegen.test.ts
+PASS tests/mcheck.test.ts
+PASS tests/transport/mock-connection.test.ts
+PASS tests/formalizer/formalizer.test.ts
+PASS tests/integration/multi-protocol-e2e.test.ts
+PASS tests/exec-task/reasoner-redline.test.ts
+PASS tests/cross-formalizer/cross-formalizer.test.ts
+PASS tests/integration/binding-mechanism.test.ts
+PASS tests/implcheck/implcheck.test.ts
+PASS tests/checker/checker-extension.test.ts
+PASS tests/versioner/versioner.test.ts
+PASS tests/parser/parser-extension.test.ts
+PASS tests/contractor/contractor.test.ts
+PASS tests/differ/differ.test.ts
+PASS tests/reasoner/liveness-modes.test.ts
+PASS tests/parser/parser.test.ts
+PASS tests/composition-checker/composition-checker.test.ts
+PASS tests/formalizer/id-escape.test.ts
+PASS tests/cross-invariant-checker/cross-invariant-checker.test.ts
+PASS tests/testgen/testgen.test.ts
+PASS tests/verifier/verifier.test.ts
+PASS tests/integration/single-protocol-e2e.test.ts
+PASS tests/reasoner/reasoner.test.ts
+PASS tests/checker/checker.test.ts
+PASS tests/scaffolder/scaffolder.test.ts
+PASS tests/cross-casegen/cross-casegen.test.ts
+PASS tests/specifier/specifier.test.ts
+PASS tests/reasoner/se-isolation.test.ts
+PASS tests/specifier/load-e2i1-e2i5.test.ts
+PASS tests/casegen/casegen-ai-loop.test.ts
+PASS tests/cross-contractor/cross-contractor.test.ts
+PASS tests/specifier/specifier-extension.test.ts
+PASS tests/casegen/submachine-coverage.test.ts
+PASS tests/verifier/verifier-detail-fields.test.ts
+PASS tests/checker/checker-ai.test.ts
+PASS tests/verifier/field-level-compare.test.ts
+PASS tests/steps/check.test.ts
+PASS tests/ai/router.test.ts
+PASS tests/ai/generation-loop.test.ts
+PASS tests/reasoner/generation-loop-isolation.test.ts
+PASS tests/transport/nsq-executor.test.ts
+PASS tests/transport/http-executor.test.ts
+PASS tests/orchestrator/dag.test.ts
+PASS tests/exec-task/exec-task.test.ts
+PASS tests/transport/transport-router.test.ts
+PASS tests/transport/unimplemented-transport.test.ts
+PASS tests/binder/binder.test.ts
+PASS tests/testgen/testgen-ai-loop.test.ts
+PASS tests/testtool/testtool-runner.test.ts
+
+Test Suites: 59 passed, 59 total
+Tests:       899 passed, 899 total
+Snapshots:   0 total
+Time:        5.327 s, estimated 6 s
+Ran all test suites.

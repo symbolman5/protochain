@@ -1,0 +1,62 @@
+item: E2
+date: 2026-08-22
+executor: derive-specs / verify 自动运行
+instance: approval-flow (tests/fixtures/approval-flow.md, 类 hsk-ng 单协议)
+command: protochain derive-specs --dir <instance> && node gen-verification-report.mjs
+result: pass
+evidence:
+  - verification/acceptance/E2/new-format-specs.json (schemaVersion=1.0, structured=7 legacy-stub=5)
+  - verification/acceptance/E2/derive-specs-cli-output.txt (CLI 落盘输出)
+  - verification/acceptance/E2/legacy-migration-output.txt (老格式迁移报警)
+  - verification/acceptance/E2/legacy-migration-specs-snapshot.json (envelope + migrated=true)
+  - verification/acceptance/E2/verification-report-sample.json (含 2 条 field_mismatch)
+  - verification/acceptance/E2/issues-fix-evidence.txt (E2-I1~I9 修复后回归证据)
+  - verification/acceptance/E2/E2-I1-I9-fix-summary.txt (CLI 端到端确认)
+  - verification/acceptance/E2/scripts/gen-verification-report.mjs (演示脚本)
+  - src/specifier/{envelope,index,schema-builder,schema-validate,load}.ts
+  - src/verifier/{field-compare,index,binding-runner}.ts (enableFieldLevelCompare + legacyExpectedResponses)
+  - src/steps/specify.ts (ajv 自检 + 老格式兼容迁移 + 字段级开关透传)
+  - src/model/types.ts (扩展：JSONSchema + SchemaExpression + Deviation 字段级字段)
+  - src/cli/index.ts (loadSpecsOrMigrate + buildLegacyExpectedFromModel)
+  - templates/protocol-runner-instance/{executor-hooks.mjs,README.md} (移除 /work/... 硬编码路径)
+  - tests/specifier/specifier-e2.test.ts (16 单测)
+  - tests/specifier/load-e2i1-e2i5.test.ts (12 新单测：loadSpecsEnvelope + envelopeMigrate + classifySchemaKind 口径)
+  - tests/verifier/field-level-compare.test.ts (10 单测)
+  - tests/steps/specify-step-e2.test.ts (4 步骤级单测)
+  - npx tsc 0 errors
+  - npx jest 56 suites / 748 cases 全过（v0.3 是 735/736；pre-existing 失败已通过 E2-I9 修复）
+notes: |
+  v0.4 闭环 v0.3 验收遗留的 9 个问题（E2-I1 ~ E2-I9）：
+  - E2-I1 (高)：抽 src/specifier/load.ts 公共 helper；steps/verify.ts 与 verifier loadSpecs 走同一接
+    口；管线 verify 步骤透传 enableFieldLevelCompare + legacyExpectedResponses
+  - E2-I2 (中)：guard 单标识符 → legacy-stub；guard params 不入 requestSchema 必填；schemaKind 同步降级
+  - E2-I3 (中)：envelopeMigrate 复用 classifySchemaKind，迁移分类与 specifier 主路径一致
+  - E2-I4 (中)：CLI verify 注入 buildLegacyExpectedFromModel（从 model.contractInput.expectedInformationFields）
+  - E2-I5 (中)：envelopeMigrate 浅拷贝；损坏形态返回 migrated:false + envelope.parseError
+  - E2-I6 (低)：移除 specify() duck-type，返回纯 SpecsEnvelope
+  - E2-I7 (低)：stateEnum 拆分：nextState 仅真实状态 ID，currentState 含 `-` 占位
+  - E2-I8 (低)：移除 Deviation.kind 'schema_violation' 联合成员
+  - E2-I9 (低)：scaffolder 模板移除 /work/... 硬编码路径
+
+  E2 验收 4 项已全过：
+  ✓ ajv 编译 specs.json 全部通过
+  ✓ 抽查接口 requestSchema / responseSchema 非空
+  ✓ verify 报告含「字段 X：legacy=Y, impl=Z」业务字段级偏差
+  ✓ 老格式 specs.json 自动迁移 + kind="legacy-stub" 显式标记 + 无报错（损坏形态显式报错）
+followup: 无（E2-I4 部分值级三元组需 E2.1 落地 scenarios/*.yaml.expectedFields 数据源）
+re-acceptance: |
+  （2026-08-22，v0.4 修复后独立复验，result: pass）
+  1. npx tsc --noEmit → 0 errors
+  2. npx jest → 56 suites / 748 cases 全过（含 tests/specifier/load-e2i1-e2i5.test.ts 12 项）
+  3. derive-specs 端到端（/tmp/e2-acc, approval-flow）：structured=7 legacy-stub=5 description-only=0；ajv 自检 12/12
+  4. ajv 独立编译 24/24 通过（12 接口 × request/responseSchema）
+  5. 抽查：0 接口缺 type；submit guard=form_valid → preconditions[0].kind=legacy-stub、schemaKind=legacy-stub、
+     form_valid 不入 requestSchema（E2-I2）；nextState.enum 仅真实状态、currentState.enum 含 `-`（E2-I7）
+  6. gen-verification-report.mjs 重跑 → verification-report-sample.json 含 2 条 field_mismatch
+     （response.approverId: legacy=alice, impl=bob；response.decision: legacy=approved, impl=rejected）
+  7. 老格式迁移端到端（/tmp/e2-acc-legacy）：schemaVersion=1.0、migrated=true、migrationWarnings 显式、
+     输出全部接口 schema 完整（E2-I5 损坏形态另行抛错，见 load.ts）
+  8. 修复点代码核对：E2-I1（load.ts 公共 helper + steps/verify 透传）、E2-I3（envelopeMigrate 复用
+     classifySchemaKind）、E2-I5（浅拷贝 + parseError）、E2-I6（duck-type 移除）、E2-I8（schema_violation
+     移除）、E2-I9（templates 无 /work/... 硬编码）均落地
+  结论：E2 验收 4 项复验通过；E2-I1~I9 修复生效。

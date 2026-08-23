@@ -1,0 +1,405 @@
+__protochain_skeleton__: true
+generatedAt: 2026-08-22T12:40:56.104Z
+sourceModelVersion: 1.0.0
+sourceEnvelope: true
+sourceMigrated: false
+sourceMigrationWarnings: []
+defaultEnv: default
+roles:
+  client:
+    roleId: client
+    baseUrl: https://TODO.example.com
+    auth: none
+    headers: {}
+  server:
+    roleId: server
+    baseUrl: https://TODO.example.com
+    auth: none
+    headers: {}
+interfaces:
+  - action: action_001
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_001
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_002
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_002
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_003
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_003
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_004
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_004
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_005
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_005
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_006
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_006
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_007
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_007
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_008
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_008
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_009
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_009
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_010
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_010
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_011
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_011
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_012
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_012
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_013
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_013
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_014
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_014
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_015
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_015
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_016
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_016
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_017
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_017
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_018
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_018
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_019
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_019
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_020
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_020
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_021
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_021
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_022
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_022
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_023
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_023
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_024
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_024
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_025
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_025
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_026
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_026
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_027
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_027
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_028
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_028
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_029
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_029
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_030
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_030
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_031
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_031
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_032
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_032
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_033
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_033
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_034
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_034
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_035
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_035
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_036
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_036
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_037
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_037
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_038
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_038
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_039
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_039
+      params:
+        - logicalName: currentState
+          in: body
+  - action: action_040
+    roleId: client
+    transport:
+      type: http
+      method: POST
+      path: /action_040
+      params:
+        - logicalName: currentState
+          in: body
+  - action: observe_初始
+    roleId: client
+    transport:
+      type: http
+      method: GET
+      path: /observe_初始
+      params: []
+  - action: observe_终态
+    roleId: client
+    transport:
+      type: http
+      method: GET
+      path: /observe_终态
+      params: []
+stateMap:
+  S1: 初始
+  S2: 终态
+stats:
+  total: 42
+  system: 40
+  observation: 2
+  generated: 42
+  partial: 0
+  generationRate: 1
+  manualConfirmItems: 4
+warnings: []

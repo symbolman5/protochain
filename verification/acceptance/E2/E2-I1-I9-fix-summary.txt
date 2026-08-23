@@ -1,0 +1,28 @@
+$ /work/protochain/dist/cli/index.js derive-specs --dir /tmp/e2-fix-test
+
+✓ specs.json 已升到 JSON Schema（schemaVersion=1.0）；verify 默认启用字段级对比。
+规格推导：✓ 通过
+  schemaVersion: 1.0
+  系统接口: 5 个
+  观测接口: 7 个
+  schema 分类: structured=7 legacy-stub=5 description-only=0
+  JSON Schema 自检（ajv）：✓ 全部通过（12 个 schema）
+  接口列表（前5个）：
+    - [system] IF_SYS_T1 (schemaKind=legacy-stub) ← submit（submit）
+    - [system] IF_SYS_T2 (schemaKind=legacy-stub) ← approve（approve）
+    - [system] IF_SYS_T3 (schemaKind=legacy-stub) ← reject（reject）
+    - [system] IF_SYS_T4 (schemaKind=legacy-stub) ← withdraw（withdraw）
+    - [system] IF_SYS_T5 (schemaKind=legacy-stub) ← timeout_return（timeout_return）
+
+# Verify spec envelope + E2-I2/I3/I7 fixes:
+  schemaVersion: "1.0"
+  submit precondition: [{ "kind": "legacy-stub", "description": "guard 单标识符（form_valid）..." }]
+  submit schemaKind: "legacy-stub"
+  currentState enum contains '-': true
+  nextState enum contains '-': false
+
+# E2-I1: loadSpecsEnvelope + steps/verify.ts（自动解 Envelope，绑定模式不崩）
+# E2-I4: CLI verify 启动时注入 legacyExpectedResponses（数据源不再恒空）
+# E2-I5: 损坏 specs.json 抛显式错误；envelopeMigrate 浅拷贝不修改输入
+# E2-I6: specify() 返回纯 SpecsEnvelope（不再 duck-type filter/map/find）
+# E2-I9: scaffolder 模板移除 /work/protocoldriven 与 /work/protocol-runner 硬编码路径

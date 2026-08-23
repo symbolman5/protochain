@@ -1,0 +1,4 @@
+接口骨架已生成于 /work/hsk-ng/modeling/protocol/P1/impl-scaffold/interfaces.d.ts
+  接口数: 17
+  E5 transport clients 已生成于 /work/protochain/verification/acceptance/E5/clients/（仅含对应 transport 类型）
+下一步：开发者填充实现逻辑，然后运行 protochain check-impl

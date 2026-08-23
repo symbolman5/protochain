@@ -1,0 +1,16 @@
+[specs.json] [migration] 老格式 specs.json 自动迁移：检测到 12 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。
+[specs.json] [migration] 5 个接口标记为 legacy-stub（缺 JSON Schema 仅 name/type/description 三件套，请回到 model.md 增补契约层段）。
+[specs.json] [migration] 7 个接口维持 structured（recompute by classifySchemaKind）。
+=== E3 binding 骨架生成报告 ===
+  源 model.md version: 1.0.0
+  源 specs.json: 裸数组（已迁移）
+  ⚠ 老格式 specs.json 自动迁移完成（见 /tmp/e3-acc-legacy/derived/bindings.skeleton.yaml 顶部 sourceMigrationWarnings）
+  接口总数: 12（系统 5 + 观测 7）
+  完整生成: 12 / 12 = 100.0%
+  部分生成: 0
+  待人工确认项: 8（baseUrl × 3 + stateMap × 5）
+
+  骨架产物: /tmp/e3-acc-legacy/derived/bindings.skeleton.yaml
+  生成报告: /tmp/e3-acc-legacy/derived/bindings-generation-report.json
+
+下一步：在骨架上编辑 baseUrl / headers / authConfig / stateMap，然后运行 protochain bind --skeleton <path>

@@ -1,0 +1,1401 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-23T03:13:30.574Z",
+  "sourceModelVersion": "0.7.0",
+  "specs": [
+    {
+      "id": "IF_SYS_T1",
+      "kind": "system",
+      "sourceId": "register",
+      "name": "register",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "description": "节点名字",
+          "required": true
+        },
+        {
+          "name": "hostDomain",
+          "type": "string",
+          "description": "主机域名",
+          "required": true
+        },
+        {
+          "name": "nics",
+          "type": "array<object>",
+          "description": "网卡 IP 入口（1:N；单对简写 internalIp/publicIp）",
+          "required": false
+        },
+        {
+          "name": "internalIp",
+          "type": "string",
+          "description": "单网卡 IP 简写",
+          "required": false
+        },
+        {
+          "name": "publicIp",
+          "type": "string",
+          "description": "单网卡公网 IP 简写",
+          "required": false
+        },
+        {
+          "name": "tunnelPort",
+          "type": "integer",
+          "description": "tunnel 端口",
+          "required": false
+        },
+        {
+          "name": "httpPort",
+          "type": "integer",
+          "description": "HTTP 入口端口",
+          "required": false
+        },
+        {
+          "name": "httpsPort",
+          "type": "integer",
+          "description": "HTTPS 入口端口",
+          "required": false
+        },
+        {
+          "name": "managementPort",
+          "type": "integer",
+          "description": "管理端口",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（期望: S1，可选枚举值: S0/S1/S2/S3/S4）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "array<string>",
+          "description": "副作用描述",
+          "required": false
+        },
+        {
+          "name": "serverId",
+          "type": "string",
+          "description": "系统生成的节点 ID",
+          "required": true
+        },
+        {
+          "name": "ownerId",
+          "type": "string",
+          "description": "平台归属（owner_id）",
+          "required": true
+        },
+        {
+          "name": "state",
+          "type": "string",
+          "description": "节点状态机状态",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "description": "节点名字",
+          "required": true
+        },
+        {
+          "name": "hostDomain",
+          "type": "string",
+          "description": "主机域名",
+          "required": true
+        },
+        {
+          "name": "serverSecret",
+          "type": "string",
+          "description": "一次性明文密钥（仅下发一次）",
+          "required": true
+        }
+      ],
+      "precondition": "名字/域名/网卡IP入口完整 且 节点ID唯一 且 网卡入口归属账户活跃（若有）",
+      "postconditions": [
+        "创建节点记录（平台归属）+签发 server_secret（系统生成 serverId）"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）"
+          },
+          "name": {
+            "type": "string",
+            "description": "节点名字"
+          },
+          "hostDomain": {
+            "type": "string",
+            "description": "主机域名"
+          },
+          "nics": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "网卡 IP 入口（1:N；单对简写 internalIp/publicIp）"
+          },
+          "internalIp": {
+            "type": "string",
+            "description": "单网卡 IP 简写"
+          },
+          "publicIp": {
+            "type": "string",
+            "description": "单网卡公网 IP 简写"
+          },
+          "tunnelPort": {
+            "type": "integer",
+            "description": "tunnel 端口"
+          },
+          "httpPort": {
+            "type": "integer",
+            "description": "HTTP 入口端口"
+          },
+          "httpsPort": {
+            "type": "integer",
+            "description": "HTTPS 入口端口"
+          },
+          "managementPort": {
+            "type": "integer",
+            "description": "管理端口"
+          }
+        },
+        "required": [
+          "currentState",
+          "name",
+          "hostDomain"
+        ]
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S1，可选枚举值: S0/S1/S2/S3/S4）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用描述"
+          },
+          "serverId": {
+            "type": "string",
+            "description": "系统生成的节点 ID"
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "平台归属（owner_id）"
+          },
+          "state": {
+            "type": "string",
+            "description": "节点状态机状态"
+          },
+          "name": {
+            "type": "string",
+            "description": "节点名字"
+          },
+          "hostDomain": {
+            "type": "string",
+            "description": "主机域名"
+          },
+          "serverSecret": {
+            "type": "string",
+            "description": "一次性明文密钥（仅下发一次）"
+          }
+        },
+        "required": [
+          "nextState",
+          "serverId",
+          "ownerId",
+          "state",
+          "name",
+          "hostDomain",
+          "serverSecret"
+        ]
+      },
+      "preconditions": [
+        {
+          "kind": "description-only",
+          "description": "name 非空"
+        },
+        {
+          "kind": "description-only",
+          "description": "hostDomain 合法"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "register 转移完成"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "创建节点记录（平台归属）+签发 server_secret（系统生成 serverId）"
+        }
+      ],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "contractSource": "register"
+    },
+    {
+      "id": "IF_SYS_T2",
+      "kind": "system",
+      "sourceId": "bind",
+      "name": "bind",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4）",
+          "required": true
+        },
+        {
+          "name": "serverSecret",
+          "type": "string",
+          "description": "绑定密钥（一次性明文下发）",
+          "required": true
+        },
+        {
+          "name": "version",
+          "type": "string",
+          "description": "实例版本号",
+          "required": true
+        },
+        {
+          "name": "ports",
+          "type": "object",
+          "description": "实例静态端口信息",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（期望: S2，可选枚举值: S0/S1/S2/S3/S4）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "array<string>",
+          "description": "副作用描述",
+          "required": false
+        },
+        {
+          "name": "serverId",
+          "type": "string",
+          "description": "节点 ID",
+          "required": true
+        },
+        {
+          "name": "ownerId",
+          "type": "string",
+          "description": "平台归属",
+          "required": true
+        },
+        {
+          "name": "state",
+          "type": "string",
+          "description": "节点状态机状态",
+          "required": true
+        },
+        {
+          "name": "instanceToken",
+          "type": "string",
+          "description": "实例会话令牌（Bearer）",
+          "required": true
+        },
+        {
+          "name": "certPem",
+          "type": "string",
+          "description": "证书池匹配证书（PEM）",
+          "required": true
+        },
+        {
+          "name": "certKeyPem",
+          "type": "string",
+          "description": "证书私钥（PEM）",
+          "required": true
+        }
+      ],
+      "precondition": "serverId+server_secret 校验通过 且 静态信息完整",
+      "postconditions": [
+        "登记实例静态信息（version/端口），签发 instance_token，下发证书，启动心跳（report 合并）"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4）"
+          },
+          "serverSecret": {
+            "type": "string",
+            "description": "绑定密钥（一次性明文下发）"
+          },
+          "version": {
+            "type": "string",
+            "description": "实例版本号"
+          },
+          "ports": {
+            "type": "object",
+            "properties": {
+              "tunnelPort": {
+                "type": "integer"
+              },
+              "httpPort": {
+                "type": "integer"
+              },
+              "httpsPort": {
+                "type": "integer"
+              },
+              "managementPort": {
+                "type": "integer"
+              }
+            },
+            "description": "实例静态端口信息"
+          }
+        },
+        "required": [
+          "currentState",
+          "serverSecret",
+          "version",
+          "ports"
+        ]
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S2，可选枚举值: S0/S1/S2/S3/S4）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用描述"
+          },
+          "serverId": {
+            "type": "string",
+            "description": "节点 ID"
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "平台归属"
+          },
+          "state": {
+            "type": "string",
+            "description": "节点状态机状态"
+          },
+          "instanceToken": {
+            "type": "string",
+            "description": "实例会话令牌（Bearer）"
+          },
+          "certPem": {
+            "type": "string",
+            "description": "证书池匹配证书（PEM）"
+          },
+          "certKeyPem": {
+            "type": "string",
+            "description": "证书私钥（PEM）"
+          }
+        },
+        "required": [
+          "nextState",
+          "serverId",
+          "ownerId",
+          "state",
+          "instanceToken",
+          "certPem",
+          "certKeyPem"
+        ]
+      },
+      "preconditions": [
+        {
+          "kind": "description-only",
+          "description": "serverSecret 校验通过"
+        },
+        {
+          "kind": "description-only",
+          "description": "静态信息完整"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "bind 转移完成"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "登记实例静态信息（version/端口），签发 instance_token，下发证书，启动心跳（report 合并）"
+        }
+      ],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "contractSource": "bind"
+    },
+    {
+      "id": "IF_SYS_T3",
+      "kind": "system",
+      "sourceId": "goOffline",
+      "name": "goOffline",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S1）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：实例主动下线，停止上报"
+        }
+      ],
+      "precondition": "TRUE",
+      "postconditions": [
+        "实例主动下线，停止上报"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S1，可选枚举值: S0/S1/S2/S3/S4）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：实例主动下线，停止上报"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（TRUE）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "实例主动下线，停止上报"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "实例主动下线，停止上报"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_SYS_T4",
+      "kind": "system",
+      "sourceId": "disable",
+      "name": "disable",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S3）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：状态置停用，中止会话"
+        }
+      ],
+      "precondition": "管理员权限",
+      "postconditions": [
+        "状态置停用，中止会话"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S3，可选枚举值: S0/S1/S2/S3/S4）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：状态置停用，中止会话"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：管理员权限"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "状态置停用，中止会话"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "状态置停用，中止会话"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_SYS_T5",
+      "kind": "system",
+      "sourceId": "enable",
+      "name": "enable",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S3）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S2）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：状态置在线（实例重新绑定/上报恢复）"
+        }
+      ],
+      "precondition": "管理员权限",
+      "postconditions": [
+        "状态置在线（实例重新绑定/上报恢复）"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S3，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S2，可选枚举值: S0/S1/S2/S3/S4）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：状态置在线（实例重新绑定/上报恢复）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：管理员权限"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "状态置在线（实例重新绑定/上报恢复）"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "状态置在线（实例重新绑定/上报恢复）"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_SYS_T6",
+      "kind": "system",
+      "sourceId": "deregister",
+      "name": "deregister",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S1）",
+          "required": true
+        },
+        {
+          "name": "P3",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））",
+          "required": true
+        },
+        {
+          "name": "mappings_pending_migration",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S4）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：删除节点记录，终态"
+        }
+      ],
+      "precondition": "管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）",
+      "postconditions": [
+        "删除节点记录，终态"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4）"
+          },
+          "P3": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          },
+          "mappings_pending_migration": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          }
+        },
+        "required": [
+          "currentState",
+          "P3",
+          "mappings_pending_migration"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S4，可选枚举值: S0/S1/S2/S3/S4）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：删除节点记录，终态"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "删除节点记录，终态"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "删除节点记录，终态"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_SYS_T7",
+      "kind": "system",
+      "sourceId": "deregister",
+      "name": "deregister",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S3）",
+          "required": true
+        },
+        {
+          "name": "P3",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））",
+          "required": true
+        },
+        {
+          "name": "mappings_pending_migration",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S4）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：删除节点记录，终态"
+        }
+      ],
+      "precondition": "管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）",
+      "postconditions": [
+        "删除节点记录，终态"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S3，可选枚举值: -/S0/S1/S2/S3/S4）"
+          },
+          "P3": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          },
+          "mappings_pending_migration": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: 管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置））（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          }
+        },
+        "required": [
+          "currentState",
+          "P3",
+          "mappings_pending_migration"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S4，可选枚举值: S0/S1/S2/S3/S4）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：删除节点记录，终态"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：管理员权限 且 节点无非删除态映射引用（P3 mappings_pending_migration 前置）"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "删除节点记录，终态"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "删除节点记录，终态"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_OBS_STATE_S0",
+      "kind": "observation",
+      "sourceId": "S0",
+      "name": "observe_未注册",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 未注册（S0）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 未注册（S0）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S1",
+      "kind": "observation",
+      "sourceId": "S1",
+      "name": "observe_已添加·未绑定",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已添加·未绑定（S1）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已添加·未绑定（S1）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S2",
+      "kind": "observation",
+      "sourceId": "S2",
+      "name": "observe_已绑定·在线",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已绑定·在线（S2）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已绑定·在线（S2）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S3",
+      "kind": "observation",
+      "sourceId": "S3",
+      "name": "observe_停用",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 停用（S3）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 停用（S3）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S4",
+      "kind": "observation",
+      "sourceId": "S4",
+      "name": "observe_已注销",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已注销（S4）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已注销（S4）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV1",
+      "kind": "observation",
+      "sourceId": "INV1",
+      "name": "observe_INV1",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 状态空间完备（INV1）当前是否成立",
+          "required": true
+        }
+      ],
+      "invariantIds": [
+        "INV1"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 状态空间完备（INV1）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV2",
+      "kind": "observation",
+      "sourceId": "INV2",
+      "name": "observe_INV2",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 活性判定标准（INV2）当前是否成立",
+          "required": true
+        }
+      ],
+      "invariantIds": [
+        "INV2"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 活性判定标准（INV2）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV3",
+      "kind": "observation",
+      "sourceId": "INV3",
+      "name": "observe_INV3",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 网卡IP对非空（INV3）当前是否成立",
+          "required": true
+        }
+      ],
+      "invariantIds": [
+        "INV3"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 网卡IP对非空（INV3）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV4",
+      "kind": "observation",
+      "sourceId": "INV4",
+      "name": "observe_INV4",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 端口合法（INV4）当前是否成立",
+          "required": true
+        }
+      ],
+      "invariantIds": [
+        "INV4"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 端口合法（INV4）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV5",
+      "kind": "observation",
+      "sourceId": "INV5",
+      "name": "observe_INV5",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 网卡入口归属合法（INV5）当前是否成立",
+          "required": true
+        }
+      ],
+      "invariantIds": [
+        "INV5"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 网卡入口归属合法（INV5）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    }
+  ]
+}

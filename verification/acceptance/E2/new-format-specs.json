@@ -1,0 +1,796 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-22T12:26:20.640Z",
+  "sourceModelVersion": "1.0.0",
+  "specs": [
+    {
+      "id": "IF_SYS_T1",
+      "kind": "system",
+      "sourceId": "submit",
+      "name": "submit",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S1）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S2）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：create_request; notify_approver"
+        }
+      ],
+      "precondition": "form_valid",
+      "postconditions": [
+        "create_request",
+        "notify_approver"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S1，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S2，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：create_request; notify_approver"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（form_valid）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "create_request"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_approver"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "create_request"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_approver"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_SYS_T2",
+      "kind": "system",
+      "sourceId": "approve",
+      "name": "approve",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S3）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：record_approved; notify_applicant"
+        }
+      ],
+      "precondition": "has_request",
+      "postconditions": [
+        "record_approved",
+        "notify_applicant"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S3，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：record_approved; notify_applicant"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（has_request）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "record_approved"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "record_approved"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_SYS_T3",
+      "kind": "system",
+      "sourceId": "reject",
+      "name": "reject",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S4）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：record_rejected; notify_applicant"
+        }
+      ],
+      "precondition": "has_request",
+      "postconditions": [
+        "record_rejected",
+        "notify_applicant"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S4，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：record_rejected; notify_applicant"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（has_request）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "record_rejected"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "record_rejected"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_SYS_T4",
+      "kind": "system",
+      "sourceId": "withdraw",
+      "name": "withdraw",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S5）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：record_withdrawn"
+        }
+      ],
+      "precondition": "has_request",
+      "postconditions": [
+        "record_withdrawn"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S5，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：record_withdrawn"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（has_request）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "record_withdrawn"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "record_withdrawn"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_SYS_T5",
+      "kind": "system",
+      "sourceId": "timeout_return",
+      "name": "timeout_return",
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S1）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：reset_request; notify_applicant"
+        }
+      ],
+      "precondition": "deadline_exceeded",
+      "postconditions": [
+        "reset_request",
+        "notify_applicant"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S1，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：reset_request; notify_applicant"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（deadline_exceeded）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "reset_request"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "reset_request"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": []
+    },
+    {
+      "id": "IF_OBS_STATE_S1",
+      "kind": "observation",
+      "sourceId": "S1",
+      "name": "observe_草稿",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 草稿（S1）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 草稿（S1）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S2",
+      "kind": "observation",
+      "sourceId": "S2",
+      "name": "observe_待审批",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 待审批（S2）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 待审批（S2）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S3",
+      "kind": "observation",
+      "sourceId": "S3",
+      "name": "observe_已通过",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已通过（S3）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已通过（S3）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S4",
+      "kind": "observation",
+      "sourceId": "S4",
+      "name": "observe_已驳回",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已驳回（S4）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已驳回（S4）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S5",
+      "kind": "observation",
+      "sourceId": "S5",
+      "name": "observe_已撤回",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已撤回（S5）状态",
+          "required": true
+        }
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已撤回（S5）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV1",
+      "kind": "observation",
+      "sourceId": "INV1",
+      "name": "observe_INV1",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 请求唯一性（INV1）当前是否成立",
+          "required": true
+        }
+      ],
+      "invariantIds": [
+        "INV1"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 请求唯一性（INV1）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV2",
+      "kind": "observation",
+      "sourceId": "INV2",
+      "name": "observe_INV2",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 终态不可逆（INV2）当前是否成立",
+          "required": true
+        }
+      ],
+      "invariantIds": [
+        "INV2"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 终态不可逆（INV2）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+# 接口列表
+
+> 共 12 个接口（系统 5 + 观测 7）
+
+| ID | 名称 | 类型 | 动作类型 | schemaKind |
+| --- | --- | --- | --- | --- |
+| [IF_SYS_T1](IF_SYS_T1) | submit | 系统 | state_transition | legacy-stub |
+| [IF_SYS_T2](IF_SYS_T2) | approve | 系统 | state_transition | legacy-stub |
+| [IF_SYS_T3](IF_SYS_T3) | reject | 系统 | state_transition | legacy-stub |
+| [IF_SYS_T4](IF_SYS_T4) | withdraw | 系统 | state_transition | legacy-stub |
+| [IF_SYS_T5](IF_SYS_T5) | timeout_return | 系统 | state_transition | legacy-stub |
+| [IF_OBS_STATE_S1](IF_OBS_STATE_S1) | observe_草稿 | 观测 | observe | structured |
+| [IF_OBS_STATE_S2](IF_OBS_STATE_S2) | observe_待审批 | 观测 | observe | structured |
+| [IF_OBS_STATE_S3](IF_OBS_STATE_S3) | observe_已通过 | 观测 | observe | structured |
+| [IF_OBS_STATE_S4](IF_OBS_STATE_S4) | observe_已驳回 | 观测 | observe | structured |
+| [IF_OBS_STATE_S5](IF_OBS_STATE_S5) | observe_已撤回 | 观测 | observe | structured |
+| [IF_OBS_INV_INV1](IF_OBS_INV_INV1) | observe_INV1 | 观测 | observe | structured |
+| [IF_OBS_INV_INV2](IF_OBS_INV_INV2) | observe_INV2 | 观测 | observe | structured |

@@ -386,3 +386,123 @@ describe('TransportResult 类型', () => {
     expect(result.ok).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// E11 #008 缺陷 1：401 + envelope 响应不被改写
+// ---------------------------------------------------------------------------
+
+import { executeHttp } from '../../src/transport/http-executor.js';
+import type { ResolvedBinding, HttpTransport, RoleBinding } from '../../src/model/types.js';
+
+function makeBinding(
+  roleAuth: RoleBinding['auth'],
+  authConfig: RoleBinding['authConfig']
+): ResolvedBinding {
+  const transport: HttpTransport = {
+    type: 'http',
+    method: 'POST',
+    path: '/api/v1/test',
+  };
+  return {
+    spec: {
+      id: 'IF_TEST_001',
+      kind: 'system',
+      sourceId: 'test',
+      name: 'test',
+      inputs: [],
+      outputs: [],
+    },
+    binding: { action: 'test', transport, params: [] },
+    roleBinding: {
+      roleId: 'r',
+      baseUrl: 'http://mock.local',
+      auth: roleAuth,
+      authConfig,
+    },
+  };
+}
+
+function mockFetchOnce(status: number, body: unknown): void {
+  (globalThis as { fetch?: unknown }).fetch = jest.fn(async () => {
+    return {
+      status,
+      ok: status >= 200 && status < 300,
+      text: async () => JSON.stringify(body),
+      json: async () => body,
+    } as unknown as Response;
+  });
+}
+
+describe('E11 #008 缺陷 1：401 envelope 保留', () => {
+  const origFetch = (globalThis as { fetch?: unknown }).fetch;
+  const origEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...origEnv };
+  });
+
+  afterEach(() => {
+    process.env = origEnv;
+    if (origFetch) {
+      (globalThis as { fetch?: unknown }).fetch = origFetch;
+    } else {
+      delete (globalThis as { fetch?: unknown }).fetch;
+    }
+  });
+
+  test('401 + {error:{code:invalid_server_secret}} → 不改写 error.code', async () => {
+    process.env.TEST_TOKEN = 'some-valid-token';
+    mockFetchOnce(401, {
+      error: {
+        code: 'invalid_server_secret',
+        message: '绑定密钥无效',
+      },
+    });
+    const result = await executeHttp(
+      makeBinding('bearer', { tokenEnv: 'TEST_TOKEN' }),
+      {}
+    );
+    expect(result.status).toBe(401);
+    expect(result.ok).toBe(false);
+    const data = result.data as { error: { code: string; message: string } };
+    expect(data.error.code).toBe('invalid_server_secret');
+    expect(data.error.message).toBe('绑定密钥无效');
+    // 不得出现旧版"认证失败：令牌无效（…）"提示
+    expect(JSON.stringify(result.data)).not.toContain('认证失败：令牌无效');
+  });
+
+  test('401 + bearer + tokenEnv 未配置 → 提示"令牌环境变量 … 未配置"', async () => {
+    // 不设 TEST_TOKEN → tokenEnv 缺失
+    mockFetchOnce(401, { error: 'plain-string-server-message' });
+    const result = await executeHttp(
+      makeBinding('bearer', { tokenEnv: 'TEST_TOKEN' }),
+      {}
+    );
+    const data = result.data as { error: string };
+    expect(data.error).toContain('TEST_TOKEN');
+    expect(data.error).toContain('未配置');
+  });
+
+  test('401 + basic + tokenEnv 已设且已发送 → 不改写 envelope.code', async () => {
+    process.env.TEST_USER = 'admin';
+    process.env.TEST_PASS = 'pw';
+    mockFetchOnce(401, { error: { code: 'unauthorized' } });
+    const result = await executeHttp(
+      makeBinding('basic', { usernameEnv: 'TEST_USER', passwordEnv: 'TEST_PASS' }),
+      {}
+    );
+    const data = result.data as { error: { code: string } };
+    expect(data.error.code).toBe('unauthorized');
+  });
+
+  test('401 + api_key + tokenEnv 已设 → 不改写 envelope.code', async () => {
+    process.env.TEST_KEY = 'k-123';
+    mockFetchOnce(401, { error: { code: 'install_secret_invalid' } });
+    const result = await executeHttp(
+      makeBinding('api_key', { keyEnv: 'TEST_KEY' }),
+      {}
+    );
+    const data = result.data as { error: { code: string } };
+    expect(data.error.code).toBe('install_secret_invalid');
+  });
+});

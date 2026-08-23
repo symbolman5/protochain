@@ -1,0 +1,31 @@
+
+[verify] 环境变量缺失（3 个）——verify 不会阻断，但相关接口将因认证/连接失败而报偏差：
+  - LEGACY_TOKEN（角色 R-Op，接口 create, pause, resume, expire, delete, tempClaim, reset）→ 预计 HTTP 401 未认证（Bearer 令牌缺失）
+  - LEGACY_NODE_TOKEN（角色 R-Client，接口 issueTicket）→ 预计 HTTP 401 未认证（Bearer 令牌缺失）
+  - LEGACY_FS_TOKEN（角色 R-FS，接口 ?）→ 预计 HTTP 401 未认证（Bearer 令牌缺失）
+  提示：先 export LEGACY_TOKEN LEGACY_NODE_TOKEN LEGACY_FS_TOKEN 再执行 verify（详见手册 4.8 节）
+
+验证环境: dev
+[specs.json] [migration] 老格式 specs.json 自动迁移：检测到 28 条 InterfaceSpec 顶层数组，已包裹为 Envelope（schemaVersion=1.0）。
+[specs.json] [migration] 28 个接口标记为 description-only（无 I/O 字段，仅名字可读）。
+一致性验证：✗ 未通过
+  通过: 14 / 失败: 5 / 跳过: 0
+  总用例数: 19
+  失败用例（前5个）：
+    - PATH_02: state_mismatch @ delete（期望 接口调用成功（期望状态 S4），实际 接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置）
+    - PATH_04: state_mismatch @ delete（期望 接口调用成功（期望状态 S4），实际 接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置）
+    - PATH_06: state_mismatch @ delete（期望 接口调用成功（期望状态 S4），实际 接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置）
+    - PATH_08: state_mismatch @ delete（期望 接口调用成功（期望状态 S4），实际 接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置）
+    - PATH_10: state_mismatch @ delete（期望 接口调用成功（期望状态 S4），实际 接口调用失败：401 认证失败：令牌环境变量 LEGACY_TOKEN 未配置）
+  AI 摘要（非权威）：
+    本次验证共执行19项，通过14项，失败5项，跳过0项。失败原因均为接口调用返回401认证失败，提示令牌环境变量LEGACY_TOKEN未配置，导致期望状态S4未达到，偏差类型为状态不匹配。
+    偏差分类: 状态不匹配
+  SQL 校验（E4）: 已跳过（--skip-sql-check 显式跳过）
+  by-design-not-tested-by-toolchain（7 项）— 由 impl 守卫保证，工具链不可消除：
+    - INV2 @ service.go L695-707: 【TLC 降级：跨实体数据不进单状态机】活跃映射的可用性依赖：Node（P2）未禁未删 + License 未封禁未过期且 in_use。语义=启用时守卫（resume 瞬间校验，service.go L695-707），不做主动级联；此后 License 被封/Node 被删映射仍显示 active（忠实现状）。真实保障：T3 守卫；关联 composition CI1
+    - INV3 @ service_client.go L600-620: 【TLC 降级】删除 Node（P2）/ 封禁 License 不级联改 mapping.status（现状无级联代码）。被动失效弱断言：此后该映射不得再换 ticket（由 T6 守卫保证），不设 reconciler
+    - INV4 @ service_client.go L484-504: 【TLC 降级】适用范围=持久映射 ticket（T6 issueTicket）：只有"映射 active 且 License 已绑且 active 且 usability=usable"才能签发/换 ticket（service_client.go L484-504 显式拦截 license_id=0 与非 active）。过期/删除/暂停的映射必须立刻无法换 ticket——数据面真正的安全闸口，底线不变量。临时映射 ticket（T7/T8）按 §5.9 设计不占 License、不走本闭环（范式差异，见 INV15）。真实保障：T6 守卫 + verify 观测；关联 composition CI2
+    - INV10 @ tunnel_repository.go L48-52: 单条/列表接口按 brand 过滤（license→user_service.source_type_id JOIN），异 brand 资源对本接口"不存在"（tunnel_repository.go L48-52，避免 xrk 资源经 tunnel 接口泄露）。真实保障：查询层 brand 过滤
+    - INV11 @ xrk/service.go L174-225: 异常映射（usability=unusable）对用户列表可见（返回完整配置+locked/locked_reason），对客户端下发通道不可见（不签 ticket）。真实保障：xrk/service.go L174-225、failTunnelBlocked 仍回完整配置；usability 为读取路径派生，不写 DB status
+    - INV12 @ service.go L300-330: 随机域名近似唯一（弱保证，非强断言）：持久映射靠应用层跨表查重(forward_http_entry+forward_port_entry，重试5次)，DB 无 UNIQUE 索引；临时映射连查重都没有（48bit 纯随机，碰撞概率可忽略但不归零）。登记为应用层弱保证，verify 不强测 DB 唯一约束；关联 composition CI4（P4 域名域）
+    - INV15 @ public/service.go L87-264: TempMapping 生命周期全程只存 Redis（res_map_），永不落 forward_mapping_resource、永不占 License；claim 仅属性回填+统计日志，到期照样销毁。主状态机以 S5/S6 承载其生命周期（T7/T8/T9 自环、T10 到期），Mapping 转移（T2-T6）不作用于 S5/S6。真实保障：public/service.go L87-264 全程不碰 MySQL + 主状态机状态隔离

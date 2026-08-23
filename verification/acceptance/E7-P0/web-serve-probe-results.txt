@@ -1,0 +1,34 @@
+Web serve HTTP 探针结果（E7-P0 v0.5）
+
+测试日期：2026-08-22
+测试命令：
+  node dist/cli/index.js web-serve --dir /tmp/e7p0-v05 --port 5176
+
+测试环境（手写 dist/ 模拟 VitePress build 产物，因 build 环境离线）：
+  /tmp/e7p0-v05/web/docs/.vitepress/dist/
+  ├── index.html
+  ├── test-cases.html
+  ├── verification.html
+  ├── diff.html
+  └── interfaces/
+      ├── index.html
+      └── IF_SYS_T1.html  （接口详情页，按 web/data.json interfaces[0].id 自动选取）
+
+探针 URL + 状态码（curl）：
+
+| URL                          | 状态码 | 备注 |
+|------------------------------|------|---|
+| /                            | 200  | 首页（SPA fallback） |
+| /interfaces/                 | 200  | 接口列表（目录自动追加 index.html） |
+| /interfaces/IF_SYS_T1.html   | 200  | 接口详情（CLI 从 data.json 读真实接口 ID；E7-I2 修复后不再硬编码） |
+| /test-cases.html             | 200  | 测试用例浏览器 |
+| /verification.html           | 200  | 验证报告对比 |
+| /diff.html                   | 200  | 模型 diff/impact |
+| /%zz                         | 400  | 畸形 URL：decodeURIComponent 异常兜底（E7-I3 修复后不再杀死进程） |
+| /（畸形请求后）              | 200  | server 仍存活（E7-I3 修复后） |
+
+E7-I1/I2/I3 全部端到端通过：默认 distDir 匹配（v0.5 改 web/docs/.vitepress/dist）、探针从 data.json 动态构造、畸形 URL 仅 400 不崩进程。
+
+注：未触发 VitePress build 是因为 build 环境无法联网下载 vitepress npm 包。
+实际验收时（联网环境）`protochain derive-web` 默认会执行 npx vitepress build，
+输出真实 dist/；探针逻辑与此处一致（startServe 内置同套探针）。

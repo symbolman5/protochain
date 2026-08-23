@@ -242,9 +242,48 @@ export async function startServe(opts: ServeOptions): Promise<ServeHandle> {
 
   return {
     address: addr,
+    /**
+     * 关闭 server + 强制关闭活跃 keep-alive 连接（Node 18.2+）。
+     *
+     * 修复（web-serve Ctrl+C 多次仍不退出的问题）：
+     * 1. 仅调 `server.close(callback)` 在 HTTP/1.1 keep-alive 连接存在时
+     *    不会立即关闭 server（等待空闲超时）—— 表现为按 Ctrl+C 后
+     *    '关闭 web serve...' 打印但进程不退。
+     * 2. 调 `server.closeAllConnections()`（Node 18.2+）主动断开所有活跃
+     *    连接，server.close 的 callback 才会触发。
+     * 3. 设 1 秒硬超时兜底（极端情况下 server.close 仍未触发 → 强制 resolve，
+     *    CLI 层用 process.exit(0) 终止）。
+     */
     close: () =>
       new Promise<void>((resolve) => {
-        server.close(() => resolve());
+        let done = false;
+        const finish = (): void => {
+          if (done) return;
+          done = true;
+          clearTimeout(hardKill);
+          resolve();
+        };
+        const hardKill = setTimeout(finish, 1000);
+        server.close((err?: Error) => {
+          if (err) {
+            // 关闭异常也视为结束（不应阻塞退出）
+            // eslint-disable-next-line no-console
+            console.error(`[web-serve] server.close 异常：${err.message}`);
+          }
+          finish();
+        });
+        // 强制关闭活跃 keep-alive 连接（HTTP/1.1 + HTTP/2）
+        // Node 18.2+ API；旧版本下不存在则静默 noop
+        const s = server as unknown as {
+          closeAllConnections?: (cb?: () => void) => void;
+        };
+        if (typeof s.closeAllConnections === 'function') {
+          try {
+            s.closeAllConnections();
+          } catch {
+            // 忽略（Node 早期版本或在 close 过程中调用可能抛错）
+          }
+        }
       }),
   };
 }

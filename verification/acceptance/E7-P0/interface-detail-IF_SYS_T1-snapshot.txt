@@ -1,0 +1,30 @@
+# submit
+
+> 接口 ID: `IF_SYS_T1` | 类型: **系统** | schemaKind: **legacy-stub**
+
+## 请求参数 (requestSchema)
+
+| 字段 | 类型 | 说明 | 必填 |
+| --- | --- | --- | --- |
+| currentState | string | 当前状态（期望 S1，可选枚举值: -/S1/S2/S3/S4/S5） | ✓ |
+
+## 响应体 (responseSchema)
+
+| 字段 | 类型 | 说明 | 必填 |
+| --- | --- | --- | --- |
+| nextState | string | 转移后状态（期望: S2，可选枚举值: S1/S2/S3/S4/S5） | ✓ |
+| effects | array | 副作用：create_request; notify_approver |  |
+
+## 前置条件 (preconditions)
+
+- kind=`legacy-stub`：guard 单标识符（form_valid）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema
+
+## 后置条件 (postconditionExpressions)
+
+- create_request
+- notify_approver
+
+## 副作用描述 (postconditions)
+
+- create_request
+- notify_approver

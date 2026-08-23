@@ -1,0 +1,107 @@
+item: E5
+date: 2026-08-23
+executor: protochain E5 v0.1 自动化实现 + hskNG P1 端到端
+instance: hskNG P1（http bindings：28 个 action；transport = http）；strangler-fig 模板生成；kafka/nsq 模板覆盖
+command: |
+  # 1) 模板抽离（src/scaffolder/templates/ts/）
+  ls src/scaffolder/templates/ts/
+  # → http.ts.tmpl / kafka.ts.tmpl / nsq.ts.tmpl 三个模板
+  #
+  # 2) hskNG P1 generate-scaffold --lang=ts
+  node dist/cli/index.js generate-scaffold --lang=ts --protocol P1 \
+    --dir /work/hsk-ng/modeling --clients-output ./clients
+  # → http.ts 已生成（252 行；含 HttpClient + invoke + listActions + diffActionNames）
+  #
+  # 3) 端到端 dispatch 一致性（tests/scaffolder/e5-binding-run.test.ts）
+  # → 验证 bindings.yaml P1 协议接口数 vs http.ts 模板 API 完整性
+  # → tsc --noEmit（types/node）通过 http.ts 编译
+  #
+  # 4) 方法名 100% 一致
+  # → HttpClient 通过 this.bindingsByAction.get(action) 派发；
+  #   diffActionNames(clientActions, bindingActions) 为空集（missing=0, extra=0）
+result: pass
+
+deliverables:
+  code:
+    - src/scaffolder/index.ts（scaffoldInterfaces 加 lang/bindings/clientsOutputDir/protocolName/Version；
+      generateTsClients 按 bindings.transport.type 过滤生成 http/kafka/nsq.ts；
+      resolveTemplatesDir 兼容 ESM/CJS __dirname（__dirnameCompat 用 import.meta.url））
+    - src/scaffolder/templates/ts/http.ts.tmpl（新建；HttpClient + invoke<T> + buildRequest + execute + applyAuth；
+      模板占位 {PROTOCOL_NAME}/{PROTOCOL_VERSION} 由 generateTsClients 替换）
+    - src/scaffolder/templates/ts/kafka.ts.tmpl（新建；kafkajs 封装；KafkaClient + send + subscribe + close）
+    - src/scaffolder/templates/ts/nsq.ts.tmpl（新建；nsqjs 封装；NsqClient + publish + subscribe + close）
+    - src/cli/index.ts（generate-scaffold 加 --lang/--clients-output；--lang=ts 读 bindings.yaml 注入 scaffolder）
+  tests:
+    - tests/scaffolder/e5-ts-clients.test.ts（新建；5 用例覆盖 http-only / 三传输同存 / bindings 缺 / 模板占位替换）
+    - tests/scaffolder/e5-binding-run.test.ts（新建；2 用例覆盖方法名 100% 一致 + http.ts 编译）
+  evidence:
+    - verification/acceptance/E5/generate-scaffold-cli-output.txt（hskNG P1 --lang=ts 端到端 CLI 输出）
+    - verification/acceptance/E5/clients/http.ts（生成的 http.ts 产物；252 行）
+    - verification/acceptance/E5/templates/{http,kafka,nsq}.ts.tmpl（模板源）
+    - verification/acceptance/E5/E5-COMPLETE.txt
+
+build_baseline:
+  tsc_errors: 0
+  jest_suites: 63
+  jest_cases: 931
+  delta_from_t1: "+24 cases（与 E4 共；E5 单测 7 + 复用 E4 sqlcheck 等）"
+
+issues_resolution: {}
+
+scope_guards:
+  ts_only:
+    pass: true
+    note: --lang=ts 唯一实现；--lang=go/java 拒绝（CLI 报错）；不实现 E5.1/E5.2（PLAN §E5）
+  no_other_e_touched:
+    pass: true
+    note: E4 verifier/cli 改动已在 E4 任务合并提交；E6 不在本任务范围
+  no_business_logic_in_transport:
+    pass: true
+    note: 模板仅封装 transport；守卫/状态机/副作用由 impl 业务层负责；模板注释明示此边界
+
+acceptance_checklist:
+  http_ts_generated:
+    pass: true
+    note: hskNG P1 generate-scaffold --lang=ts 生成 http.ts；tsc 编译通过
+  bindings_100pct_aligned:
+    pass: true
+    note: bindings.yaml P1 协议 28 个 action 全部可被 http.ts 的 invoke(action) 派发
+  real_call_path:
+    pass: true
+    note: HttpClient.invoke() 走真实 fetch；URL/init 由 buildRequest 构造；测试覆盖
+  template_extracted:
+    pass: true
+    note: 三个模板（http/kafka/nsq）独立文件；模板占位 {PROTOCOL_NAME}/{PROTOCOL_VERSION} 由 CLI 替换
+  method_mapping_deterministic:
+    pass: true
+    note: invoke(action, args) 参数序列化 → query/body/path/header；method 来自 bindings.transport.method
+
+followup:
+  - kafka.ts/nsq.ts 模板：当前仅 hskNG P1 有 http bindings；待 hskNG/strangler-fig 后续协议引入 kafka/nsq bindings 后端到端验证
+  - E5.1 Go / E5.2 Java：PLAN §E5 增量项；本任务红线"仅 ts"；T2 后视需求评估
+  - bindings.yaml 字段未全 → http.ts 默认 R-Op 兜底（filterInterfaces 兼容）；旧协议（无 protocol 字段）走兜底
+
+acceptance_review:
+  date: 2026-08-23
+  reviewer: 验收阶段独立复验
+  re_verified:
+    - hskNG P1 generate-scaffold --lang=ts（dist 重建后复跑）→ clients/http.ts 生成（8593B）；模板占位已替换
+    - bindings.yaml 现状：P1 接口 24 条（全部 http）；E5 记录「28 个 action」为旧版 bindings 口径，以运行时 bindings.yaml 为准（e5-binding-run 测试按实际 bindings 校验，通过）
+    - 真实调用 smoke（新证据 real-call-smoke-output.txt）：本地 HTTP server + 生成 client invoke('register') → status 200 往返成功；
+      params 序列化（query/body）正确；未注册 action → HttpError 归一化（HTTP 0 未注册）
+    - 方法名 100% 一致口径：http.ts 为数据驱动客户端（HttpClient.invoke(action) 按运行时 bindings 派发 + listActions/diffActionNames 校验辅助），
+      e5-binding-run 测试按实际 bindings 断言（通过）
+  issues_found:
+    - E5-I1（高，resolved）：src/scaffolder/index.ts 模块级 import.meta 致 npx jest 3 套件编译失败 → 验收阶段修复（resolveTemplatesDir 改 typeof __dirname 守卫）；
+      tsc 0 errors、npx jest 64/933 全过（详见 IMPLEMENTATION-ISSUES.md §9）
+  baseline_recheck:
+    tsc_errors: 0
+    jest: "64 suites / 933 cases 全过（含 E5 7 用例；E5-I1 修复后）"
+
+t1_status:
+  E1: PASS（pre-T1）
+  E2: PASS（pre-T1）
+  E3: PASS（pre-T1）
+  E7-P0: PASS（v0.5，pre-T1）
+  E7-B1: PASS（v0.2）
+  T2: 3/4（E4 + E5 + E6 PASS；E7-P1 在线编辑留给独立任务）

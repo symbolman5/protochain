@@ -1,0 +1,13 @@
+
+[verify] 环境变量缺失（1 个）——verify 不会阻断，但相关接口将因认证/连接失败而报偏差：
+  - ADMIN_TOKEN（角色 R-Op，接口 register, bind, report, reissueSecret, listServers, goOffline, disable, enable, deregister, certImport, certList, certDelete, observe_未注册, observe_已注册·离线, observe_在线, observe_停用, observe_INV1, observe_INV2, observe_已添加·未绑定, observe_已绑定·在线, observe_已注销, observe_INV3, observe_INV4, observe_INV5, purge_user, purge_mapping, purge_server, purge_site）→ 预计 HTTP 401 未认证（Bearer 令牌缺失）
+  提示：先 export ADMIN_TOKEN 再执行 verify（详见手册 4.8 节）
+
+验证环境: dev
+mock 模式：fixtures+spy 实现；用例 4/4 通过；spy 触发 6 个 action
+一致性验证：✓ 通过
+  通过: 9 / 失败: 0 / 跳过: 0
+  总用例数: 9
+  AI 摘要（非权威）：
+    全部 9 项验证通过，0 项失败，0 项跳过，未发现任何偏差，验证通过。
+  SQL 校验（E4）: 已跳过（无数据级不变量（deferredToSqlValidation 为空））

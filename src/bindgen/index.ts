@@ -31,6 +31,8 @@ import type {
   BindingConfig,
   HttpTransport,
   SourceProtocolModel,
+  ErrorMapEntry,
+  ErrorResponseDef,
 } from '../model/types.js';
 import {
   envelopeMigrate,
@@ -173,6 +175,49 @@ export function deriveHttpParams(spec: InterfaceSpec): { logicalName: string; in
  */
 function isLikelyIdentifierParam(name: string): boolean {
   return name === 'id' || name === 'name' || name.endsWith('_id') || name.endsWith('Id');
+}
+
+// ============================================================================
+// E11：errorMap 骨架推导（从 specs.errorResponses 派生）
+// ============================================================================
+
+/**
+ * E11：从 specs.errorResponses 派生 errorMap 骨架（协议码 → ErrorMapEntry）。
+ * - 必填字段：httpStatus（直接从契约）
+ * - 可空字段：systemCode / bodyField / bodyFieldValue / messageField
+ *   留待人工确认（与 roles.baseUrl 同等待遇，计入 manualConfirmItems）
+ * - 老协议无 errorResponses → 返回空对象 + warning
+ */
+export function deriveErrorMap(
+  specs: InterfaceSpec[]
+): { errorMap: Record<string, ErrorMapEntry>; warnings: string[] } {
+  const warnings: string[] = [];
+  const errorMap: Record<string, ErrorMapEntry> = {};
+
+  const seen = new Set<string>();
+  for (const spec of specs) {
+    if (!spec.errorResponses || spec.errorResponses.length === 0) continue;
+    for (const er of spec.errorResponses) {
+      if (seen.has(er.errorCode)) continue;
+      seen.add(er.errorCode);
+      errorMap[er.errorCode] = {
+        httpStatus: er.httpStatus,
+        // 缺省 bodyField='code'（与统一 envelope 一致；人工可改）
+        bodyField: 'code',
+      };
+    }
+  }
+
+  if (Object.keys(errorMap).length === 0) {
+    warnings.push(
+      'specs.json 无 errorResponses；errorMap 初始为空（待人工按外部系统错误结构补全）'
+    );
+  } else {
+    warnings.push(
+      `errorMap 骨架已生成 ${Object.keys(errorMap).length} 个 errorCode（systemCode/bodyFieldValue 待人工确认）`
+    );
+  }
+  return { errorMap, warnings };
 }
 
 // ============================================================================
@@ -322,6 +367,10 @@ export function deriveSkeletonBindings(
   const { stateMap, warnings: stateMapWarnings } = deriveStateMap(specs);
   warnings.push(...stateMapWarnings);
 
+  // E11：从 specs.errorResponses 派生 errorMap 骨架（与 stateMap 同构）
+  const { errorMap, warnings: errorMapWarnings } = deriveErrorMap(specs);
+  warnings.push(...errorMapWarnings);
+
   const defaultRoleId = selectDefaultRoleId(model);
   const interfaces: InterfaceBinding[] = [];
   let systemCount = 0;
@@ -344,8 +393,11 @@ export function deriveSkeletonBindings(
 
   // 统计 manualConfirmItems：roles 数量（每个角色需人工确认 baseUrl/headers/authConfig）
   // + stateMap 条目数（每个待人工确认系统词）
+  // + errorMap 条目数（每个待人工确认 systemCode/bodyFieldValue）
   const manualConfirmItems =
-    Object.keys(roles).length + Object.keys(stateMap).length;
+    Object.keys(roles).length +
+    Object.keys(stateMap).length +
+    Object.keys(errorMap).length;
 
   const total = specs.length;
   const stats: SkeletonStats = {
@@ -369,6 +421,7 @@ export function deriveSkeletonBindings(
     roles,
     interfaces,
     stateMap,
+    errorMap: Object.keys(errorMap).length > 0 ? errorMap : undefined,
     stats,
     warnings,
   };
@@ -491,6 +544,7 @@ function stringifySkeleton(skeleton: SkeletonBindings): string {
     roles: skeleton.roles,
     interfaces: skeleton.interfaces,
     stateMap: skeleton.stateMap,
+    errorMap: skeleton.errorMap,
     stats: skeleton.stats,
     warnings: skeleton.warnings,
   };

@@ -1,0 +1,48 @@
+{
+  "authoritative": {
+    "passed": false,
+    "counts": {
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0
+    },
+    "caseResults": [
+      {
+        "pathId": "PATH_01_main",
+        "passed": false,
+        "deviations": [
+          {
+            "action": "go",
+            "state": "S1",
+            "expected": "alice",
+            "actual": "bob",
+            "kind": "field_mismatch",
+            "stepIndex": 0,
+            "field": "response.approverId",
+            "legacy": "alice",
+            "impl": "bob",
+            "httpStatus": 200
+          },
+          {
+            "action": "go",
+            "state": "S1",
+            "expected": "approved",
+            "actual": "rejected",
+            "kind": "field_mismatch",
+            "stepIndex": 0,
+            "field": "response.decision",
+            "legacy": "approved",
+            "impl": "rejected",
+            "httpStatus": 200
+          }
+        ],
+        "injectedParams": {
+          "approverId": "response",
+          "decision": "response"
+        }
+      }
+    ],
+    "scenarioWarnings": []
+  },
+  "verifiedAt": "2026-08-22T12:25:41.610Z"
+}

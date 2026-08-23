@@ -1,0 +1,126 @@
+item: E7-B1
+date: 2026-08-22（v0.2：B1-I1/I2/I3 全量修复；v0.1 初次实施）
+executor: protochain E7-B1 v0.1 自动化实现 + 独立复验 + v0.2 全量修复
+instance: hskNG 真实根（/work/hsk-ng/modeling，非裁剪 fixture）
+command: |
+  # 1) hskNG 真实根走组合层模式（B1-I2 修复后端到端跑通）
+  rm -rf /work/hsk-ng/modeling/web
+  node dist/cli/index.js derive-web --dir /work/hsk-ng/modeling --project --no-build --force
+  # 2) 组合层产物 web-serve 探针（B1-I3 修复后 8 探针全 200）
+  #    注：CI 离线无法下载 vitepress，手写 dist 模拟（脚本见附录）
+  node dist/cli/index.js web-serve --dir /work/hsk-ng/modeling --port 5181
+  # 3) --skip-probe 实际生效（B1-I3 修复）
+  node dist/cli/index.js web-serve --dir /work/hsk-ng/modeling --port 5182 --skip-probe
+  # 4) 单协议回归（无回归）
+  # 5) 单元测试（59 suites / 899 cases 全过）
+  npx jest
+  # 6) tsc 静态检查
+  npx tsc --noEmit
+result: pass
+
+deliverables:
+  code:
+    - src/webgen/composition.ts（v0.2：删除 composeDataWithProject；新增 schemaVersion='1.1' + generatedAt；首页链接无尾斜杠）
+    - src/composition-parser/index.ts（v0.2：changeType 接受 protocol_extend；新增 preprocessYamlProse）
+    - src/parser/extension-sections.ts（v0.2：parseSubItemsByHeading 增加 yamlPreprocessor 可选参数）
+    - src/model/types.ts（v0.2：CompositionMetadata.changeType 枚举扩展）
+    - src/cli/index.ts（v0.2：web-serve 按 schemaVersion 自动分支 + --skip-probe 传空数组 + 探针消息动态化）
+  tests:
+    - tests/webgen/composition.test.ts（60 cases，含 B1-I1/I3 新增/修正）
+    - tests/webgen/webgen.test.ts（v0.2 新增 B1-I3 probePaths=[] × 1）
+    - tests/composition-parser/composition-parser.test.ts（v0.2 新增 B1-I2 × 6 cases）
+  evidence:
+    - verification/acceptance/E7-B1/E7-B1-COMPLETE.txt
+    - verification/acceptance/E7-B1/derive-web-cli-output-v02.txt（hsk-ng 真实根）
+    - verification/acceptance/E7-B1/webserve-cli-output-v02.txt（组合层 8 探针全 200）
+    - verification/acceptance/E7-B1/webserve-skipprobe-output-v02.txt
+    - verification/acceptance/E7-B1/web-data-snapshot-v02.json（含 crossInvariants 8 条）
+    - verification/acceptance/E7-B1/{project,cross-refs,cross-diff,protocols-index,protocols-P1,protocols-P3}-md-snapshot-v02.txt
+    - verification/acceptance/E7-B1/tsc-noEmit-output-v02.txt
+    - verification/acceptance/E7-B1/jest-output-v02.txt
+
+build_baseline_v02:
+  tsc_errors: 0
+  jest_suites: 59
+  jest_cases: 899
+  jest_v01_to_v02_delta: "+7 cases（B1-I1 schemaVersion × 2 + B1-I3 link 修正 × 1 + B1-I3 probePaths=[] × 1 + B1-I2 × 6 - composeDataWithProject × 2 - 1 重排）"
+  cli_commands:
+    - derive-web --project（E7-B1 主入口）
+    - web-serve（按 schemaVersion 自动分支；--skip-probe 实际生效）
+
+issues_resolution:
+  b1_i1:
+    pass: true
+    note: 删除死代码 composeDataWithProject；组合层 WebDataJson 顶层新增 schemaVersion='1.1' + generatedAt
+  b1_i2:
+    pass: true
+    note: changeType 枚举扩展 + preprocessYamlProse；hsk-ng 真实根 CI1~CI8 全部解析（含 `{...}: ...` 与多行 checkMethod）
+  b1_i3:
+    pass: true
+    note: --skip-probe 传空数组生效；web-serve 按 schemaVersion 自动分支；首页链接无尾斜杠；组合层 8 探针全 200 + 单协议 6 探针全 200（无回归）
+
+acceptance_checklist:
+  hsk_ng_real_root_end_to_end:
+    pass: true
+    note: 端到端跑通（v0.2）：4 协议卡片 + 6 依赖边 + 31 跨协议引用 + 8 跨协议不变量（CI1~CI8）；非裁剪 fixture
+  cross_protocol_refs_matrix:
+    pass: true
+    note: cross-refs.md 按 fromProtocol → toProtocol 分组；31 条引用全部人读 Markdown 表格 + 上下文片段
+  per_protocol_pages_with_cross_refs:
+    pass: true
+    note: protocols/P[1-4].md 各自含"### 引用其他协议" + "### 被其他协议引用" 双向表
+  cross_diff_skeleton:
+    pass: true
+    note: cross-diff.md 占位页 + "待 E9 接通" + "禁止自行实现"（红线守住）
+  web_serve_composition_layer:
+    pass: true
+    note: B1-I3 修复后组合层产物 web-serve 起服务；8 探针（/, /protocols/, /cross-refs, /cross-diff, /protocols/P1-P4）全 200
+  skip_probe_effective:
+    pass: true
+    note: B1-I3 修复后 --skip-probe 实际生效（不触发默认探针 fallback）；server 存活
+  single_protocol_no_regression:
+    pass: true
+    note: 单协议 schemaVersion=1.0 走原逻辑；6 探针（/, /interfaces/, /interfaces/<id>, /test-cases, /verification, /diff）全 200
+  ts_compile:
+    pass: true
+    note: npx tsc --noEmit → 0 errors
+  no_runtime_dependencies:
+    pass: true
+    note: package.json 未动；纯静态机械生成；vitepress 仅站点工程 devDep
+  security:
+    pass: true
+    note: 不读 process.env / bindings.yaml；敏感字段整键删除复用 E7-I6 修复；端到端测试注入 tokenEnv/secret 字段 → 断言产物不含
+
+scope_guards:
+  no_e9_cross_protocol_diff_analysis:
+    pass: true
+    note: cross-diff.md 仅骨架占位；crossRefs 提取不走 diff 逻辑
+  no_p1_online_editing:
+    pass: true
+    note: 不实现 scenarios/bindings 编辑；不引入 Express/Fastify
+  no_authority_source_mutation:
+    pass: true
+    note: derive-web 是只读映射；不写 composition.md / specs.json / model.md
+  no_mermaid_runtime:
+    pass: true
+    note: 沿用 E7-P0：预生成 mermaid 源码 + 贴 mermaid.live 链接
+  no_other_e_numbers_touched:
+    pass: true
+    note: E4/E5/E6/E7-P1 各自独立任务；本任务仅读 composition-parser + specifier + webgen
+
+followup:
+  - cross-diff.md 待 E9 实施接通（按 PLAN §E7 v0.4 B2）
+  - hsk-ng specs 全部 description-only（无 I/O 字段 schema）：与 B1 无关，仅展示现状
+  - VitePress 构建产物未在 CLI 端真实生成（CI 离线无法下载 vitepress）；验收用手写 dist 模拟 + 探针全 200
+
+t1_status:
+  E1: PASS（pre-T1）
+  E2: PASS（pre-T1）
+  E3: PASS（pre-T1）
+  E7-P0: PASS（v0.5，pre-T1）
+  E7-B1: PASS（v0.2；v0.1 三条独立复验问题全量 closed）
+  T1 完成标志:
+    - specs.json 过 ajv: true
+    - m-check 拦下 019 单 INV-PS1: pre-T1（E1 验收项；本次未复测）
+    - derive-bindings 生成率 ≥ 80%: pre-T1（E3 验收项；本次未复测）
+    - Web 静态站点可访问: true（E7-P0 + E7-B1 双模式，组合层 8 探针 + 单协议 6 探针全 200）

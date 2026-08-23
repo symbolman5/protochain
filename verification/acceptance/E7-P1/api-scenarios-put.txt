@@ -1,0 +1,1 @@
+{"ok":true,"data":{"path":"/work/hsk-ng/modeling/protocol/P1/scenarios/sc-e2e-test.yaml"}}

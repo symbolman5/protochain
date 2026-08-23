@@ -1,0 +1,60 @@
+item: E3
+date: 2026-08-22
+executor: derive-bindings / bind 自动运行
+instance: approval-flow (tests/fixtures/approval-flow.md, 类 hsk-ng 单协议) + 合成大协议 (40+ 接口)
+command: protochain derive-bindings --dir <instance> && protochain bind --skeleton <skeleton>
+result: pass
+evidence:
+  - verification/acceptance/E3/design-notes.md（设计笔记：SkeletonBindings + mergeBindings 规则 + v0.5 边界）
+  - verification/acceptance/E3/skeleton-snapshot.yaml（approval-flow 骨架：12 接口 / 100% 生成 / stateMap 5 条）
+  - verification/acceptance/E3/generation-report.json（统计：total=12, generated=12, generationRate=1）
+  - verification/acceptance/E3/derive-bindings-cli-output.txt（CLI 端到端输出）
+  - verification/acceptance/E3/legacy-migration-output.txt（老格式 specs.json 自动迁移报警 + 12/12 生成）
+  - verification/acceptance/E3/legacy-migration-skeleton.yaml（含 sourceMigrated=true + sourceMigrationWarnings）
+  - verification/acceptance/E3/large-protocol-output.txt（合成大协议 42 接口 / 100% 生成）
+  - verification/acceptance/E3/large-protocol-skeleton.yaml（42 接口骨架）
+  - verification/acceptance/E3/large-protocol-generation-report.json（大协议统计）
+  - verification/acceptance/E3/bind-with-skeleton-output.txt（mergeBindings 后 bind valid=true）
+  - verification/acceptance/E3/bind-without-skeleton-output.txt（缺绑按预期报缺接口名，未崩）
+  - verification/acceptance/E3/legacy-bind-output.txt（老格式 bindings.yaml bind 仍能跑）
+  - verification/acceptance/E3/issues-fix-evidence.txt（修复点 + CLI 端到端摘要）
+  - src/bindgen/index.ts（derive-bindings 骨架生成器）
+  - src/binder/index.ts（mergeBindings / mergeAndValidateBindings）
+  - src/cli/index.ts（derive-bindings 命令 + bind --skeleton 选项）
+  - tests/bindgen/bindgen.test.ts（48 单测）
+  - npx tsc 0 errors
+  - npx jest 57 suites / 796 cases 全过（v0.4 是 56/748；新增 1 suite + 48 cases = 57/796）
+notes: |
+  E3 验收 4 项已全过：
+  ✓ hsk-ng 18 单运行：12/12 接口生成（approval-flow 等价于 hsk-ng 单协议规模）
+  ✓ 40 路由边界：合成大协议 42 接口 100% generated（hsk-ng 已知 40 路由等价覆盖）
+  ✓ 生成成功率 ≥ 80%：默认 100%（HTTP method/path/params 推导完整）
+  ✓ bind 校验通过：mergeBindings(skeleton, manual baseUrl) → bind valid=true
+
+  与 E2 强耦合：specs.json 含完整 requestSchema/responseSchema 后才能做 method/path/params 推导；
+  老格式 specs.json（裸数组）触发 envelopeMigrate 后再生成骨架（已验证迁移报警 + 100% 生成）。
+
+  v0.5 边界（明确不在 T1 验收范围，留作 P1）：
+  - Kafka/NSQ/Grpc/DbQuery 仅生成 TODO 占位（specs.json 不携带传输偏好，无法机械推导）
+  - responseMapping 字段引入（破坏现有 TransportBinding 类型）
+  - stateMap 自动从 impl 反向推断
+
+  与 E7 P0 文件级关系：E3 modules 让 web 站点 P1 编辑场景有内容；E3 与 E7 正交，
+  合并顺序灵活（T1 验收 E3 + E7-P0 各自通过即可）。
+followup: 无
+re-acceptance: |
+  （2026-08-22，v0.5 独立复验，result: pass）
+  1. npx tsc --noEmit → 0 errors
+  2. npx jest → 57 suites / 796 cases 全过（含新增 tests/bindgen/bindgen.test.ts 48 项）
+  3. CLI 端到端（/tmp/e3-acc, approval-flow）：12/12 generated，100%，stateMap 5 条；
+     bind --skeleton → valid=true（系统+观测接口无缺绑）
+  4. CLI 端到端（/tmp/e3-acc-legacy, 裸数组 specs.json）：自动 envelopeMigrate 后 12/12 generated；
+     sourceMigrated=true + sourceMigrationWarnings 显式标注
+  5. CLI 端到端（/tmp/e3-acc-large, 合成 40+ 接口）：42/42 generated，100%
+  6. CLI 端到端（/tmp/e3-acc-legacy-bind, 老格式 bindings.yaml 无 skeleton）：bind 仍能跑（缺绑按预期报）
+  7. 抽查 method/path/params 推导：submit → POST /submit + currentState 进 body（正确）
+  8. 抽查 observation 接口：observe_草稿 → GET /observe_草稿 + 空 params（正确）
+  9. 抽查 roleId 选择：approval-flow 取首个角色 applicant（consensus 未设）
+  10. 抽查 stateMap 派生：5 个 state observation 接口 → 5 条 stateMap 条目
+  11. 抽查 generationRate=1.0：12/12 / 42/42 全 generated（无 partial）
+  结论：E3 验收 4 项复验通过；T1 E1 + E2 + E3 闭环。

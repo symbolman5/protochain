@@ -1,0 +1,10 @@
+PASS tests/ai/generation-loop.test.ts
+PASS tests/binder/binder.test.ts
+PASS tests/testgen/testgen-ai-loop.test.ts
+PASS tests/testtool/testtool-runner.test.ts
+
+Test Suites: 59 passed, 59 total
+Tests:       892 passed, 892 total
+Snapshots:   0 total
+Time:        5.373 s
+Ran all test suites.
