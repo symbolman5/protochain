@@ -129,6 +129,12 @@ export interface WebInterfaceView {
    * 每个错误响应含 id/errorCode/httpStatus/bodySchema——绑定后展示"错误响应"表。
    */
   errorResponses?: ErrorResponseDef[];
+  /**
+   * E11 后续问题 5：契约承载接口标记（specifier 派生 IF_CTR_* 时为 true）。
+   * web 渲染接口详情页头部加注：「承载接口：契约 interface 未匹配 transition，由 specifier 派生」，
+   * 让读者区分"状态机系统接口"与"契约投影载体"。
+   */
+  isContractCarrier?: boolean;
 }
 
 /** 测试用例浏览器视图 */
@@ -455,10 +461,17 @@ export function buildInterfaceViews(specs: InterfaceSpec[]): WebInterfaceView[] 
       observesResourcePoolId: s.observesResourcePoolId,
     };
     if (s.actionType) view.actionType = s.actionType;
+    // 系统接口默认 actionType='state_transition'（状态转移接口：currentState 是 CAS 入参）
+    // 显式声明的 attribute_update 走原值；观测接口不设 actionType（currentState 是多余的）
+    if (s.kind === 'system' && !view.actionType) {
+      view.actionType = 'state_transition';
+    }
     // E11：错误响应契约投影（接口详情"错误响应"表）
     if (s.errorResponses && s.errorResponses.length > 0) {
       view.errorResponses = s.errorResponses.slice();
     }
+    // E11 后续问题 5：契约承载接口标记透传
+    if (s.isContractCarrier) view.isContractCarrier = true;
     return view;
   });
 }
@@ -1056,12 +1069,40 @@ function escapeMdCell(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
-/** 渲染 JSON Schema 为人读表格（properties 列表） */
-function renderSchemaTable(schema: JSONSchema | undefined): string {
+/** 渲染 JSON Schema 为人读表格（properties 列表）
+ *
+ * 008-6：currentState 字段 CAS 标注
+ * - 仅当 schema 含 `currentState` 属性时附加「CAS 断言」说明列；
+ * - 状态转移接口（kind=system + actionType=state_transition）：CAS 是真实入参，断言
+ *   "资源当前状态 == currentState 才允许转移"（hsk-ng Disable/Enable/Delete）；
+ * - 观测接口（kind=observation 或 system/attribute_update）：CAS 多余但无害，impl
+ *   不读取该字段；纯读/观测接口在 web 展示加「CAS 断言（impl 不读取）」标注。
+ * - 契约承载接口（isContractCarrier=true）：契约层自带 requestSchema 通常不含 currentState，
+ *   此参数化函数对 currentState 列保持默认（无附加标注）。
+ */
+function renderSchemaTable(
+  schema: JSONSchema | undefined,
+  ifaceKind: 'system' | 'observation',
+  actionType: 'state_transition' | 'attribute_update' | undefined,
+  isContractCarrier: boolean | undefined
+): string {
   if (!schema?.properties) return '*(无 schema)*';
+  const isStateTransition = ifaceKind === 'system' && actionType === 'state_transition';
+  const isObservation = ifaceKind === 'observation';
   const rows = Object.entries(schema.properties).map(([k, v]) => {
     const required = schema.required?.includes(k) ? '✓' : '';
-    return [k, v.type ?? 'any', v.description ?? '', required];
+    let desc = v.description ?? '';
+    // E11 后续问题 6：currentState CAS 标注
+    if (k === 'currentState') {
+      if (isStateTransition) {
+        desc = `${desc ? desc + '\n' : ''}\`CAS 断言\`：状态转移前置校验（resource 实际状态 == currentState 才执行；hsk-ng Disable/Enable/Delete 走 Disable/Enable/Delete(ctx, ownerID, id, req.CurrentState)）。`;
+      } else if (isObservation) {
+        desc = `${desc ? desc + '\n' : ''}\`CAS 断言（impl 不读取）\`：纯读/观测接口 impl 不使用 currentState；specs 必填仅用于契约对齐，verify 仍会注入（多余但无害）。`;
+      } else if (!isContractCarrier) {
+        desc = `${desc ? desc + '\n' : ''}\`CAS 断言\`：模型要求；impl 可容忍 currentState=="" 时取实体实际状态。`;
+      }
+    }
+    return [k, v.type ?? 'any', desc, required];
   });
   return renderTable(['字段', '类型', '说明', '必填'], rows);
 }
@@ -1146,16 +1187,24 @@ function renderInterfaceDetailPage(view: WebInterfaceView): string {
   parts.push(`> 接口 ID: \`${view.id}\` | 类型: **${view.kind === 'system' ? '系统' : '观测'}**${
     view.actionType ? ` | 动作类型: \`${view.actionType}\`` : ''
   } | schemaKind: **${view.schemaKind ?? '—'}**\n`);
+  // E11 后续问题 5：契约承载接口标注
+  if (view.isContractCarrier) {
+    parts.push(
+      '> **承载接口（contract-carrier）**：契约 interface 未匹配任何 transition.id/action；'
+      + 'requestSchema/responseSchema/errorResponses 由契约层直接投影，不参与状态机推演。'
+      + '（详见 envelope.migrationWarnings）\n'
+    );
+  }
   if (view.schemaDegradedReasons && view.schemaDegradedReasons.length > 0) {
     parts.push('## 降级理由\n');
     for (const r of view.schemaDegradedReasons) parts.push(`- ${r}`);
     parts.push('');
   }
   parts.push('## 请求参数 (requestSchema)\n');
-  parts.push(renderSchemaTable(view.requestSchema));
+  parts.push(renderSchemaTable(view.requestSchema, view.kind, view.actionType, view.isContractCarrier));
   parts.push('');
   parts.push('## 响应体 (responseSchema)\n');
-  parts.push(renderSchemaTable(view.responseSchema));
+  parts.push(renderSchemaTable(view.responseSchema, view.kind, view.actionType, view.isContractCarrier));
   parts.push('');
   // E11：错误响应契约表（接口详情"错误响应"段）
   if (view.errorResponses && view.errorResponses.length > 0) {

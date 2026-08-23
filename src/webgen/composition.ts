@@ -928,6 +928,21 @@ export function renderSubProtocolPage(
     ));
     parts.push('');
   }
+
+  // 更多信息：链接到本子协议目录下的具体信息页（test-cases/verification/diff/bindings）。
+  // 这些页面由单协议 derive-web 生成后复制到 protocols/<id>/（组合层不重新生成），
+  // 此处仅作机械相对链接；文件缺失时链接自然 404，不阻断生成。
+  parts.push(`## 更多信息\n`);
+  const detailLinks: Array<[string, string, string]> = [
+    ['test-cases', '测试用例浏览器', '路径覆盖度与偏差'],
+    ['verification', '验证报告对比', 'legacy vs impl 双跑对账'],
+    ['diff', '模型 diff / impact', '变更 → 受影响步骤/产物'],
+    ['bindings', '绑定视图', '传输绑定与错误映射'],
+  ];
+  for (const [file, title, desc] of detailLinks) {
+    parts.push(`- [${title}](${file}) — ${desc}`);
+  }
+  parts.push('');
   return parts.join('\n');
 }
 
@@ -970,22 +985,44 @@ export function renderProjectInterfaceDetailPage(
   // 顶部导航：返回子协议列表 + 协议元数据
   parts.push(`# ${iface.name}\n`);
   parts.push(`> [← 返回 ${protocol.id} ${protocol.name}](../${protocol.id}/) | 接口 ID: \`${iface.id}\` | 类型: **${iface.kind === 'system' ? '系统' : '观测'}**${iface.actionType ? ` | 动作类型: \`${iface.actionType}\`` : ''} | schemaKind: **${iface.schemaKind ?? '—'}**\n`);
+  // E11 后续问题 5：契约承载接口标注（组合层）
+  if (iface.isContractCarrier) {
+    parts.push(
+      '> **承载接口（contract-carrier）**：契约 interface 未匹配任何 transition.id/action；'
+      + 'requestSchema/responseSchema/errorResponses 由契约层直接投影，不参与状态机推演。\n'
+    );
+  }
   if (iface.schemaDegradedReasons && iface.schemaDegradedReasons.length > 0) {
     parts.push('## 降级理由\n');
     for (const r of iface.schemaDegradedReasons) parts.push(`- ${r}`);
     parts.push('');
   }
   // I/O 字段（结构化展示，沿用 E7-P0 风格）
+  // E11 后续问题 6：currentState CAS 标注（组合层）
   if (iface.inputs && iface.inputs.length > 0) {
     parts.push('## 输入字段\n');
+    const isStateTransition = iface.kind === 'system' && iface.actionType === 'state_transition';
+    const isObservation = iface.kind === 'observation';
     parts.push(renderTable(
       ['字段名', '类型', '必填', '说明'],
-      (iface.inputs as FieldSpec[]).map((f) => [
-        f.name,
-        f.type ?? '—',
-        f.required ? '✓' : '',
-        f.description ?? '',
-      ]),
+      (iface.inputs as FieldSpec[]).map((f) => {
+        let desc = f.description ?? '';
+        if (f.name === 'currentState') {
+          if (isStateTransition) {
+            desc = `${desc ? desc + '\n' : ''}\`CAS 断言\`：状态转移前置校验（resource 实际状态 == currentState 才执行；hsk-ng Disable/Enable/Delete 走 Disable/Enable/Delete(ctx, ownerID, id, req.CurrentState)）。`;
+          } else if (isObservation) {
+            desc = `${desc ? desc + '\n' : ''}\`CAS 断言（impl 不读取）\`：纯读/观测接口 impl 不使用 currentState；specs 必填仅用于契约对齐，verify 仍会注入（多余但无害）。`;
+          } else if (!iface.isContractCarrier) {
+            desc = `${desc ? desc + '\n' : ''}\`CAS 断言\`：模型要求；impl 可容忍 currentState=="" 时取实体实际状态。`;
+          }
+        }
+        return [
+          f.name,
+          f.type ?? '—',
+          f.required ? '✓' : '',
+          desc,
+        ];
+      }),
     ));
     parts.push('');
   }

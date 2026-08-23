@@ -806,6 +806,16 @@ export interface InterfaceSpec {
    * 缺省视为兼容老协议（无错误契约）。
    */
   errorResponses?: ErrorResponseDef[];
+  /**
+   * E11 后续问题 5：契约承载接口标记。
+   * - true 表示该 spec 是「未匹配任何 transition 的契约」的承载接口
+   *   （contract.interface 找不到对应 transition.id/action 时由 specifier 派生），
+   *   用于把契约 errorResponses / requestSchema / responseSchema 投影到 specs，
+   *   补齐 errorMap 缺口。
+   * - kind 仍为 system，但 sourceId 与 transition 解耦；不入状态机推演。
+   * - 缺省视为正常状态机系统接口。
+   */
+  isContractCarrier?: boolean;
 }
 
 // ============================================================================

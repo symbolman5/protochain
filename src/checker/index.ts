@@ -1008,6 +1008,36 @@ export function checkErrorContracts(
       );
     }
   }
+
+  // ── R-E6：契约 interface 无匹配系统接口 → warning（008-5；非 error，防阻断）──
+  // 背景：specifier 按 transition.id / transition.action 匹配 contract.interface（或 sourceId）投影 errorResponses；
+  // 未匹配契约的 errorResponses 会被静默丢弃（specs.json 不含 → errorMap 缺口）。
+  // specifier 已派生承载接口 IF_CTR_<iface>（kind=system，isContractCarrier=true）补投影，
+  // 此处加 warning 让模型作者知道：「该契约无对应 transition，请审视是否需要补系统接口或归并」。
+  // 形态：warning（非 error），防阻断已有协议；信息集中暴露便于后续整改。
+  const transitionNames = new Set<string>();
+  for (const t of model.derivable.transitions) {
+    if (t.id) transitionNames.add(t.id);
+    if (t.action) transitionNames.add(t.action);
+  }
+  const seenIface = new Set<string>();
+  for (const c of contracts) {
+    if (!c.interface || seenIface.has(c.interface)) continue;
+    seenIface.add(c.interface);
+    // 命中判定：契约 interface 名 或 显式 sourceId 任一被 transition 消费即视为对齐
+    if (transitionNames.has(c.interface)) continue;
+    if (c.sourceId && transitionNames.has(c.sourceId)) continue;
+    // 该契约无任何 transition 消费 → warning
+    const erCodes = (c.errorResponses ?? []).map((er) => er.errorCode);
+    const codesText = erCodes.length > 0 ? `（涉及错误码：${erCodes.join(', ')}）` : '';
+    fieldIssues.push(
+      warningIssue(
+        `契约 interface "${c.interface}" 未匹配任何 transition.id/action；specifier 已派生承载接口（IF_CTR_*）补 errorResponses 投影，请审视是否需要在 model.md 增加对应系统接口${codesText}`,
+        `contractInput.contracts.${c.interface}`,
+        c.interface
+      )
+    );
+  }
 }
 
 // ============================================================================

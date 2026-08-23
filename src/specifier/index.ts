@@ -53,6 +53,15 @@ export interface SpecifyOptions {
  * - 消费方统一走 `specify(model).specs` 或 `specsFromEnvelope(specify(model))`
  * - 既有的 12 个 caller（specifier.test.ts 等）已迁移为 envelopes.specs / specsFromEnvelope
  *
+ * E11 后续问题 5（008-5）：契约 interface 未匹配任何系统接口时的投影策略
+ * - 旧行为：契约 errorResponses 被静默丢弃（specs.json 不含），errorMap 中 22 个错误码
+ *   缺失投影；根因：P3/P4 系统接口仅覆盖 disable/enable/delete 等状态机动作，契约层
+ *   的 mappingCreate/domainClaim/endpointRegister 等动作无对应 transition。
+ * - 新行为：对"未匹配任何 transition.id/action"的契约派生承载接口（contract-carrier），
+ *   把契约 errorResponses / requestSchema / responseSchema 投影到该承载 spec；
+ *   同时通过 envelope.migrationWarnings 列出缺口细节（契约名 + errorResponses 数 +
+ *   涉及错误码），checker 同步新增 warning（非 error，防阻断）。
+ *
  * 边界：
  * - 退化模式：specs 仍为 InterfaceSpec[]（duck-type 不再依赖）
  * - 强类型消费：返回值即 SpecsEnvelope；envelope.specs 是 InterfaceSpec[]
@@ -63,12 +72,25 @@ export function specify(
 ): SpecsEnvelope {
   const derivable = model.derivable;
   let specs: InterfaceSpec[];
+  // E11 后续问题 5：收集"未匹配任何 transition 的契约"详情（承载接口投影依据 + warning 来源）
+  const orphanContractReports: OrphanContractReport[] = [];
 
   // E2.1：契约层 contracts[] → Map（degraded 模式也消费，但 schemaKind 仍 description-only）
   const contractMap = buildContractMap(model.contractInput?.contracts);
 
   if (derivable.degraded) {
     specs = specifyDegraded(model, options, contractMap);
+    // 退化模式：契约未被 transition 消费的情况单独收集（同样视作 orphan）
+    // 退化模式不强制承载接口（保持 description-only），仅记录
+    const orphans = collectOrphanContracts(contractMap, derivable.transitions);
+    for (const entry of orphans) {
+      orphanContractReports.push({
+        interface: entry.iface,
+        carrierId: '(degraded: 未派生承载接口)',
+        errorResponseCount: entry.contract.errorResponses?.length ?? 0,
+        errorCodes: (entry.contract.errorResponses ?? []).map((er) => er.errorCode),
+      });
+    }
   } else {
     specs = [];
 
@@ -105,6 +127,38 @@ export function specify(
     for (const pool of derivable.resourcePools ?? []) {
       specs.push(deriveResourcePoolObservationInterface(pool));
     }
+
+    // 7. E11 后续问题 5：契约承载接口派生
+    // - 收集 contractMap 中未被任何 transition.id/action 消费的契约
+    // - 对每个 orphan contract 派生一个 IF_CTR_<iface> 形态的承载接口（kind=system）
+    // - 承载接口的 requestSchema/responseSchema 来自契约层（直接采用，已对齐 ajv 可编译）
+    // - 承载接口的 errorResponses 来自契约层（= 原 errorResponses 列表）
+    // - 承载接口不参与状态机（sourceId 与 transition 无对应），仅作"契约投影载体"
+    const orphans = collectOrphanContracts(contractMap, derivable.transitions);
+    for (const entry of orphans) {
+      const carrier = deriveContractCarrierInterface(entry.contract, entry.iface);
+      specs.push(carrier);
+      orphanContractReports.push({
+        interface: entry.iface,
+        carrierId: carrier.id,
+        errorResponseCount: entry.contract.errorResponses?.length ?? 0,
+        errorCodes: (entry.contract.errorResponses ?? []).map((er) => er.errorCode),
+      });
+    }
+  }
+
+  // E11 后续问题 5：把缺口清单写入 envelope.migrationWarnings（warning 语义而非 migration）
+  const migrationWarnings: string[] = [];
+  if (orphanContractReports.length > 0) {
+    migrationWarnings.push(
+      `E11 后续问题 5：检测到 ${orphanContractReports.length} 个契约 interface 未匹配任何 transition.id/action，已派生承载接口 IF_CTR_*（kind=system）；承载接口包含契约 errorResponses，建议审视是否需要在 model.md 增加对应系统接口或归并到现有 transition。`
+    );
+    for (const r of orphanContractReports) {
+      const codes = r.errorCodes.length > 0 ? `（涉及错误码：${r.errorCodes.join(', ')}）` : '';
+      migrationWarnings.push(
+        `  - 契约 "${r.interface}" → 承载接口 ${r.carrierId}，errorResponses=${r.errorResponseCount}${codes}`
+      );
+    }
   }
 
   return {
@@ -112,7 +166,52 @@ export function specify(
     generatedAt: new Date().toISOString(),
     sourceModelVersion: model.metadata.version,
     specs,
+    migrationWarnings: migrationWarnings.length > 0 ? migrationWarnings : undefined,
   };
+}
+
+/** E11 后续问题 5：承载接口派生所需的契约 + 接口名中间结构（specify 内部用） */
+interface OrphanContractReport {
+  interface: string;
+  carrierId: string;
+  errorResponseCount: number;
+  errorCodes: string[];
+}
+
+/** E11 后续问题 5：判定契约 interface 是否被某 transition 消费 */
+function isContractConsumedByTransitions(
+  contractInterface: string,
+  transitions: TransitionDef[]
+): boolean {
+  for (const t of transitions) {
+    if (t.id === contractInterface) return true;
+    if (t.action === contractInterface) return true;
+  }
+  return false;
+}
+
+/**
+ * E11 后续问题 5：收集"未被任何 transition 消费"的契约条目
+ * - 同一契约可能既按 interface 又按 sourceId 进 map（buildContractMap 双键），去重时按
+ *   contract.interface 唯一（避免对同一 contract 报两次）
+ */
+function collectOrphanContracts(
+  contractMap: Map<string, ContractEntry>,
+  transitions: TransitionDef[]
+): Array<{ iface: string; contract: ContractEntry }> {
+  const orphans: Array<{ iface: string; contract: ContractEntry }> = [];
+  const seen = new Set<string>();
+  for (const [key, contract] of contractMap.entries()) {
+    // 同一 contract 可能存在 interface + sourceId 两键，仅按 interface 去重
+    if (seen.has(contract.interface)) continue;
+    if (isContractConsumedByTransitions(key, transitions) || isContractConsumedByTransitions(contract.interface, transitions)) {
+      seen.add(contract.interface);
+      continue;
+    }
+    seen.add(contract.interface);
+    orphans.push({ iface: contract.interface, contract });
+  }
+  return orphans;
 }
 
 /**
@@ -321,6 +420,96 @@ function deriveSystemInterface(
       contract?.errorResponses && contract.errorResponses.length > 0
         ? contract.errorResponses.slice()
         : undefined,
+  };
+}
+
+// ============================================================================
+// E11 后续问题 5：契约承载接口（contract-carrier）
+// ============================================================================
+
+/**
+ * E11 后续问题 5：对"未被任何 transition 消费的契约"派生承载接口。
+ *
+ * 动机：specifier 旧实现按 transition.action / transition.id 匹配 contract.interface，
+ * 未匹配契约的 errorResponses 被静默丢弃（specs.json 不含 → errorMap 中错误码缺失投影，
+ * web「错误映射表」每接口页出警告）。新增承载接口机制：
+ * - 承载接口 kind=system，但 sourceId/iface 与 transition 解耦（仅作契约投影载体）
+ * - requestSchema/responseSchema 直接采用契约层（ajv 可编译）
+ * - errorResponses 来自契约层（关键：使 errorMap 22 个缺口码进 specs）
+ * - 不参与状态机（无 from/to/guard），故不产生 currentState / nextState 字段
+ * - ID 命名空间：IF_CTR_<interface>（避开 IF_SYS_* / IF_OBS_* 既有命名）
+ *
+ * 退化模式：不派生承载接口（保持 description-only）；但 envelope.migrationWarnings
+ * 仍记录缺口，让 checker / web 知道需要人工干预。
+ */
+function deriveContractCarrierInterface(
+  contract: ContractEntry,
+  contractIface: string
+): InterfaceSpec {
+  // 承载接口的 requestSchema / responseSchema 直接采用契约层（已是 ajv 可编译 JSON Schema）
+  const requestSchema: JSONSchema = contract.requestSchema ?? fieldsToObjectSchema([], {});
+  const responseSchema: JSONSchema = contract.responseSchema ?? fieldsToObjectSchema([], {});
+
+  // inputs / outputs 由 schema properties 机械派生（与 deriveSystemInterface 对齐）
+  const inputs: FieldSpec[] = schemaPropertiesToFields(
+    requestSchema,
+    `${contractIface} 契约层请求字段`
+  );
+  const outputs: FieldSpec[] = schemaPropertiesToFields(
+    responseSchema,
+    `${contractIface} 契约层响应字段`
+  );
+
+  // 承载接口标识：IF_CTR_<interface>（驼峰→大写下划线仅占位）
+  const idSafeIface = contractIface.replace(/[^a-zA-Z0-9_]/g, '_');
+  const carrierId = `IF_CTR_${idSafeIface}`;
+
+  // 契约层 preconditions/postconditions/sideEffects 直接采用
+  const preconditions: SchemaExpression[] = contract.preconditions?.slice() ?? [];
+  const postconditionExpressions: SchemaExpression[] = contract.postconditions?.slice() ?? [];
+  const sideEffects: SchemaExpression[] = contract.sideEffects?.slice() ?? [];
+
+  // schemaKind：契约层提供完整 request/response schema + 表达式时 → structured；
+  // 否则按 classifySchemaKind 归类（多数契约层均达 structured）。
+  const schemaKind = classifySchemaKind({
+    requestSchema,
+    responseSchema,
+    preconditions,
+    postconditionExpressions,
+    sideEffects,
+  });
+
+  // 降级理由：明确标注"承载接口"语义，避免与状态机系统接口混淆
+  const schemaDegradedReasons: string[] = [
+    `承载接口（contract-carrier）：契约 ${contractIface} 未匹配任何 transition.id/action；requestSchema/responseSchema 直接采用契约层`,
+  ];
+  if (schemaKind !== 'structured') {
+    schemaDegradedReasons.push('契约层未提供完整 JSON Schema 或 preconditions/postconditions，进 description-only 降级');
+  }
+
+  return {
+    id: carrierId,
+    kind: 'system', // 沿用 system 类型（让 web 渲染表/绑定视图正常出现）；用 isContractCarrier 标记区分
+    sourceId: contractIface,
+    name: contractIface,
+    inputs,
+    outputs,
+    requestSchema,
+    responseSchema,
+    preconditions,
+    postconditionExpressions,
+    sideEffects,
+    schemaKind,
+    schemaDegradedReasons,
+    // 契约层来源标识
+    contractSource: contractIface,
+    // E11：接口错误响应契约（承载：把契约 errorResponses 投影进 specs，补 errorMap 缺口）
+    errorResponses:
+      contract.errorResponses && contract.errorResponses.length > 0
+        ? contract.errorResponses.slice()
+        : undefined,
+    // 承载接口标记：webgen / checker 可据此区分（不入 verify 状态机推演）
+    isContractCarrier: true,
   };
 }
 
