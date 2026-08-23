@@ -402,6 +402,7 @@ function makeBinding(
     type: 'http',
     method: 'POST',
     path: '/api/v1/test',
+    params: [],
   };
   return {
     spec: {
@@ -412,7 +413,7 @@ function makeBinding(
       inputs: [],
       outputs: [],
     },
-    binding: { action: 'test', transport, params: [] },
+    binding: { action: 'test', roleId: 'r', transport },
     roleBinding: {
       roleId: 'r',
       baseUrl: 'http://mock.local',

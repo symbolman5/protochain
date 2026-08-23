@@ -29,8 +29,8 @@ import { deriveWeb, redactSensitiveFields } from '../../src/webgen/index.js';
 import type {
   BindingConfig,
   SourceProtocolModel,
-  TransportResult,
 } from '../../src/model/types.js';
+import type { TransportResult } from '../../src/transport/types.js';
 import type { TransportExecutorFn } from '../../src/verifier/binding-runner.js';
 
 // ---------------------------------------------------------------------------
@@ -129,7 +129,7 @@ describe('E11 fixture-level 自包含验收', () => {
     const config: BindingConfig = {
       roles: { r: { roleId: 'r', baseUrl: 'http://x', auth: 'none' } },
       interfaces: [
-        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r' } },
+        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r', params: [] } },
       ],
       // 故意不写 errorMap
     };
@@ -158,7 +158,7 @@ describe('E11 fixture-level 自包含验收', () => {
     const config: BindingConfig = {
       roles: { r: { roleId: 'r', baseUrl: 'http://x', auth: 'none' } },
       interfaces: [
-        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r' } },
+        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r', params: [] } },
       ],
       errorMap: {
         domain_taken: { httpStatus: 409, systemCode: 'E409', bodyField: 'code' },
@@ -185,7 +185,7 @@ describe('E11 fixture-level 自包含验收', () => {
     const bindings: BindingConfig = {
       roles: { r: { roleId: 'r', baseUrl: 'http://x', auth: 'none' } },
       interfaces: [
-        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r' } },
+        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r', params: [] } },
       ],
       errorMap: {
         domain_taken: { httpStatus: 409, bodyField: 'code', systemCode: 'E409', bodyFieldValue: 'DOMAIN_TAKEN' },
@@ -194,7 +194,7 @@ describe('E11 fixture-level 自包含验收', () => {
     const transport = makeTransport({
       register: () => ({ status: 409, data: { code: 'domain_taken', message: '已被占用' }, ok: false }),
     });
-    const errorSummary = { matched: {}, unmapped: [], systemFault: 0, expected: {} };
+    const errorSummary: import('../../src/model/types.js').ErrorSummary = { matched: {}, unmapped: [], systemFault: 0, expected: {} };
     const path = {
       id: 'P1',
       transitionIds: ['T1'],
@@ -242,7 +242,7 @@ describe('E11 fixture-level 自包含验收', () => {
     const bindings: BindingConfig = {
       roles: { r: { roleId: 'r', baseUrl: 'http://x', auth: 'none' } },
       interfaces: [
-        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r' } },
+        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r', params: [] } },
       ],
       errorMap: {
         domain_taken: { httpStatus: 409, bodyField: 'code' },
@@ -251,7 +251,7 @@ describe('E11 fixture-level 自包含验收', () => {
     const transport = makeTransport({
       register: () => ({ status: 403, data: { code: 'token_invalid_role', message: '...' }, ok: false }),
     });
-    const errorSummary = { matched: {}, unmapped: [], systemFault: 0 };
+    const errorSummary: import('../../src/model/types.js').ErrorSummary = { matched: {}, unmapped: [], systemFault: 0 };
     const path = { id: 'P1', transitionIds: ['T1'], stateIds: ['S1', 'S2'], length: 1 };
     const resolved = [
       { spec: specs.find((s) => s.name === 'register')!, binding: bindings.interfaces[0], roleBinding: bindings.roles.r },
@@ -280,7 +280,7 @@ describe('E11 fixture-level 自包含验收', () => {
     const bindings: BindingConfig = {
       roles: { r: { roleId: 'r', baseUrl: 'http://x', auth: 'none' } },
       interfaces: [
-        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r' } },
+        { action: 'register', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r', params: [] } },
       ],
       errorMap: {
         domain_taken: { httpStatus: 409, bodyField: 'code' },
@@ -290,7 +290,7 @@ describe('E11 fixture-level 自包含验收', () => {
     const transport = makeTransport({
       register: () => ({ status: 504, data: { error: 'gateway timeout' }, ok: false }),
     });
-    const errorSummary = { matched: {}, unmapped: [], systemFault: 0 };
+    const errorSummary: import('../../src/model/types.js').ErrorSummary = { matched: {}, unmapped: [], systemFault: 0 };
     const path = { id: 'P1', transitionIds: ['T1'], stateIds: ['S1', 'S2'], length: 1 };
     const resolved = [
       { spec: specs.find((s) => s.name === 'register')!, binding: bindings.interfaces[0], roleBinding: bindings.roles.r },
@@ -307,7 +307,7 @@ describe('E11 fixture-level 自包含验收', () => {
     expect(errorSummary.systemFault).toBeGreaterThanOrEqual(1);
     expect(errorSummary.unmapped.length).toBe(0);
     expect(
-      Object.values(errorSummary.matched).reduce((a, b) => a + b, 0)
+      Object.values(errorSummary.matched).reduce((a: number, b: number) => a + b, 0)
     ).toBe(0);
   });
 
@@ -453,7 +453,7 @@ roles:
     const config: BindingConfig = {
       roles: { r: { roleId: 'r', baseUrl: 'http://x', auth: 'none' } },
       interfaces: [
-        { action: 'do_legacy', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r' } },
+        { action: 'do_legacy', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/r', params: [] } },
       ],
     };
     const report = validateBindings(specs, config);

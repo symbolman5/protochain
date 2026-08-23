@@ -24,7 +24,7 @@ describe('verifier', () => {
     const testCases = generateCases(model, { criterion: 'state' });
 
     test('无实现时路径跳过但消极保证通过', async () => {
-      const report = await verify(model, { testCases, implementation: undefined });
+      const report = await verify(model, { rootDir: '.', testCases, implementation: undefined });
       expect(report.authoritative.counts.skipped).toBe(testCases.paths.length);
       expect(report.authoritative.counts.passed).toBe(model.derivable.invariants.length); // 消极保证验证通过
       expect(report.authoritative.counts.failed).toBe(0);
@@ -41,7 +41,7 @@ describe('verifier', () => {
         timeout_return: async (s) => ({ nextState: s === 'S2' ? 'S1' : s }),
       };
 
-      const report = await verify(model, { testCases, implementation });
+      const report = await verify(model, { rootDir: '.', testCases, implementation });
       expect(report.authoritative.counts.skipped).toBe(0);
       expect(report.authoritative.counts.failed).toBe(0);
       // 路径数 + 不变量数（消极保证验证）
@@ -58,7 +58,7 @@ describe('verifier', () => {
         timeout_return: async (s) => ({ nextState: 'S1' }),
       };
 
-      const report = await verify(model, { testCases, implementation });
+      const report = await verify(model, { rootDir: '.', testCases, implementation });
       expect(report.authoritative.counts.failed).toBeGreaterThan(0);
       expect(report.authoritative.passed).toBe(false);
 
@@ -78,7 +78,7 @@ describe('verifier', () => {
         // 缺少 approve/reject/withdraw/timeout_return
       };
 
-      const report = await verify(model, { testCases, implementation });
+      const report = await verify(model, { rootDir: '.', testCases, implementation });
       const failed = report.authoritative.caseResults.filter((c) => !c.passed && !c.skipped);
       expect(failed.length).toBeGreaterThan(0);
       const missingDevs = failed.flatMap((c) => c.deviations ?? []).filter((d) => d.kind === 'missing_action');
@@ -94,7 +94,7 @@ describe('verifier', () => {
         timeout_return: async (s) => ({ nextState: 'S1' }),
       };
 
-      const report = await verify(model, { testCases, implementation });
+      const report = await verify(model, { rootDir: '.', testCases, implementation });
       const failed = report.authoritative.caseResults.filter((c) => !c.passed && !c.skipped);
       expect(failed.length).toBeGreaterThan(0);
       const firstFailed = failed[0];
@@ -107,14 +107,14 @@ describe('verifier', () => {
     const testCases = generateCases(model, { criterion: 'state' });
 
     test('报告含 counts 三项计数', async () => {
-      const report = await verify(model, { testCases });
+      const report = await verify(model, { rootDir: '.', testCases });
       expect(report.authoritative.counts).toHaveProperty('passed');
       expect(report.authoritative.counts).toHaveProperty('failed');
       expect(report.authoritative.counts).toHaveProperty('skipped');
     });
 
     test('caseResults 含每条路径的结果', async () => {
-      const report = await verify(model, { testCases });
+      const report = await verify(model, { rootDir: '.', testCases });
       // 路径结果 + 消极保证验证结果（不变量数）
       expect(report.authoritative.caseResults.length).toBe(testCases.paths.length + model.derivable.invariants.length);
       for (const cr of report.authoritative.caseResults) {
@@ -124,7 +124,7 @@ describe('verifier', () => {
     });
 
     test('记录验证时间戳', async () => {
-      const report = await verify(model, { testCases });
+      const report = await verify(model, { rootDir: '.', testCases });
       expect(report.verifiedAt).toBeTruthy();
       expect(report.verifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     });
@@ -142,7 +142,7 @@ describe('verifier', () => {
       const adapter = new MockAIAdapter(aiResponse);
       const report = await verify(
         model,
-        { testCases },
+        { rootDir: '.', testCases },
         adapter,
         { useAISummary: true }
       );
@@ -165,7 +165,7 @@ describe('verifier', () => {
       };
       const report = await verify(
         model,
-        { testCases, implementation },
+        { rootDir: '.', testCases, implementation },
         adapter,
         { useAISummary: true }
       );
@@ -177,7 +177,7 @@ describe('verifier', () => {
       const adapter = new MockAIAdapter('', false);
       const report = await verify(
         model,
-        { testCases },
+        { rootDir: '.', testCases },
         adapter,
         { useAISummary: true }
       );
@@ -190,7 +190,7 @@ describe('verifier', () => {
       const adapter = new MockAIAdapter('不是 JSON');
       const report = await verify(
         model,
-        { testCases },
+        { rootDir: '.', testCases },
         adapter,
         { useAISummary: true }
       );
@@ -207,10 +207,11 @@ describe('verifier', () => {
           criterion: 'state',
           stateCoverage: { covered: 0, total: 0, ratio: 0, coveredIds: [], uncoveredIds: [] },
           transitionCoverage: { covered: 0, total: 0, ratio: 0, coveredIds: [], uncoveredIds: [] },
+          uncoveredDispositions: [],
         },
         generatedAt: new Date().toISOString(),
       };
-      const report = await verify(model, { testCases: emptyTestCases });
+      const report = await verify(model, { rootDir: '.', testCases: emptyTestCases });
       // 无路径用例，但仍有消极保证验证结果（不变量数）
       expect(report.authoritative.caseResults.length).toBe(model.derivable.invariants.length);
       expect(report.authoritative.counts.passed).toBe(model.derivable.invariants.length);
@@ -221,7 +222,7 @@ describe('verifier', () => {
     test('摘要包含通过/失败/跳过计数', async () => {
       const model = parseProtocolContent(readFixture('approval-flow.md'));
       const testCases = generateCases(model, { criterion: 'state' });
-      const report = await verify(model, { testCases });
+      const report = await verify(model, { rootDir: '.', testCases });
       const summary = formatVerificationSummary(report);
       expect(summary).toContain('一致性验证');
       expect(summary).toContain('通过');
@@ -239,7 +240,7 @@ describe('verifier', () => {
         withdraw: async (s) => ({ nextState: 'S5' }),
         timeout_return: async (s) => ({ nextState: 'S1' }),
       };
-      const report = await verify(model, { testCases, implementation });
+      const report = await verify(model, { rootDir: '.', testCases, implementation });
       const summary = formatVerificationSummary(report);
       expect(summary).toContain('失败用例');
     });

@@ -59,20 +59,20 @@ function makeP7LikeModel(): SourceProtocolModel {
 
   const transitions: TransitionDef[] = [
     // 主 US 转移
-    { id: 'T1', name: 'US冻结', from: ['US1'], to: 'US2', action: 'freeze' },
-    { id: 'T2', name: 'US解冻', from: ['US2'], to: 'US1', action: 'unfreeze' },
-    { id: 'T3', name: 'US注销', from: ['US1'], to: 'US3', action: 'deactivate' },
-    { id: 'T4', name: 'US注销完成', from: ['US3'], to: 'US4', action: 'deactivate_done' },
+    { id: 'T1', name: 'US冻结', from: ['US1'], to: 'US2', action: 'freeze', triggerType: 'role', trigger: 'user', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'T2', name: 'US解冻', from: ['US2'], to: 'US1', action: 'unfreeze', triggerType: 'role', trigger: 'user', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'T3', name: 'US注销', from: ['US1'], to: 'US3', action: 'deactivate', triggerType: 'role', trigger: 'user', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'T4', name: 'US注销完成', from: ['US3'], to: 'US4', action: 'deactivate_done', triggerType: 'system', trigger: 'system', actionType: 'state_transition', affectsDimensions: [] },
     // PS 维度（附属实体创建转移：from='-'/空，归属 PS 子状态机）
-    { id: 'PS_T1', name: 'PS创建', from: ['-'], to: 'PS2', action: 'create' },
-    { id: 'PS_T2', name: 'PS到期', from: ['PS2'], to: 'PS3', action: 'expire' },
-    { id: 'PS_T3', name: 'PS封禁', from: ['PS2'], to: 'PS4', action: 'ban' },
-    { id: 'PS_T4', name: 'PS停用', from: ['PS3', 'PS4'], to: 'PS5', action: 'deactivate' },
+    { id: 'PS_T1', name: 'PS创建', from: ['-'], to: 'PS2', action: 'create', triggerType: 'system', trigger: 'system', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'PS_T2', name: 'PS到期', from: ['PS2'], to: 'PS3', action: 'expire', triggerType: 'system', trigger: 'system', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'PS_T3', name: 'PS封禁', from: ['PS2'], to: 'PS4', action: 'ban', triggerType: 'role', trigger: 'user', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'PS_T4', name: 'PS停用', from: ['PS3', 'PS4'], to: 'PS5', action: 'deactivate', triggerType: 'role', trigger: 'user', actionType: 'state_transition', affectsDimensions: [] },
     // PI 维度
-    { id: 'PI_T1', name: 'PI创建', from: ['-'], to: 'PI1', action: 'create' },
-    { id: 'PI_T2', name: 'PI解配', from: ['PI1'], to: 'PI2', action: 'unbind' },
-    { id: 'PI_T3', name: 'PI故障', from: ['PI1'], to: 'PI3', action: 'fault' },
-    { id: 'PI_T4', name: 'PI退役', from: ['PI2', 'PI3'], to: 'PI4', action: 'retire' },
+    { id: 'PI_T1', name: 'PI创建', from: ['-'], to: 'PI1', action: 'create', triggerType: 'system', trigger: 'system', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'PI_T2', name: 'PI解配', from: ['PI1'], to: 'PI2', action: 'unbind', triggerType: 'role', trigger: 'user', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'PI_T3', name: 'PI故障', from: ['PI1'], to: 'PI3', action: 'fault', triggerType: 'system', trigger: 'system', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'PI_T4', name: 'PI退役', from: ['PI2', 'PI3'], to: 'PI4', action: 'retire', triggerType: 'role', trigger: 'user', actionType: 'state_transition', affectsDimensions: [] },
   ];
 
   const invariants: InvariantDef[] = [
@@ -80,6 +80,8 @@ function makeP7LikeModel(): SourceProtocolModel {
       id: 'INV-PS1',
       name: 'PS 终态不活跃',
       expression: 'PS5 implies US4',
+      declaredBy: 'system',
+      invariantClass: 'intra_protocol',
     },
   ];
 
@@ -95,11 +97,14 @@ function makeP7LikeModel(): SourceProtocolModel {
   };
 
   return {
-    metadata: { name: 'P7-like 多实体模型', version: '1.0.0', purpose: '多子状态机测试' },
-    readable: { background: '等价 P7 协议，含 US 主状态机 + PS/PI 附属子状态机' },
+    metadata: {
+      name: 'P7-like 多实体模型',
+      version: '1.0.0',
+      purpose: '多子状态机测试',
+      roles: [{ id: 'user', name: '用户', roleType: 'participant' }],
+    },
+    readable: { background: '等价 P7 协议，含 US 主状态机 + PS/PI 附属子状态机', concepts: [], workflow: '' },
     derivable,
-    roleAnchors: [],
-    subsidiaries: [],
   };
 }
 
@@ -111,13 +116,18 @@ function makeSingleMachineModel(): SourceProtocolModel {
     { id: 'S3', name: '停止', type: 'terminal' },
   ];
   const transitions: TransitionDef[] = [
-    { id: 'T1', name: '启动', from: ['S1'], to: 'S2', action: 'start' },
-    { id: 'T2', name: '接收流量', from: ['S2'], to: 'S2', action: 'receive' },
-    { id: 'T3', name: '停止', from: ['S2'], to: 'S3', action: 'stop' },
+    { id: 'T1', name: '启动', from: ['S1'], to: 'S2', action: 'start', triggerType: 'role', trigger: 'user', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'T2', name: '接收流量', from: ['S2'], to: 'S2', action: 'receive', triggerType: 'system', trigger: 'system', actionType: 'state_transition', affectsDimensions: [] },
+    { id: 'T3', name: '停止', from: ['S2'], to: 'S3', action: 'stop', triggerType: 'role', trigger: 'user', actionType: 'state_transition', affectsDimensions: [] },
   ];
   return {
-    metadata: { name: '单状态机', version: '1.0.0', purpose: '回归测试' },
-    readable: { background: '简单单状态机' },
+    metadata: {
+      name: '单状态机',
+      version: '1.0.0',
+      purpose: '回归测试',
+      roles: [{ id: 'user', name: '用户', roleType: 'participant' }],
+    },
+    readable: { background: '简单单状态机', concepts: [], workflow: '' },
     derivable: {
       states,
       transitions,
@@ -128,8 +138,6 @@ function makeSingleMachineModel(): SourceProtocolModel {
       initialStateId: 'S1',
       terminalStateIds: ['S3'],
     },
-    roleAnchors: [],
-    subsidiaries: [],
   };
 }
 

@@ -265,8 +265,10 @@ roles:
     // 系统接口 path 与观测接口 path 不同（独立通道）
     expect(step2Binding.binding!.transport).toHaveProperty('path', '/step2');
     expect(obsS3Binding.binding!.transport).toHaveProperty('path', '/state/S3');
-    expect(step2Binding.binding!.transport.path).not.toBe(
-      obsS3Binding.binding!.transport.path
+    expect(
+      (step2Binding.binding!.transport as { path?: string }).path
+    ).not.toBe(
+      (obsS3Binding.binding!.transport as { path?: string }).path
     );
   });
 });

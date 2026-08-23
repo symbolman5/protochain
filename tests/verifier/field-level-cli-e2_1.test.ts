@@ -93,7 +93,7 @@ describe('verifier - E2.1 字段级 CLI 端到端', () => {
   test('verify 端到端：字段类型不符 → 偏差含 legacy=<type>, impl=<type>', async () => {
     const model: SourceProtocolModel = parseProtocolContent(MODEL_TEXT, 'e2_1.md');
     const specs: InterfaceSpec[] = specsFromEnvelope(specify(model));
-    const testCases = generateCases(model, specs);
+    const testCases = generateCases(model);
 
     // 构造 bindings：仅 register 一个接口
     const bindings: BindingConfig = {
@@ -162,7 +162,7 @@ describe('verifier - E2.1 字段级 CLI 端到端', () => {
   test('verify 端到端：所有字段类型正确 → 无 field_mismatch', async () => {
     const model = parseProtocolContent(MODEL_TEXT, 'e2_1.md');
     const specs = specsFromEnvelope(specify(model));
-    const testCases = generateCases(model, specs);
+    const testCases = generateCases(model);
 
     const bindings: BindingConfig = {
       roles: {

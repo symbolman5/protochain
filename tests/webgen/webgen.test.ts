@@ -595,7 +595,6 @@ describe('deriveWeb（端到端）', () => {
         description: 'fake',
         required: false,
         // 注入敏感键（specifier 不会输出这些键，但 webgen 应在 redact 阶段清除）
-        // @ts-expect-error 故意注入额外字段模拟上游不慎写入
         tokenEnv: 'SECRET_TOKEN_XYZ',
       };
       // @ts-expect-error 同样故意

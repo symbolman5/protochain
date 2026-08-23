@@ -714,7 +714,7 @@ describe('mergeBindings', () => {
       warnings: [],
     };
 
-    const manual = {
+    const manual: import('../../src/model/types.js').BindingConfig = {
       roles: {},
       interfaces: [
         { action: 'overlap', roleId: 'R1', transport: { type: 'http', method: 'POST', path: '/manual', params: [] } },

@@ -13,6 +13,7 @@ import type {
   ResolvedBinding,
   InterfaceSpec,
   TransportBinding,
+  DbQueryTransport,
 } from '../../src/model/types.js';
 import type { TransportResult } from '../../src/transport/types.js';
 
@@ -202,7 +203,7 @@ describe('executeTransport 路由分发', () => {
         connectionEnv: 'MYSQL_URL',
       });
 
-      expect(resolved.binding!.transport.dbType).toBe('mysql');
+      expect((resolved.binding!.transport as DbQueryTransport).dbType).toBe('mysql');
     });
 
     test('type=db_query sqlite', () => {
@@ -213,7 +214,7 @@ describe('executeTransport 路由分发', () => {
         connectionEnv: 'SQLITE_PATH',
       });
 
-      expect(resolved.binding!.transport.dbType).toBe('sqlite');
+      expect((resolved.binding!.transport as DbQueryTransport).dbType).toBe('sqlite');
     });
   });
 

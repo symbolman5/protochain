@@ -13,6 +13,11 @@ import type { ProtochainConfig } from '../../src/model/types.js';
 
 type AIConfig = NonNullable<ProtochainConfig['ai']>;
 
+/** AIAdapter 接口未声明 modelName，但各 provider 适配器均有该 getter（运行时存在） */
+function modelOf(adapter: unknown): string {
+  return (adapter as { modelName: string }).modelName;
+}
+
 const LOCAL_CONFIG: AIConfig = {
   provider: 'local',
   model: 'default-model',
@@ -38,9 +43,9 @@ describe('多模型路由（ai/router）', () => {
   test('各角色返回对应模型的适配器，且同一角色缓存复用实例', () => {
     const router = createAIRouter(LOCAL_CONFIG);
 
-    expect(router.get('semantic').modelName).toBe('cheap-flash');
-    expect(router.get('reasoning').modelName).toBe('strong-pro');
-    expect(router.get('generation').modelName).toBe('gen-flash');
+    expect(modelOf(router.get('semantic'))).toBe('cheap-flash');
+    expect(modelOf(router.get('reasoning'))).toBe('strong-pro');
+    expect(modelOf(router.get('generation'))).toBe('gen-flash');
     expect(router.modelFor('reasoning')).toBe('strong-pro');
 
     // 缓存复用：同一角色两次 get 返回同一实例
@@ -51,9 +56,9 @@ describe('多模型路由（ai/router）', () => {
 
   test('未配置 models 时全部角色回退默认 model', () => {
     const router = createAIRouter({ provider: 'local', model: 'single' });
-    expect(router.get('semantic').modelName).toBe('single');
-    expect(router.get('reasoning').modelName).toBe('single');
-    expect(router.get('generation').modelName).toBe('single');
+    expect(modelOf(router.get('semantic'))).toBe('single');
+    expect(modelOf(router.get('reasoning'))).toBe('single');
+    expect(modelOf(router.get('generation'))).toBe('single');
   });
 
   test('apiKey 缺失时构造失败（与 createAIAdapter 一致，不静默降级）', () => {

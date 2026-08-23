@@ -35,6 +35,8 @@ import {
   renderProjectInterfaceBindingSection,
   renderProjectVitePressConfig,
   type CompositionWebData,
+  type SubProtocolSummary,
+  type CrossProtocolRef,
 } from '../../src/webgen/composition.js';
 import type { WebBindingView } from '../../src/webgen/index.js';
 import type {
@@ -741,6 +743,8 @@ describe('renderCrossRefsPage', () => {
 describe('renderCrossDiffSkeleton', () => {
   test('显示待 E9 接通', () => {
     const md = renderCrossDiffSkeleton({
+      schemaVersion: '1.1',
+      generatedAt: new Date().toISOString(),
       composition: { systemName: 'X', version: '0.1.0', changeType: 'protocol_tweak' },
       protocols: [],
       dependencyGraph: { mermaid: '', edges: [] },

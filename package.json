@@ -10,7 +10,8 @@
     "build": "tsc",
     "dev": "ts-node --esm src/cli/index.ts",
     "test": "jest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
     "ajv": "^8.17.1",

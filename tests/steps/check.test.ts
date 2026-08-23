@@ -16,8 +16,8 @@ import type {
   AIResponse,
   CompletenessReport,
   DerivedArtifacts,
-  StepContext,
 } from '../../src/model/types.js';
+import type { StepContext } from '../../src/orchestrator/index.js';
 
 class MockAIAdapter implements AIAdapter {
   name = 'mock';

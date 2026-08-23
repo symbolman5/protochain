@@ -66,7 +66,7 @@ describe('webgen - E11 buildBindingView（非敏感投影）', () => {
         r: { roleId: 'r', baseUrl: 'http://mock.local', auth: 'none' },
       },
       interfaces: [
-        { action: 'create', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/c' } },
+        { action: 'create', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/c', params: [] } },
       ],
       errorMap: {
         domain_not_owned: { httpStatus: 409, systemCode: 'E40901', bodyField: 'code' },
@@ -114,7 +114,7 @@ describe('webgen - E11 buildBindingView（非敏感投影）', () => {
           roleId: 'r',
           baseUrl: 'http://mock.local',
           auth: 'none',
-          tls: { certPath: '/etc/ssl/SECRET_CERT.pem', keyPath: '/etc/ssl/SECRET_KEY.pem' },
+          tls: { caFile: '/etc/ssl/SECRET_CERT.pem', servername: 'SECRET.example' },
         },
       },
       interfaces: [],
@@ -310,7 +310,7 @@ roles:
     expect(data.binding).toBeUndefined();
   });
 
-  void {} as SourceProtocolModel; // satisfy lint
+  void {} as unknown as SourceProtocolModel; // satisfy lint
 });
 
 // ---------------------------------------------------------------------------

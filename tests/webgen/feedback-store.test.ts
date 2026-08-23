@@ -208,7 +208,8 @@ describe('feedback/store: bindings.yaml 读写', () => {
       interfaces: [{ action: 'transfer', transport: { type: 'http', method: 'POST', path: '/v1/transfer' } }],
     });
     expect(w.ok).toBe(true);
-    const raw = readFileSync(w.data?.path ?? join(root, 'bindings.yaml'), 'utf-8');
+    if (!w.ok) throw new Error('writeBindingsFile 应成功');
+    const raw = readFileSync(w.data.path, 'utf-8');
     expect(raw).toContain('R-Op');
     expect(raw).toContain('transfer');
   });
@@ -217,7 +218,8 @@ describe('feedback/store: bindings.yaml 读写', () => {
     writeFileSync(join(root, 'bindings.yaml'), 'roles: []\ninterfaces: []\n');
     const w = writeBindingsFile(root, {
       roles: [{ roleId: 'R-Op' }],
-      interfaces: [{ protocol: 'P1' }], // 缺 action
+      // 缺 action：schema 拒（类型层面故意不完整，运行时由 validateBindingFile 拒绝）
+      interfaces: [{ protocol: 'P1' } as never],
     });
     expect(w.ok).toBe(false);
   });
@@ -236,7 +238,8 @@ describe('feedback/store: bindings.yaml 读写', () => {
       },
     });
     expect(w.ok).toBe(true);
-    const raw = readFileSync(w.data?.path ?? join(root, 'bindings.yaml'), 'utf-8');
+    if (!w.ok) throw new Error('writeBindingsFile 应成功');
+    const raw = readFileSync(w.data.path, 'utf-8');
     expect(raw).toContain('tokenEnv:');
     expect(raw).toContain('ADMIN_TOKEN'); // 落盘仍写「键名」—— 这是 YAML 字段名，非 secret 值
   });
@@ -300,9 +303,9 @@ describe('feedback/store: replaceBindingsFileAtomic (E7-P1-I1)', () => {
     const original = 'roles: [{roleId: R-Op}]\ninterfaces: [{action: original}]\n';
     writeFileSync(path, original, 'utf-8');
     const w = replaceBindingsFileAtomic(root, {
-      // 缺 action：schema 拒
+      // 缺 action：schema 拒（类型层面故意不完整，运行时由 validateBindingFile 拒绝）
       roles: [{ roleId: 'R-Op' }],
-      interfaces: [{ protocol: 'P1' }],
+      interfaces: [{ protocol: 'P1' } as never],
     });
     expect(w.ok).toBe(false);
     // 原文件未变

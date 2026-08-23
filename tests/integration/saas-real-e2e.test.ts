@@ -482,8 +482,9 @@ describe('SaaS 内网映射系统真实验证', () => {
     test('路径 description 包含依赖信息', () => {
       const cases = generateCrossCases(composition, subProtocolModels);
       // 第一条路径应该描述依赖关系
-      expect(cases.paths[0].description).toBeTruthy();
-      expect(cases.paths[0].description.length).toBeGreaterThan(0);
+      const firstPath = cases.paths[0];
+      expect(firstPath?.description).toBeTruthy();
+      expect(firstPath?.description?.length ?? 0).toBeGreaterThan(0);
     });
 
     test('路径包含跨协议不变量检查点', () => {

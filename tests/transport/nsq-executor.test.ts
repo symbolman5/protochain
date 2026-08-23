@@ -15,7 +15,7 @@
  */
 
 import { executeTransport } from '../../src/transport/index.js';
-import type { ResolvedBinding, InterfaceSpec } from '../../src/model/types.js';
+import type { ResolvedBinding, InterfaceSpec, RoleBinding, NsqTransport } from '../../src/model/types.js';
 import type { TransportResult } from '../../src/transport/types.js';
 
 // ---------------------------------------------------------------------------
@@ -173,7 +173,7 @@ describe('NSQ 传输 — 序列化与传输行为', () => {
     // NSQ 的 serde 类型定义为 'json'（literal type），
     // 不支持 avro/protobuf。这是类型层面保证的。
     const resolved = makeNsqResolved();
-    const transport = resolved.binding!.transport;
+    const transport = resolved.binding!.transport as NsqTransport;
     expect(transport.type).toBe('nsq');
     expect(transport.serde).toBe('json');
   });
@@ -310,14 +310,14 @@ describe('NSQ binder validateBindings 校验', () => {
 
 describe('NSQ 配置完整性', () => {
   test('RoleBinding.nsq 字段存在且可选', () => {
-    const roleWithNsq = {
+    const roleWithNsq: RoleBinding = {
       roleId: 'R',
       baseUrl: '',
       auth: 'none' as const,
       nsq: { nsqdTcpEnv: 'NSQD' },
     };
 
-    const roleWithoutNsq = {
+    const roleWithoutNsq: RoleBinding = {
       roleId: 'R',
       baseUrl: '',
       auth: 'none' as const,
@@ -329,7 +329,7 @@ describe('NSQ 配置完整性', () => {
   });
 
   test('NsqTransport 配置含 channel 可选字段', () => {
-    const withChannel = {
+    const withChannel: NsqTransport = {
       type: 'nsq' as const,
       topic: 't',
       serde: 'json' as const,
@@ -338,7 +338,7 @@ describe('NSQ 配置完整性', () => {
       channel: 'my-channel',
     };
 
-    const withoutChannel = {
+    const withoutChannel: NsqTransport = {
       type: 'nsq' as const,
       topic: 't',
       serde: 'json' as const,
@@ -350,7 +350,7 @@ describe('NSQ 配置完整性', () => {
   });
 
   test('NsqTransport correlationIdField 默认 correlation_id', () => {
-    const transport = {
+    const transport: NsqTransport = {
       type: 'nsq' as const,
       topic: 't',
       serde: 'json' as const,

@@ -256,7 +256,7 @@ describe('webgen - E11 后续问题 5/6 渲染标注', () => {
         schemaKind: 'structured',
       };
       const md = renderProjectInterfaceDetailPage(
-        { id: 'P1', name: '测试协议' },
+        { id: 'P1', name: '测试协议' } as unknown as Parameters<typeof renderProjectInterfaceDetailPage>[0],
         iface,
         [],
         undefined
@@ -280,7 +280,7 @@ describe('webgen - E11 后续问题 5/6 渲染标注', () => {
         schemaKind: 'structured',
       };
       const md = renderProjectInterfaceDetailPage(
-        { id: 'P1', name: '测试协议' },
+        { id: 'P1', name: '测试协议' } as unknown as Parameters<typeof renderProjectInterfaceDetailPage>[0],
         iface,
         [],
         undefined
@@ -304,7 +304,7 @@ describe('webgen - E11 后续问题 5/6 渲染标注', () => {
         errorResponses: [{ id: 'ERR-01', errorCode: 'port_conflict', httpStatus: 409 }],
       };
       const md = renderProjectInterfaceDetailPage(
-        { id: 'P1', name: '测试协议' },
+        { id: 'P1', name: '测试协议' } as unknown as Parameters<typeof renderProjectInterfaceDetailPage>[0],
         iface,
         [],
         undefined

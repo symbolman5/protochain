@@ -183,7 +183,7 @@ describe('binder - E11 validateBindings errorMap 完整性', () => {
       // 关键：specs.name 必须能在 interfaces 中找到，否则 missingSystem 非空 → valid=false
       roles: { r: { roleId: 'r', baseUrl: 'http://x', auth: 'none' } },
       interfaces: [
-        { action: 'create_mapping', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/c' } },
+        { action: 'create_mapping', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/c', params: [] } },
       ],
       errorMap: {
         domain_not_owned: { httpStatus: 409, bodyField: 'code' },
@@ -210,6 +210,58 @@ describe('binder - E11 validateBindings errorMap 完整性', () => {
     expect(report.warnings.some((w) => w.includes('phantom_code'))).toBe(true);
   });
 
+  test('B6.3：多协议项目——其他子协议声明的 errorMap 码归类跨协议共享（非残留）', () => {
+    const specs = [
+      makeSpec('create', [
+        { id: 'ERR-01', errorCode: 'domain_taken', httpStatus: 409 },
+      ]),
+    ];
+    const config: BindingConfig = {
+      roles: { r: { roleId: 'r', baseUrl: 'http://x', auth: 'none' } },
+      interfaces: [
+        { action: 'create', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/c', params: [] } },
+      ],
+      errorMap: {
+        domain_taken: { httpStatus: 409 },   // 当前协议声明 → 覆盖
+        site_not_found: { httpStatus: 404 }, // 其他子协议（P4）声明 → 跨协议共享
+        phantom_code: { httpStatus: 400 },   // 无任何协议声明 → 残留
+      },
+    };
+    const report = validateBindings(specs, config, 'P3', {
+      exceptionPathErrorCodes: ['domain_taken'],
+      protocolErrorCodes: {
+        P3: ['domain_taken'],
+        P4: ['site_not_found'],
+      },
+    });
+    expect(report.valid).toBe(true);
+    // 跨协议共享码进入 crossProtocolErrorCodes，不入 extraErrorCodes，不产生"残留" warning
+    expect(report.crossProtocolErrorCodes).toContain('site_not_found');
+    expect(report.extraErrorCodes).not.toContain('site_not_found');
+    expect(report.warnings.some((w) => w.includes('site_not_found'))).toBe(false);
+    // 真残留仍报 warning
+    expect(report.extraErrorCodes).toContain('phantom_code');
+    expect(report.warnings.some((w) => w.includes('phantom_code'))).toBe(true);
+  });
+
+  test('B6.3：当前协议异常路径码并入已声明集合（不作为多余码）', () => {
+    const specs: InterfaceSpec[] = [];
+    const config: BindingConfig = {
+      roles: {},
+      interfaces: [],
+      errorMap: {
+        duplicate_server_id: { httpStatus: 409 },
+      },
+    };
+    // 无 protocolErrorCodes（如单协议项目）→ 异常路径码仍应被识别为已声明
+    const report = validateBindings(specs, config, 'P1', {
+      exceptionPathErrorCodes: ['duplicate_server_id'],
+    });
+    expect(report.valid).toBe(true);
+    expect(report.extraErrorCodes).toBeUndefined();
+    expect(report.warnings.some((w) => w.includes('duplicate_server_id'))).toBe(false);
+  });
+
   test('兼容：specs 无 errorResponses + bindings 无 errorMap → 沿用旧行为（valid=true）', () => {
     const specs = [
       makeSpec('create', /* no errorResponses */),
@@ -217,7 +269,7 @@ describe('binder - E11 validateBindings errorMap 完整性', () => {
     const config: BindingConfig = {
       roles: { r: { roleId: 'r', baseUrl: 'http://x', auth: 'none' } },
       interfaces: [
-        { action: 'create', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/c' } },
+        { action: 'create', roleId: 'r', transport: { type: 'http', method: 'POST', path: '/c', params: [] } },
       ],
     };
     const report = validateBindings(specs, config);

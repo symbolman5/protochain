@@ -32,8 +32,8 @@ import type {
   BindingConfig,
   TestCaseSet,
   ErrorMapEntry,
-  TransportResult,
 } from '../../src/model/types.js';
+import type { TransportResult } from '../../src/transport/types.js';
 import type { TransportExecutorFn } from '../../src/verifier/binding-runner.js';
 
 // ---------------------------------------------------------------------------

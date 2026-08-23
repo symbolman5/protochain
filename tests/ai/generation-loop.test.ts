@@ -38,9 +38,9 @@ class ScriptedAdapter implements AIAdapter {
   }
 }
 
-function identityPrompt({ iteration, previousAttempts }: {
+function identityPrompt<T>({ iteration, previousAttempts }: {
   iteration: number;
-  previousAttempts: GenerationAttempt<string>[];
+  previousAttempts: GenerationAttempt<T>[];
 }): AIPrompt {
   const feedback = previousAttempts
     .map((a) => a.preflight.feedback)
