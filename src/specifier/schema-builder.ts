@@ -21,7 +21,10 @@ import type {
   JSONSchema,
   SchemaExpression,
   StateDef,
+  InvariantDef,
+  AttributeEffect,
 } from '../model/types.js';
+import { translatePredicate } from './predicates.js';
 
 /** 允许映射的 FieldSpec.type → JSON Schema type 名称 */
 const TYPE_MAP: Record<string, JSONSchema['type']> = {
@@ -108,15 +111,30 @@ export function fieldsToObjectSchema(
 /**
  * guard 表达式机械提取（结构化）
  *
- * 简化规则（E2-I2 修复后）：
+ * 简化规则（E2-I2 修复后 + W2 R2-1 语法扩展路线）：
+ * - W2（TC3/TC4）：先试受限谓词语法（nonEmpty / nonNegative / unique / matchesPattern /
+ *   fieldA == fieldB / fieldA < fieldB / sum(...) == total / invariant(INVn)）——
+ *   命中 → kind='json-schema' + 谓词机械翻译的可编译 schema；
  * - 单标识符（predicate 形 `form_valid` / `has_request` 等）→ legacy-stub（自然语言谓词，不进 schema）
  *   - 注：设计 §4.1：单标识符 guard 是「自然语言谓词」而非算术表达式；按 E2-I2 修复降级为 legacy-stub
  * - 多 token 表达式（`x == 1` / `count > 0 && flag == true`）→ json-schema + {type:'boolean'}
  * - 含中文标点 / 复杂函数调用 / 变量点引用 → legacy-stub
+ * - 未按谓词语法书写（自然语言）→ 恒不命中谓词（不做模式匹配，红线 2），走既有降级路径
  */
 export function tryParseGuardSchema(guard: string | undefined): SchemaExpression | undefined {
   if (!guard || guard.trim() === '') return undefined;
   const trimmed = guard.trim();
+
+  // W2（TC4）：受限谓词语法优先——命中 → json-schema + 谓词翻译 schema（R2-1 定案）
+  const predicate = translatePredicate(trimmed);
+  if (predicate) {
+    return {
+      kind: 'json-schema',
+      description: predicate.description,
+      schema: predicate.schema,
+    };
+  }
+
   // 含中文标点或非 ASCII 字符 → 标记 legacy-stub
   if (/[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]/.test(trimmed)) {
     return {
@@ -163,14 +181,76 @@ export function isIdentifierPredicate(guard: string | undefined): boolean {
 }
 
 /**
- * effects 数组 → SchemaExpression[]（始终是 description-only，effects 是 narrative）
+ * effects 数组 → SchemaExpression[]（W2 R2-2 ② narrative effects 值约束子集）
+ *
+ * - 命中受限谓词语法（值约束子集：nonEmpty / nonNegative / unique / matchesPattern 等）→ json-schema；
+ * - 未命中（赋值语义文本如 "状态改为已接单" / "计数 +1"）→ description-only（赋值语义归
+ *   attributeEffects 直通，不混入 guard 值约束，R2-2 定案）；
+ * - 老模型行为不变：既有 narrative effects（无谓词语法命中）全部保持 description-only（零回归）。
  */
 export function effectsToExpressions(effects: string[] | undefined): SchemaExpression[] {
   if (!effects || effects.length === 0) return [];
-  return effects.map((e) => ({
+  return effects.map((e) => {
+    const predicate = translatePredicate(e);
+    if (predicate) {
+      return {
+        kind: 'json-schema',
+        description: predicate.description,
+        schema: predicate.schema,
+      };
+    }
+    return { kind: 'description-only', description: e };
+  });
+}
+
+/**
+ * attributeEffects → structured effects（W2 R2-2 ① 零翻译直通）
+ *
+ * TransitionDef.attributeEffects 已是结构化赋值声明（set/increment/append/remove + field + value），
+ * 直接投影为 structured effects（kind='json-schema'），不做任何翻译/模式匹配：
+ * - schema 结构表达：字段必填（object.properties[field] + required）；
+ * - 操作/取值语义写入 description（零翻译直通，逐字段断言）。
+ */
+export function attributeEffectsToExpressions(
+  attributeEffects: AttributeEffect[] | undefined
+): SchemaExpression[] {
+  if (!attributeEffects || attributeEffects.length === 0) return [];
+  return attributeEffects.map((e) => {
+    const valueText = e.value !== undefined ? ` = ${e.value}` : '';
+    return {
+      kind: 'json-schema',
+      description: `属性效果 ${e.operation}(${e.field})${valueText}`,
+      schema: {
+        type: 'object',
+        properties: { [e.field]: { description: `attributeEffects.${e.operation}` } },
+        required: [e.field],
+      },
+    };
+  });
+}
+
+/**
+ * InvariantDef → SchemaExpression 机械转换（W2 §5 B 验收基准 / TC4 ④）
+ *
+ * 数据级不变量（level=data，如 UNIQUE 类）与 guard/effects 统一表达：
+ * - 表达式命中受限谓词语法（unique / nonEmpty / nonNegative / matchesPattern 等）→ json-schema
+ *   （unique 谓词直连 E4 已落地 SQL 校验生成器，不重做——本函数只做 SchemaExpression 转换）；
+ * - 未命中 → description-only（保留原文，不静默）。
+ * 跨接口谓词 invariant(INVn) 挂载 InvariantDef（R2-3），引用存在性由 checker 校验（TC5）。
+ */
+export function invariantToSchemaExpression(inv: InvariantDef): SchemaExpression {
+  const predicate = translatePredicate(inv.expression);
+  if (predicate) {
+    return {
+      kind: 'json-schema',
+      description: `不变量 ${inv.id}（${inv.expression}）：${predicate.description}`,
+      schema: predicate.schema,
+    };
+  }
+  return {
     kind: 'description-only',
-    description: e,
-  }));
+    description: `不变量 ${inv.id}（${inv.expression}）未命中受限谓词语法，保持原文`,
+  };
 }
 
 /**

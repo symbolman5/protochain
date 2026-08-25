@@ -48,6 +48,8 @@ import type {
   GuardTranslationDef,
   AttributeEffect,
   ErrorResponseDef,
+  RelationAssertion,
+  RelationAssertionKind,
 } from '../model/types.js';
 import {
   parseMarkdownAst,
@@ -97,7 +99,7 @@ export function parseProtocolContent(
   const sections = splitByHeadings(ast);
 
   const readable = parseReadableLayer(sections);
-  const { derivable, contractInput } = parseDerivableLayer(
+  const { derivable, contractInput, relationAssertions } = parseDerivableLayer(
     sections,
     metadata,
     options.allowDegraded ?? true
@@ -108,6 +110,7 @@ export function parseProtocolContent(
     readable,
     derivable,
     contractInput,
+    relationAssertions,
     sourcePath,
     parsedAt: new Date().toISOString(),
   };
@@ -328,7 +331,7 @@ function parseDerivableLayer(
   sections: Section[],
   metadata: MetadataLayer,
   allowDegraded: boolean
-): { derivable: DerivableLayer; contractInput?: ContractLayerInput } {
+): { derivable: DerivableLayer; contractInput?: ContractLayerInput; relationAssertions?: RelationAssertion[] } {
   // 检测退化模式：在形式化章节或可推演层章节下出现代码块
   const formalBlock = findFormalCodeBlock(sections);
 
@@ -422,7 +425,10 @@ function parseDerivableLayer(
   // 契约层（可选，仅校验用）
   const contractInput = parseContractInput(sections);
 
-  return { derivable, contractInput };
+  // W1-b 关系断言段（可选声明段；无断言段 → undefined，老 model.md 零回归）
+  const relationAssertions = parseRelationAssertions(sections);
+
+  return { derivable, contractInput, relationAssertions };
 }
 
 function findFormalCodeBlock(
@@ -925,6 +931,61 @@ function parseGuardTranslations(sections: Section[]): GuardTranslationDef[] {
         stutterVars: asStringArray(r.stutterVars, '守卫翻译.stutterVars') ?? [],
       };
     }
+  );
+}
+
+/**
+ * W1-b 关系断言段：YAML 数组，每条解析为 RelationAssertion。
+ * - 标题关键词：['关系断言', 'relation-assertions']（复用 detectExtensionSectionList）
+ * - 断言种类白名单：depends_on / sequence / shares_invariant（NR1-2 映射表）
+ * - 不在映射表的种类（如 excludes）→ ParseError 硬错误（无映射即无校验，主动加固，红线 3）
+ * - 引用存在性校验（a/b 是否存在于转移/状态）由 checker（TC2）负责，parser 只管语法与种类白名单
+ * - 无断言段 → undefined（老 model.md 零回归）
+ */
+function parseRelationAssertions(sections: Section[]): RelationAssertion[] | undefined {
+  const items = detectExtensionSectionList(
+    sections,
+    ['关系断言', 'relation-assertions'],
+    '关系断言',
+    (yaml) => {
+      const r = asRecord(yaml, '关系断言');
+      const id = requireString(r, 'id', '关系断言');
+      const kind = validateRelationAssertionKind(
+        requireString(r, 'kind', '关系断言'),
+        id
+      );
+      const a = requireString(r, 'a', '关系断言');
+      const b = requireString(r, 'b', '关系断言');
+      const note = optionalString(r, 'note');
+      const assertion: RelationAssertion = {
+        id,
+        kind,
+        a,
+        b,
+        assert: true,
+      };
+      if (note !== undefined) assertion.note = note;
+      return assertion;
+    }
+  );
+  return items.length > 0 ? items : undefined;
+}
+
+/**
+ * 断言种类白名单（NR1-2 映射表定案）。
+ * 不在映射表内的种类（如 excludes）→ ParseError 硬错误：
+ * 无映射即无机械校验对象（W1-a 投影无对应 kind），宽容处理会绕过校验拆护城河。
+ */
+function validateRelationAssertionKind(raw: string, assertionId: string): RelationAssertionKind {
+  const ALLOWED: RelationAssertionKind[] = ['depends_on', 'sequence', 'shares_invariant'];
+  const norm = raw.trim().toLowerCase();
+  if ((ALLOWED as string[]).includes(norm)) {
+    return norm as RelationAssertionKind;
+  }
+  throw new ParseError(
+    `关系断言 "${assertionId}" 的种类 "${raw}" 不在映射表（仅支持 depends_on / sequence / shares_invariant）；` +
+      `无映射即无机械校验对象（excludes 等种类首版裁出，R1-1 定案），拒绝解析`,
+    '关系断言'
   );
 }
 

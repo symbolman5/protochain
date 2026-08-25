@@ -499,6 +499,19 @@ describe('deriveWeb（端到端）', () => {
     const dataRaw = JSON.parse(readFileSync(result.dataJsonPath, 'utf-8')) as WebDataJson;
     expect(dataRaw.schemaVersion).toBe(WEB_DATA_SCHEMA_VERSION);
 
+    // 1.1 W1-a（T2/TB1）：derived/relations.json 随 data.json 同批落盘，sourceModelVersion 三处同源
+    const relationsPath = join(tmpRoot, 'derived/relations.json');
+    expect(existsSync(relationsPath)).toBe(true);
+    const relationsRaw = JSON.parse(readFileSync(relationsPath, 'utf-8')) as {
+      sourceModelVersion: string;
+      entries: unknown[];
+    };
+    expect(relationsRaw.sourceModelVersion).toBe(dataRaw.sourceModelVersion);
+    expect(relationsRaw.sourceModelVersion).toBe(dataRaw.relations.sourceModelVersion);
+    expect(relationsRaw.sourceModelVersion).toBe(dataRaw.sourceModelVersion);
+    expect(relationsRaw.entries.length).toBe(dataRaw.relations.entries.length);
+    expect(relationsRaw.entries.length).toBeGreaterThan(0);
+
     // 2. 站点工程目录
     expect(existsSync(join(result.webDir, 'package.json'))).toBe(true);
     expect(existsSync(join(result.webDir, 'docs/.vitepress/config.ts'))).toBe(true);

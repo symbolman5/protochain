@@ -1,0 +1,433 @@
+/* Protochain Viewer 样式（无框架；浅色主题，双击 file:// 可开） */
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --border: #e2e6ec;
+  --text: #1f2733;
+  --muted: #6b7686;
+  --accent: #2f6fed;
+  --ok: #1a7f37;
+  --warn: #9a6700;
+  --error: #cf222e;
+  --pass: #2da44e;
+  --fail: #cf222e;
+  --uncovered: #d4a72c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.brand-mark { color: var(--accent); font-size: 18px; }
+.brand-name { font-weight: 700; font-size: 16px; }
+.brand-sub { color: var(--muted); font-size: 12px; }
+.version-badge {
+  font-size: 12px;
+  color: var(--accent);
+  background: #eef3fe;
+  border: 1px solid #d6e2fb;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+/* ---------- N1 警示条 ---------- */
+.n1-banner {
+  margin: 10px 20px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.n1-banner.hidden { display: none; }
+.n1-error { background: #fff1f0; border: 1px solid #f7c5c9; color: var(--error); }
+.n1-warn  { background: #fff8e6; border: 1px solid #eedc9a; color: var(--warn); }
+
+/* ---------- 布局 ---------- */
+.layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: auto auto 1fr;
+  gap: 14px;
+  padding: 16px 20px 28px;
+}
+.import-panel { grid-column: 1; grid-row: 1; }
+.model-panel  { grid-column: 1; grid-row: 2; }
+.view-panel   { grid-column: 2; grid-row: 1 / span 2; }
+
+section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+
+/* ---------- 导入区 ---------- */
+.dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dropzone:hover, .dropzone.dragging { border-color: var(--accent); background: #f2f6fe; }
+.drop-title { font-weight: 600; }
+.drop-hint {
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0 7px;
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+.drop-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.status-line { margin-top: 6px; }
+.status-text { font-size: 12px; color: var(--muted); word-break: break-all; }
+.status-text.status-ok    { color: var(--ok); }
+.status-text.status-error { color: var(--error); }
+
+/* ---------- 模型信息 ---------- */
+.model-info .model-empty, .panel-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 12px 4px;
+}
+.model-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.model-name { font-weight: 700; font-size: 15px; }
+.model-meta { display: flex; gap: 12px; margin: 6px 0; font-size: 12px; color: var(--muted); }
+.model-roles { font-size: 12px; color: var(--muted); }
+
+/* ---------- 面板容器（TA4/TA5 挂载） ---------- */
+.panels { min-height: 360px; }
+
+/* ---------- 图例 / 面板通用 ---------- */
+.panel-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.legend { display: flex; gap: 12px; font-size: 12px; align-items: center; }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,0.15); }
+
+/* ---------- ① 主视图：状态机 SVG（TA4） ---------- */
+.sm-svg { width: 100%; min-height: 360px; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
+.sm-node { stroke: #1f2733; stroke-width: 1.5; fill: #eef2f8; }
+.sm-node-group.selected .sm-node { stroke: var(--accent); stroke-width: 2.5; fill: #dbe7ff; }
+.sm-node-label { font-size: 12px; fill: var(--text); pointer-events: none; }
+.sm-initial { fill: #1f2733; }
+.sm-initial + .sm-node-label { fill: #fff; }
+.sm-terminal { fill: #ffffff; }
+.sm-node-outer { fill: none; stroke: #1f2733; stroke-width: 1.5; }
+.sm-error { fill: #fff0f0; stroke: var(--error); }
+.sm-edge {
+  stroke: #9aa4b2;
+  stroke-width: 1.6;
+  fill: none;
+  cursor: pointer;
+  stroke-dasharray: 5 4;   /* 默认虚线：静态视图柔和；选中/联动/悬停时切实线（下方） */
+}
+.sm-edge:hover,
+.sm-edge.selected,
+.sm-edge.highlight { stroke-dasharray: none; }  /* 交互/强调态：实线 */
+.sm-edge:hover { stroke: var(--accent); stroke-width: 3; }
+.sm-edge-degraded { stroke: var(--error); }       /* 异常路径：红色虚线（继承 dasharray） */
+.sm-edge.selected { stroke: var(--accent); stroke-width: 3; }
+.sm-arrow-head { fill: #9aa4b2; }
+
+/* 边详情 */
+.detail-box { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #fafbfc; }
+.detail-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+.detail-hint { color: var(--muted); font-size: 12px; }
+.detail-row { display: flex; gap: 10px; font-size: 12px; padding: 3px 0; border-bottom: 1px dashed #e6e9ef; }
+.detail-row:last-child { border-bottom: none; }
+.detail-label { width: 150px; flex-shrink: 0; color: var(--muted); }
+.detail-value { word-break: break-all; }
+
+/* ---------- ③ 接口列表（TA5） ---------- */
+.iface-panel { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: #fafbfc; }
+.panel-subtitle { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.iface-list { display: flex; flex-wrap: wrap; gap: 4px; max-height: 140px; overflow: auto; }
+.iface-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #fff;
+}
+.iface-item:hover { border-color: var(--accent); }
+.iface-item.active { background: #dbe7ff; border-color: var(--accent); }
+.iface-item .iface-id { font-weight: 600; }
+.iface-item .iface-kind { float: right; color: var(--muted); font-size: 11px; }
+
+/* ③ 联动高亮（叠加在状态机 SVG 上） */
+.sm-node-group.highlight-pre { filter: drop-shadow(0 0 4px #9ecbff); }
+.sm-node-group.highlight-post { filter: drop-shadow(0 0 4px #2da44e); }
+.sm-edge.highlight { stroke: var(--accent); stroke-width: 2.5; }
+
+/* ---------- ⑥ 验证着色（TA5） ---------- */
+.sm-edge.coverage-pass { stroke: var(--pass); }
+.sm-edge.coverage-fail { stroke: var(--fail); }
+.sm-edge.coverage-uncovered { stroke: var(--uncovered); }
+.coverage-legend-note { font-size: 11px; color: var(--muted); }
+
+/* ---------- ② 角色泳道（TB3） ---------- */
+.lane-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafbfc;
+}
+.lane-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.lane-row {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  min-height: 44px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lane-row.lane-common { background: #fbfbfd; }
+.lane-row.scope-highlight { background: #eef6ff; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.lane-role {
+  flex-shrink: 0;
+  width: 110px;
+  padding: 10px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  border-right: 1px solid var(--border);
+  background: #f6f7f9;
+  display: flex;
+  align-items: center;
+  border-radius: 6px 0 0 6px;
+}
+.lane-nodes { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; align-items: center; }
+.lane-empty-hint { color: var(--muted); font-size: 12px; padding: 6px 2px; }
+.lane-node {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lane-node-multi { border-style: dashed; }
+.lane-node.scope-highlight { background: #dbe7ff; border-color: var(--accent); font-weight: 600; }
+.invariant-scope-list { display: flex; flex-direction: column; gap: 4px; }
+.invariant-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.invariant-item:hover { border-color: var(--accent); }
+.invariant-item.active { background: #dbe7ff; border-color: var(--accent); }
+.invariant-item .inv-name { font-weight: 600; }
+.invariant-item .inv-meta { color: var(--muted); }
+
+/* ---------- 用例路径回放（TB4） ---------- */
+.replay-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafbfc;
+}
+.replay-case-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.replay-case-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.replay-case-item:hover { border-color: var(--accent); }
+.replay-case-item.active { background: #dbe7ff; border-color: var(--accent); }
+.replay-case-id { font-weight: 600; }
+.replay-case-len { color: var(--muted); font-size: 11px; }
+.replay-case-status { font-size: 11px; border-radius: 999px; padding: 1px 7px; border: 1px solid var(--border); }
+.replay-status-pass { color: var(--ok); border-color: #bbe3c3; background: #f0fbf2; }
+.replay-status-fail { color: var(--error); border-color: #f7c5c9; background: #fff1f0; }
+.replay-status-skip { color: var(--warn); border-color: #eedc9a; background: #fff8e6; }
+.replay-status-none { color: var(--muted); }
+.replay-controls { margin-top: 4px; }
+.replay-bar { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.replay-step-label { font-size: 12px; font-weight: 600; margin-right: 6px; }
+.replay-bar button {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.replay-bar button:hover { border-color: var(--accent); color: var(--accent); }
+.replay-side { margin-top: 0; }
+
+/* 回放高亮（叠加在状态机 SVG 上） */
+.sm-node-group.replay-now { filter: drop-shadow(0 0 5px var(--accent)); }
+.sm-edge.replay-now { stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
+
+/* ---------- 关系面板（TB5） ---------- */
+.relations-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafbfc;
+}
+.relations-filter { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.relations-kind-btn {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.relations-kind-btn:hover { border-color: var(--accent); color: var(--accent); }
+.relations-kind-btn.active { background: #dbe7ff; border-color: var(--accent); }
+.relations-list { display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow: auto; }
+.relations-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.relations-item:hover { border-color: var(--accent); }
+.relations-item.active { background: #dbe7ff; border-color: var(--accent); }
+.relations-item-degraded { border-style: dashed; opacity: 0.9; }
+.rel-kind { font-size: 11px; border-radius: 4px; padding: 1px 6px; border: 1px solid var(--border); color: var(--muted); }
+.rel-kind-sequence { color: #7d4bb4; border-color: #d6c3ee; background: #f8f4fd; }
+.rel-kind-causes_state_change { color: #2f6fed; border-color: #c3d8fb; background: #f2f6fe; }
+.rel-kind-invariant_scope { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.rel-kind-timing { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.rel-pair { font-weight: 600; }
+.rel-scope, .rel-bound, .rel-degraded-tag { font-size: 11px; color: var(--muted); }
+.rel-degraded-tag { color: var(--error); border: 1px solid #f7c5c9; border-radius: 999px; padding: 0 6px; background: #fff1f0; }
+.rel-derived { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+/* 关系高亮（叠加在状态机 SVG 上） */
+.sm-edge.rel-highlight { stroke: #7d4bb4; stroke-width: 3; stroke-dasharray: none; }
+.sm-node-group.rel-highlight { filter: drop-shadow(0 0 5px #b48ade); }
+
+/* ═══════════════════════════════════════════════════════════════
+   ⑦ 演进 diff 面板（W3-f / TC9）
+   数据全部查表（data.json.diffView），计数 = 列表长度（图例可数）
+   ═══════════════════════════════════════════════════════════════ */
+.diff-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafbfc;
+}
+.diff-summary { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; font-size: 12px; }
+.diff-summary-text { color: var(--muted); font-size: 11px; }
+.diff-controls { display: flex; gap: 6px; margin-bottom: 8px; }
+.diff-hl-btn, .diff-clr-btn {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.diff-hl-btn:hover, .diff-clr-btn:hover { border-color: #9a6700; color: #9a6700; }
+.diff-affected { display: flex; flex-direction: column; gap: 6px; }
+.diff-block-title { font-size: 12px; font-weight: 600; color: var(--muted); }
+.diff-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.diff-chip {
+  font-size: 11px;
+  border: 1px solid #eedc9a;
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #fff8e6;
+  color: #9a6700;
+}
+.diff-none { font-size: 12px; color: var(--muted); }
+.diff-empty { color: #9a6700; }
+
+/* diff 高亮（叠加在状态机 SVG 上；集合 = diffView 查表） */
+.sm-edge.diff-highlight { stroke: #9a6700; stroke-width: 3; stroke-dasharray: 6 3; }
+.sm-node-group.diff-highlight { filter: drop-shadow(0 0 5px #d4a72c); }
+
+/* ═══════════════════════════════════════════════════════════════
+   组合层面板（W3-f / TC8）
+   数据全部查表（组合层 data.json schemaVersion=1.1），零 join 零推导
+   ═══════════════════════════════════════════════════════════════ */
+.composition-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafbfc;
+}
+.compo-proto-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.proto-node {
+  font-size: 12px;
+  border: 1px solid #c3d8fb;
+  border-radius: 999px;
+  padding: 3px 12px;
+  background: #f2f6fe;
+  color: #2f6fed;
+  transition: all 0.15s ease;
+}
+.proto-node.hl { background: #ffe9a8; border-color: #d4a72c; color: #7a5b00; box-shadow: 0 0 0 2px rgba(212, 167, 44, 0.35); }
+.compo-block-title { font-size: 12px; font-weight: 600; color: var(--muted); margin: 8px 0 4px; }
+.compo-dep-list, .compo-ref-list, .compo-inv-list { display: flex; flex-direction: column; gap: 4px; }
+.dep-row, .ref-row, .inv-span-row {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  background: #fff;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ref-row { cursor: pointer; }
+.ref-row:hover { border-color: #d4a72c; }
+.ref-row.hl { background: #fff8e6; border-color: #d4a72c; }
+.dep-pair, .ref-pair { font-weight: 600; }
+.dep-type, .ref-kind, .ref-target, .ref-src { font-size: 11px; color: var(--muted); }
+.ref-kind-guard { color: #9a6700; border: 1px solid #eedc9a; border-radius: 999px; padding: 0 6px; background: #fff8e6; }
+.ref-kind-field { color: #2f6fed; border: 1px solid #c3d8fb; border-radius: 999px; padding: 0 6px; background: #f2f6fe; }
+.ref-kind-invariant { color: #1a7f37; border: 1px solid #bbe3c3; border-radius: 999px; padding: 0 6px; background: #f0fbf2; }
+.ref-kind-shared { color: #7d4bb4; border: 1px solid #d6c3ee; border-radius: 999px; padding: 0 6px; background: #f8f4fd; }
+.ref-ctx { color: var(--muted); font-size: 11px; }
+.dep-desc { color: var(--muted); font-size: 11px; }
+.inv-span-id { font-weight: 600; }
+.inv-span-protos { color: var(--muted); font-size: 11px; margin-left: auto; }
+.composition-empty { color: #9a6700; }

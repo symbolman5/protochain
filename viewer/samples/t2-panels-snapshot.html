@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Protochain Viewer · T2 面板快照（泳道 / 回放 / 关系）</title>
+<style>/* Protochain Viewer 样式（无框架；浅色主题，双击 file:// 可开） */
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --border: #e2e6ec;
+  --text: #1f2733;
+  --muted: #6b7686;
+  --accent: #2f6fed;
+  --ok: #1a7f37;
+  --warn: #9a6700;
+  --error: #cf222e;
+  --pass: #2da44e;
+  --fail: #cf222e;
+  --uncovered: #d4a72c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.brand-mark { color: var(--accent); font-size: 18px; }
+.brand-name { font-weight: 700; font-size: 16px; }
+.brand-sub { color: var(--muted); font-size: 12px; }
+.version-badge {
+  font-size: 12px;
+  color: var(--accent);
+  background: #eef3fe;
+  border: 1px solid #d6e2fb;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+/* ---------- N1 警示条 ---------- */
+.n1-banner {
+  margin: 10px 20px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.n1-banner.hidden { display: none; }
+.n1-error { background: #fff1f0; border: 1px solid #f7c5c9; color: var(--error); }
+.n1-warn  { background: #fff8e6; border: 1px solid #eedc9a; color: var(--warn); }
+
+/* ---------- 布局 ---------- */
+.layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: auto auto 1fr;
+  gap: 14px;
+  padding: 16px 20px 28px;
+}
+.import-panel { grid-column: 1; grid-row: 1; }
+.model-panel  { grid-column: 1; grid-row: 2; }
+.view-panel   { grid-column: 2; grid-row: 1 / span 2; }
+
+section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+
+/* ---------- 导入区 ---------- */
+.dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dropzone:hover, .dropzone.dragging { border-color: var(--accent); background: #f2f6fe; }
+.drop-title { font-weight: 600; }
+.drop-hint {
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0 7px;
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+.drop-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.status-line { margin-top: 6px; }
+.status-text { font-size: 12px; color: var(--muted); word-break: break-all; }
+.status-text.status-ok    { color: var(--ok); }
+.status-text.status-error { color: var(--error); }
+
+/* ---------- 模型信息 ---------- */
+.model-info .model-empty, .panel-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 12px 4px;
+}
+.model-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.model-name { font-weight: 700; font-size: 15px; }
+.model-meta { display: flex; gap: 12px; margin: 6px 0; font-size: 12px; color: var(--muted); }
+.model-roles { font-size: 12px; color: var(--muted); }
+
+/* ---------- 面板容器（TA4/TA5 挂载） ---------- */
+.panels { min-height: 360px; }
+
+/* ---------- 图例 / 面板通用 ---------- */
+.panel-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.legend { display: flex; gap: 12px; font-size: 12px; align-items: center; }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,0.15); }
+
+/* ---------- ① 主视图：状态机 SVG（TA4） ---------- */
+.sm-svg { width: 100%; min-height: 360px; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
+.sm-node { stroke: #1f2733; stroke-width: 1.5; fill: #eef2f8; }
+.sm-node-group.selected .sm-node { stroke: var(--accent); stroke-width: 2.5; fill: #dbe7ff; }
+.sm-node-label { font-size: 12px; fill: var(--text); pointer-events: none; }
+.sm-initial { fill: #1f2733; }
+.sm-initial + .sm-node-label { fill: #fff; }
+.sm-terminal { fill: #ffffff; }
+.sm-node-outer { fill: none; stroke: #1f2733; stroke-width: 1.5; }
+.sm-error { fill: #fff0f0; stroke: var(--error); }
+.sm-edge {
+  stroke: #9aa4b2;
+  stroke-width: 1.6;
+  fill: none;
+  cursor: pointer;
+  stroke-dasharray: 5 4;   /* 默认虚线：静态视图柔和；选中/联动/悬停时切实线（下方） */
+}
+.sm-edge:hover,
+.sm-edge.selected,
+.sm-edge.highlight { stroke-dasharray: none; }  /* 交互/强调态：实线 */
+.sm-edge:hover { stroke: var(--accent); stroke-width: 3; }
+.sm-edge-degraded { stroke: var(--error); }       /* 异常路径：红色虚线（继承 dasharray） */
+.sm-edge.selected { stroke: var(--accent); stroke-width: 3; }
+.sm-arrow-head { fill: #9aa4b2; }
+
+/* 边详情 */
+.detail-box { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #fafbfc; }
+.detail-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+.detail-hint { color: var(--muted); font-size: 12px; }
+.detail-row { display: flex; gap: 10px; font-size: 12px; padding: 3px 0; border-bottom: 1px dashed #e6e9ef; }
+.detail-row:last-child { border-bottom: none; }
+.detail-label { width: 150px; flex-shrink: 0; color: var(--muted); }
+.detail-value { word-break: break-all; }
+
+/* ---------- ③ 接口列表（TA5） ---------- */
+.iface-panel { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: #fafbfc; }
+.panel-subtitle { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.iface-list { display: flex; flex-wrap: wrap; gap: 4px; max-height: 140px; overflow: auto; }
+.iface-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #fff;
+}
+.iface-item:hover { border-color: var(--accent); }
+.iface-item.active { background: #dbe7ff; border-color: var(--accent); }
+.iface-item .iface-id { font-weight: 600; }
+.iface-item .iface-kind { float: right; color: var(--muted); font-size: 11px; }
+
+/* ③ 联动高亮（叠加在状态机 SVG 上） */
+.sm-node-group.highlight-pre { filter: drop-shadow(0 0 4px #9ecbff); }
+.sm-node-group.highlight-post { filter: drop-shadow(0 0 4px #2da44e); }
+.sm-edge.highlight { stroke: var(--accent); stroke-width: 2.5; }
+
+/* ---------- ⑥ 验证着色（TA5） ---------- */
+.sm-edge.coverage-pass { stroke: var(--pass); }
+.sm-edge.coverage-fail { stroke: var(--fail); }
+.sm-edge.coverage-uncovered { stroke: var(--uncovered); }
+.coverage-legend-note { font-size: 11px; color: var(--muted); }
+
+/* ---------- ② 角色泳道（TB3） ---------- */
+.lane-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafbfc;
+}
+.lane-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.lane-row {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  min-height: 44px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lane-row.lane-common { background: #fbfbfd; }
+.lane-row.scope-highlight { background: #eef6ff; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.lane-role {
+  flex-shrink: 0;
+  width: 110px;
+  padding: 10px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  border-right: 1px solid var(--border);
+  background: #f6f7f9;
+  display: flex;
+  align-items: center;
+  border-radius: 6px 0 0 6px;
+}
+.lane-nodes { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; align-items: center; }
+.lane-empty-hint { color: var(--muted); font-size: 12px; padding: 6px 2px; }
+.lane-node {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lane-node-multi { border-style: dashed; }
+.lane-node.scope-highlight { background: #dbe7ff; border-color: var(--accent); font-weight: 600; }
+.invariant-scope-list { display: flex; flex-direction: column; gap: 4px; }
+.invariant-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.invariant-item:hover { border-color: var(--accent); }
+.invariant-item.active { background: #dbe7ff; border-color: var(--accent); }
+.invariant-item .inv-name { font-weight: 600; }
+.invariant-item .inv-meta { color: var(--muted); }
+
+/* ---------- 用例路径回放（TB4） ---------- */
+.replay-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafbfc;
+}
+.replay-case-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.replay-case-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.replay-case-item:hover { border-color: var(--accent); }
+.replay-case-item.active { background: #dbe7ff; border-color: var(--accent); }
+.replay-case-id { font-weight: 600; }
+.replay-case-len { color: var(--muted); font-size: 11px; }
+.replay-case-status { font-size: 11px; border-radius: 999px; padding: 1px 7px; border: 1px solid var(--border); }
+.replay-status-pass { color: var(--ok); border-color: #bbe3c3; background: #f0fbf2; }
+.replay-status-fail { color: var(--error); border-color: #f7c5c9; background: #fff1f0; }
+.replay-status-skip { color: var(--warn); border-color: #eedc9a; background: #fff8e6; }
+.replay-status-none { color: var(--muted); }
+.replay-controls { margin-top: 4px; }
+.replay-bar { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.replay-step-label { font-size: 12px; font-weight: 600; margin-right: 6px; }
+.replay-bar button {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.replay-bar button:hover { border-color: var(--accent); color: var(--accent); }
+.replay-side { margin-top: 0; }
+
+/* 回放高亮（叠加在状态机 SVG 上） */
+.sm-node-group.replay-now { filter: drop-shadow(0 0 5px var(--accent)); }
+.sm-edge.replay-now { stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
+
+/* ---------- 关系面板（TB5） ---------- */
+.relations-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafbfc;
+}
+.relations-filter { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.relations-kind-btn {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.relations-kind-btn:hover { border-color: var(--accent); color: var(--accent); }
+.relations-kind-btn.active { background: #dbe7ff; border-color: var(--accent); }
+.relations-list { display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow: auto; }
+.relations-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.relations-item:hover { border-color: var(--accent); }
+.relations-item.active { background: #dbe7ff; border-color: var(--accent); }
+.relations-item-degraded { border-style: dashed; opacity: 0.9; }
+.rel-kind { font-size: 11px; border-radius: 4px; padding: 1px 6px; border: 1px solid var(--border); color: var(--muted); }
+.rel-kind-sequence { color: #7d4bb4; border-color: #d6c3ee; background: #f8f4fd; }
+.rel-kind-causes_state_change { color: #2f6fed; border-color: #c3d8fb; background: #f2f6fe; }
+.rel-kind-invariant_scope { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.rel-kind-timing { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.rel-pair { font-weight: 600; }
+.rel-scope, .rel-bound, .rel-degraded-tag { font-size: 11px; color: var(--muted); }
+.rel-degraded-tag { color: var(--error); border: 1px solid #f7c5c9; border-radius: 999px; padding: 0 6px; background: #fff1f0; }
+.rel-derived { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+/* 关系高亮（叠加在状态机 SVG 上） */
+.sm-edge.rel-highlight { stroke: #7d4bb4; stroke-width: 3; stroke-dasharray: none; }
+.sm-node-group.rel-highlight { filter: drop-shadow(0 0 5px #b48ade); }
+</style>
+</head>
+<body>
+<!-- T2 快照：由 scripts/gen-t2-snapshot.ts 生成（jsdom 渲染 food-delivery.t2.data.json） -->
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◈</span>
+      <span class="brand-name">Protochain Viewer</span>
+      <span class="brand-sub">通用静态模型浏览器</span>
+    </div>
+    <div class="topbar-right">
+      <span id="parser-version" class="version-badge" title="内嵌 parser 版本（与工具链 package.json version 对齐，防版本漂移）">内嵌 parser v0.1.0</span>
+    </div>
+  </header>
+
+  <!-- N1 新鲜度守卫警示条（默认隐藏） -->
+  <div id="n1-banner" class="n1-banner hidden" role="alert"></div>
+
+  <main class="layout">
+    <!-- 导入区（W3-a） -->
+    <section class="import-panel">
+      <h2>导入</h2>
+
+      <div id="model-drop" class="dropzone" tabindex="0">
+        <div class="drop-title">model.md <span class="drop-hint">主输入</span></div>
+        <div class="drop-desc">拖拽或点击选择协议模型文件（浏览器端解析）</div>
+        <input id="model-file" type="file" accept=".md,.markdown" hidden="">
+      </div>
+
+      <div id="data-drop" class="dropzone" tabindex="0">
+        <div class="drop-title">data.json <span class="drop-hint">增强数据</span></div>
+        <div class="drop-desc">拖拽或点击选择 derive-web 产物（验证着色唯一数据源）</div>
+        <input id="data-file" type="file" accept=".json,application/json" hidden="">
+      </div>
+
+      <div class="status-line">
+        <span id="import-status" class="status-text">未导入文件</span>
+      </div>
+    </section>
+
+    <!-- 模型信息（TA3 验收③：模型名/版本/状态数） -->
+    <section class="model-panel">
+      <h2>模型</h2>
+      <div id="model-info" class="model-info">
+        <div class="model-empty">导入 model.md 后显示模型名称、版本与状态空间规模</div>
+      </div>
+    </section>
+
+    <!-- 面板容器：TA4 主视图 / TA5 ③⑥ 面板在此挂载 -->
+    <section class="view-panel">
+      <h2>视图</h2>
+      <div id="panels" class="panels"><div class="iface-panel"><div class="panel-subtitle">③ 接口 ↔ 状态联动（点击接口高亮前置/后置状态）</div><div class="iface-list"><div class="iface-item" data-iface-id="IF_SYS_T1"><span class="iface-id">IF_SYS_T1</span><span class="iface-kind">system</span><div class="iface-name">create</div></div><div class="iface-item" data-iface-id="IF_SYS_T2"><span class="iface-id">IF_SYS_T2</span><span class="iface-kind">system</span><div class="iface-name">pay_success</div></div><div class="iface-item" data-iface-id="IF_SYS_T3"><span class="iface-id">IF_SYS_T3</span><span class="iface-kind">system</span><div class="iface-name">accept</div></div><div class="iface-item" data-iface-id="IF_SYS_T4"><span class="iface-id">IF_SYS_T4</span><span class="iface-kind">system</span><div class="iface-name">finish_preparing</div></div><div class="iface-item" data-iface-id="IF_SYS_T5"><span class="iface-id">IF_SYS_T5</span><span class="iface-kind">system</span><div class="iface-name">assign_rider</div></div><div class="iface-item" data-iface-id="IF_SYS_T5b"><span class="iface-id">IF_SYS_T5b</span><span class="iface-kind">system</span><div class="iface-name">auto_cancel_no_rider</div></div><div class="iface-item" data-iface-id="IF_SYS_T6"><span class="iface-id">IF_SYS_T6</span><span class="iface-kind">system</span><div class="iface-name">confirm_delivery</div></div><div class="iface-item" data-iface-id="IF_SYS_T7"><span class="iface-id">IF_SYS_T7</span><span class="iface-kind">system</span><div class="iface-name">cancel</div></div><div class="iface-item" data-iface-id="IF_SYS_T8"><span class="iface-id">IF_SYS_T8</span><span class="iface-kind">system</span><div class="iface-name">auto_cancel_accept_timeout</div></div><div class="iface-item" data-iface-id="IF_SYS_T9"><span class="iface-id">IF_SYS_T9</span><span class="iface-kind">system</span><div class="iface-name">auto_cancel_delivery_timeout</div></div><div class="iface-item" data-iface-id="IF_SYS_T10"><span class="iface-id">IF_SYS_T10</span><span class="iface-kind">system</span><div class="iface-name">reject_by_merchant</div></div><div class="iface-item" data-iface-id="IF_OBS_STATE_S0"><span class="iface-id">IF_OBS_STATE_S0</span><span class="iface-kind">observation</span><div class="iface-name">observe_未创建</div></div><div class="iface-item" data-iface-id="IF_OBS_STATE_S1"><span class="iface-id">IF_OBS_STATE_S1</span><span class="iface-kind">observation</span><div class="iface-name">observe_已创建</div></div><div class="iface-item" data-iface-id="IF_OBS_STATE_S2"><span class="iface-id">IF_OBS_STATE_S2</span><span class="iface-kind">observation</span><div class="iface-name">observe_已支付</div></div><div class="iface-item" data-iface-id="IF_OBS_STATE_S3"><span class="iface-id">IF_OBS_STATE_S3</span><span class="iface-kind">observation</span><div class="iface-name">observe_备餐中</div></div><div class="iface-item" data-iface-id="IF_OBS_STATE_S4"><span class="iface-id">IF_OBS_STATE_S4</span><span class="iface-kind">observation</span><div class="iface-name">observe_已出餐</div></div><div class="iface-item" data-iface-id="IF_OBS_STATE_S5"><span class="iface-id">IF_OBS_STATE_S5</span><span class="iface-kind">observation</span><div class="iface-name">observe_配送中</div></div><div class="iface-item" data-iface-id="IF_OBS_STATE_S6"><span class="iface-id">IF_OBS_STATE_S6</span><span class="iface-kind">observation</span><div class="iface-name">observe_已送达</div></div><div class="iface-item" data-iface-id="IF_OBS_STATE_S7"><span class="iface-id">IF_OBS_STATE_S7</span><span class="iface-kind">observation</span><div class="iface-name">observe_已取消</div></div><div class="iface-item" data-iface-id="IF_OBS_INV_INV1"><span class="iface-id">IF_OBS_INV_INV1</span><span class="iface-kind">observation</span><div class="iface-name">observe_INV1</div></div><div class="iface-item" data-iface-id="IF_OBS_INV_INV2"><span class="iface-id">IF_OBS_INV_INV2</span><span class="iface-kind">observation</span><div class="iface-name">observe_INV2</div></div><div class="iface-item" data-iface-id="IF_OBS_INV_INV3"><span class="iface-id">IF_OBS_INV_INV3</span><span class="iface-kind">observation</span><div class="iface-name">observe_INV3</div></div><div class="iface-item" data-iface-id="IF_OBS_INV_INV4"><span class="iface-id">IF_OBS_INV_INV4</span><span class="iface-kind">observation</span><div class="iface-name">observe_INV4</div></div><div class="iface-item" data-iface-id="IF_OBS_INV_INV5"><span class="iface-id">IF_OBS_INV_INV5</span><span class="iface-kind">observation</span><div class="iface-name">observe_INV5</div></div><div class="iface-item" data-iface-id="IF_OBS_POOL_RP1"><span class="iface-id">IF_OBS_POOL_RP1</span><span class="iface-kind">observation</span><div class="iface-name">observe_pool_骑手运力池</div></div></div></div><div class="panel-toolbar"><span class="legend"><span class="legend-item"><span class="swatch" style="background:#1f2733;border-radius:50%"></span>初始</span><span class="legend-item"><span class="swatch" style="background:#6b7686;border:3px solid #fff;box-shadow:0 0 0 1px #6b7686"></span>终态</span><span class="legend-item"><span class="swatch" style="background:#2f6fed"></span>普通</span><span class="legend-item"><span class="swatch" style="background:#cf222e;border-radius:0;transform:rotate(45deg) scale(0.7)"></span>异常</span></span><span class="legend">状态 <b>8</b> · 转移 <b>11</b></span><span class="legend"><span class="legend-item"><span class="swatch" style="background:var(--pass)"></span>通过 3</span><span class="legend-item"><span class="swatch" style="background:var(--fail)"></span>失败 7</span><span class="legend-item"><span class="swatch" style="background:var(--uncovered);border-radius:50%"></span>未覆盖 1</span></span></div><svg viewBox="0 0 1120 390" class="sm-svg" role="img"><defs></defs><g data-node-id="S0" class="sm-node-group" style="cursor: pointer;"><circle cx="135" cy="52" r="22" class="sm-node sm-initial"></circle><text x="135" y="57" text-anchor="middle" class="sm-node-label">S0 未创建</text></g><g data-node-id="S1" class="sm-node-group" style="cursor: pointer;"><rect x="230" y="30" width="150" height="44" rx="10" class="sm-node sm-normal"></rect><text x="305" y="57" text-anchor="middle" class="sm-node-label">S1 已创建</text></g><g data-node-id="S2" class="sm-node-group" style="cursor: pointer;"><rect x="400" y="30" width="150" height="44" rx="10" class="sm-node sm-normal"></rect><text x="475" y="57" text-anchor="middle" class="sm-node-label">S2 已支付</text></g><g data-node-id="S3" class="sm-node-group" style="cursor: pointer;"><rect x="570" y="30" width="150" height="44" rx="10" class="sm-node sm-normal"></rect><text x="645" y="57" text-anchor="middle" class="sm-node-label">S3 备餐中</text></g><g data-node-id="S4" class="sm-node-group" style="cursor: pointer;"><rect x="740" y="30" width="150" height="44" rx="10" class="sm-node sm-normal"></rect><text x="815" y="57" text-anchor="middle" class="sm-node-label">S4 已出餐</text></g><g data-node-id="S5" class="sm-node-group" style="cursor: pointer;"><rect x="910" y="30" width="150" height="44" rx="10" class="sm-node sm-normal"></rect><text x="985" y="57" text-anchor="middle" class="sm-node-label">S5 配送中</text></g><g data-node-id="S6" class="sm-node-group" style="cursor: pointer;"><circle cx="135" cy="320" r="18" class="sm-node sm-terminal"></circle><circle cx="135" cy="320" r="22" class="sm-node-outer"></circle><text x="135" y="325" text-anchor="middle" class="sm-node-label">S6 已送达</text></g><g data-node-id="S7" class="sm-node-group" style="cursor: pointer;"><circle cx="736" cy="320" r="18" class="sm-node sm-terminal"></circle><circle cx="736" cy="320" r="22" class="sm-node-outer"></circle><text x="736" y="325" text-anchor="middle" class="sm-node-label">S7 已取消</text></g><g><line x1="210" y1="52" x2="230" y2="52" class="sm-edge coverage-fail" data-edge-id="T1" marker-end="url(#sm-arrow)"></line><line x1="380" y1="52" x2="400" y2="52" class="sm-edge coverage-fail" data-edge-id="T2" marker-end="url(#sm-arrow)"></line><line x1="550" y1="52" x2="570" y2="52" class="sm-edge coverage-fail" data-edge-id="T3" marker-end="url(#sm-arrow)"></line><line x1="720" y1="52" x2="740" y2="52" class="sm-edge coverage-fail" data-edge-id="T4" marker-end="url(#sm-arrow)"></line><line x1="890" y1="52" x2="910" y2="52" class="sm-edge coverage-fail" data-edge-id="T5" marker-end="url(#sm-arrow)"></line><path d="M 815 74 L 815 240 L 736 240 L 736 298" class="sm-edge coverage-pass" data-edge-id="T5b" marker-end="url(#sm-arrow)"></path><path d="M 985 74 L 985 284 L 135 284 L 135 298" class="sm-edge coverage-pass" data-edge-id="T6" marker-end="url(#sm-arrow)"></path><path d="M 305 74 L 305 184 L 736 184 L 736 298" class="sm-edge coverage-fail" data-edge-id="T7" marker-end="url(#sm-arrow)"></path><path d="M 475 74 L 475 226 L 736 226 L 736 298" class="sm-edge coverage-fail" data-edge-id="T7" marker-end="url(#sm-arrow)"></path><path d="M 475 74 L 475 212 L 736 212 L 736 298" class="sm-edge sm-edge-degraded coverage-pass" data-edge-id="T8" marker-end="url(#sm-arrow)"></path><path d="M 985 74 L 985 254 L 736 254 L 736 298" class="sm-edge sm-edge-degraded coverage-fail" data-edge-id="T9" marker-end="url(#sm-arrow)"></path><path d="M 475 74 L 475 198 L 736 198 L 736 298" class="sm-edge coverage-uncovered" data-edge-id="T10" marker-end="url(#sm-arrow)"></path></g></svg><div class="detail-box"><div class="detail-title">边详情</div><div class="detail-hint">点击图中的转移边查看详情（数据来自 data.json，端内零推导）</div></div><div class="lane-panel"><div class="panel-subtitle">② 角色泳道（按 StateDef.roleIds 落道，零推导）</div><div class="lane-container"><div class="lane-row" data-role-id="customer"><div class="lane-role">顾客</div><div class="lane-nodes"><div class="lane-node" data-node-id="S0">S0 未创建</div><div class="lane-node" data-node-id="S1">S1 已创建</div><div class="lane-node lane-node-multi" data-node-id="S2" title="roles: customer, merchant">S2 已支付</div><div class="lane-node" data-node-id="S6">S6 已送达</div><div class="lane-node lane-node-multi" data-node-id="S7" title="roles: customer, merchant">S7 已取消</div></div></div><div class="lane-row" data-role-id="merchant"><div class="lane-role">商家</div><div class="lane-nodes"><div class="lane-node" data-node-id="S3">S3 备餐中</div><div class="lane-node lane-node-multi" data-node-id="S4" title="roles: merchant, system">S4 已出餐</div></div></div><div class="lane-row" data-role-id="rider"><div class="lane-role">骑手</div><div class="lane-nodes"><div class="lane-node" data-node-id="S5">S5 配送中</div></div></div><div class="lane-row" data-role-id="system"><div class="lane-role">平台系统</div><div class="lane-nodes"><span class="lane-empty-hint">（无状态）</span></div></div><div class="lane-row" data-role-id="payment_gateway"><div class="lane-role">支付网关</div><div class="lane-nodes"><span class="lane-empty-hint">（无状态）</span></div></div></div><div class="panel-subtitle">约束承载联动（点击条目高亮 scope 状态与承载泳道）</div><div class="invariant-scope-list"><div class="invariant-item" data-invariant-id="INV1"><span class="inv-name">INV1 金额一致性</span><span class="inv-meta">承载：customer, merchant, rider, system · 覆盖 6 状态</span></div><div class="invariant-item" data-invariant-id="INV2"><span class="inv-name">INV2 送达不早于出餐</span><span class="inv-meta">承载：customer · 覆盖 1 状态</span></div><div class="invariant-item" data-invariant-id="INV3"><span class="inv-name">INV3 取消订单不产生配送费</span><span class="inv-meta">承载：customer, merchant · 覆盖 1 状态</span></div><div class="invariant-item" data-invariant-id="INV4"><span class="inv-name">INV4 骑手在途单量受限</span><span class="inv-meta">承载：rider · 覆盖 1 状态</span></div><div class="invariant-item" data-invariant-id="INV5"><span class="inv-name">INV5 实付金额与订单金额一致</span><span class="inv-meta">承载：customer, merchant, rider, system · 覆盖 5 状态</span></div></div></div><div class="replay-panel"><div class="panel-subtitle">用例路径回放（沿 stateIds/transitionIds 播放，零推导）</div><div class="replay-case-list"><div class="replay-case-item" data-case-id="P1"><span class="replay-case-id">P1</span><span class="replay-case-len">6 步</span><span class="replay-case-status replay-status-pass">通过</span></div><div class="replay-case-item" data-case-id="P2"><span class="replay-case-id">P2</span><span class="replay-case-len">3 步</span><span class="replay-case-status replay-status-fail">失败</span></div><div class="replay-case-item" data-case-id="P3"><span class="replay-case-id">P3</span><span class="replay-case-len">3 步</span><span class="replay-case-status replay-status-pass">通过</span></div><div class="replay-case-item" data-case-id="P4"><span class="replay-case-id">P4</span><span class="replay-case-len">5 步</span><span class="replay-case-status replay-status-pass">通过</span></div><div class="replay-case-item" data-case-id="P5"><span class="replay-case-id">P5</span><span class="replay-case-len">6 步</span><span class="replay-case-status replay-status-fail">失败</span></div></div><div class="panel-empty">选择上方用例开始回放（步进/自动/暂停）</div></div><div class="relations-panel"><div class="panel-subtitle">关系面板（W1-a relations 投影 · sourceModelVersion v1.0.0）</div><div class="relations-filter"><button type="button" class="relations-kind-btn active" data-kind="all">全部 31</button><button type="button" class="relations-kind-btn" data-kind="sequence">顺序前置 11</button><button type="button" class="relations-kind-btn" data-kind="causes_state_change">状态变更 11</button><button type="button" class="relations-kind-btn" data-kind="invariant_scope">不变量覆盖 5</button><button type="button" class="relations-kind-btn" data-kind="timing">时限 4</button><button type="button" class="relations-kind-btn relations-degraded-btn" data-kind="degraded">degraded 2</button></div><div class="relations-list"><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T1 → S1</span><span class="rel-derived" title="derived-from 溯源">源自：T1</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T10 → S7</span><span class="rel-derived" title="derived-from 溯源">源自：T10</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T2 → S2</span><span class="rel-derived" title="derived-from 溯源">源自：T2</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T3 → S3</span><span class="rel-derived" title="derived-from 溯源">源自：T3</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T4 → S4</span><span class="rel-derived" title="derived-from 溯源">源自：T4</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T5 → S5</span><span class="rel-derived" title="derived-from 溯源">源自：T5</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T5b → S7</span><span class="rel-derived" title="derived-from 溯源">源自：T5b</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T6 → S6</span><span class="rel-derived" title="derived-from 溯源">源自：T6</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T7 → S7</span><span class="rel-derived" title="derived-from 溯源">源自：T7</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T8 → S7</span><span class="rel-derived" title="derived-from 溯源">源自：T8</span></div><div class="relations-item" data-kind="causes_state_change"><span class="rel-kind rel-kind-causes_state_change">状态变更</span><span class="rel-pair">T9 → S7</span><span class="rel-derived" title="derived-from 溯源">源自：T9</span></div><div class="relations-item" data-kind="invariant_scope"><span class="rel-kind rel-kind-invariant_scope">不变量覆盖</span><span class="rel-pair">INV1 → S1,S2,S3,S4,S5,S6</span><span class="rel-scope">覆盖 6 状态</span><span class="rel-derived" title="derived-from 溯源">源自：INV1</span></div><div class="relations-item" data-kind="invariant_scope"><span class="rel-kind rel-kind-invariant_scope">不变量覆盖</span><span class="rel-pair">INV2 → S6</span><span class="rel-scope">覆盖 1 状态</span><span class="rel-derived" title="derived-from 溯源">源自：INV2</span></div><div class="relations-item" data-kind="invariant_scope"><span class="rel-kind rel-kind-invariant_scope">不变量覆盖</span><span class="rel-pair">INV3 → S7</span><span class="rel-scope">覆盖 1 状态</span><span class="rel-derived" title="derived-from 溯源">源自：INV3</span></div><div class="relations-item" data-kind="invariant_scope"><span class="rel-kind rel-kind-invariant_scope">不变量覆盖</span><span class="rel-pair">INV4 → S5</span><span class="rel-scope">覆盖 1 状态</span><span class="rel-derived" title="derived-from 溯源">源自：INV4</span></div><div class="relations-item" data-kind="invariant_scope"><span class="rel-kind rel-kind-invariant_scope">不变量覆盖</span><span class="rel-pair">INV5 → S2,S3,S4,S5,S6</span><span class="rel-scope">覆盖 5 状态</span><span class="rel-derived" title="derived-from 溯源">源自：INV5</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T1 → T2</span><span class="rel-derived" title="derived-from 溯源">源自：T1, T2</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T1 → T7</span><span class="rel-derived" title="derived-from 溯源">源自：T1, T7</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T2 → T10</span><span class="rel-derived" title="derived-from 溯源">源自：T2, T10</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T2 → T3</span><span class="rel-derived" title="derived-from 溯源">源自：T2, T3</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T2 → T7</span><span class="rel-derived" title="derived-from 溯源">源自：T2, T7</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T2 → T8</span><span class="rel-derived" title="derived-from 溯源">源自：T2, T8</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T3 → T4</span><span class="rel-derived" title="derived-from 溯源">源自：T3, T4</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T4 → T5</span><span class="rel-derived" title="derived-from 溯源">源自：T4, T5</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T4 → T5b</span><span class="rel-derived" title="derived-from 溯源">源自：T4, T5b</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T5 → T6</span><span class="rel-derived" title="derived-from 溯源">源自：T5, T6</span></div><div class="relations-item" data-kind="sequence"><span class="rel-kind rel-kind-sequence">顺序前置</span><span class="rel-pair">T5 → T9</span><span class="rel-derived" title="derived-from 溯源">源自：T5, T9</span></div><div class="relations-item" data-kind="timing"><span class="rel-kind rel-kind-timing">时限</span><span class="rel-pair">finish_preparing → confirm_delivery</span><span class="rel-bound">≤1800000ms</span><span class="rel-derived" title="derived-from 溯源">源自：TM2</span></div><div class="relations-item" data-kind="timing"><span class="rel-kind rel-kind-timing">时限</span><span class="rel-pair">pay_success → accept</span><span class="rel-bound">≤300000ms</span><span class="rel-derived" title="derived-from 溯源">源自：TM1</span></div><div class="relations-item relations-item-degraded" data-kind="timing"><span class="rel-kind rel-kind-timing">时限</span><span class="rel-pair">S2 → S2</span><span class="rel-degraded-tag" title="timing type=scheduled（定时规则 */1 * * * *）无 boundMs，&quot;≤X 时限&quot;语义未定义，显式降级">degraded</span><span class="rel-derived" title="derived-from 溯源">源自：TM3</span></div><div class="relations-item relations-item-degraded" data-kind="timing"><span class="rel-kind rel-kind-timing">时限</span><span class="rel-pair">S5 → S5</span><span class="rel-degraded-tag" title="timing type=continuous（onViolation 违约转移）无 boundMs，&quot;≤X 时限&quot;语义未定义，显式降级">degraded</span><span class="rel-derived" title="derived-from 溯源">源自：TM4</span></div></div></div></div>
+    </section>
+  </main>
+
+  <!-- 浏览器端 parser bundle（TA2 产物；IIFE + globalName=ProtochainParser） -->
+  <script src="assets/parser.js"></script>
+  <!-- N1 新鲜度守卫（纯函数，UMD；可独立测试） -->
+  <script src="n1-guard.js"></script>
+  <!-- viewer 应用逻辑（无框架，手写） -->
+  <script src="app.js"></script>
+  <!-- ① 生命周期主视图（TA4；注册 ProtochainViewerHooks.renderAll） -->
+  <script src="main-view.js"></script>
+  <!-- ③ 接口↔状态联动 + ⑥ edgeCoverage 着色（TA5） -->
+  <script src="link-coverage.js"></script>
+  <!-- ② 角色泳道 + 约束承载联动（TB3） -->
+  <script src="swimlanes.js"></script>
+  <!-- 用例路径回放（TB4） -->
+  <script src="replay.js"></script>
+  <!-- 关系展示面板（W1-a 消费端，TB5） -->
+  <script src="relations-panel.js"></script>
+
+
+
+</body>
+</html>

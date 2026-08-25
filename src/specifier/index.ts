@@ -27,11 +27,14 @@ import {
   fieldsToObjectSchema,
   tryParseGuardSchema,
   effectsToExpressions,
+  attributeEffectsToExpressions,
   stateEnumSchema,
   stateEnumCurrentSchema,
   classifySchemaKind,
   isIdentifierPredicate,
+  invariantToSchemaExpression,
 } from './schema-builder.js';
+import { translatePredicate } from './predicates.js';
 import {
   envelopeMigrate,
   SPECS_ENVELOPE_SCHEMA_VERSION,
@@ -370,11 +373,32 @@ function deriveSystemInterface(
   const postconditionExpressions: SchemaExpression[] =
     contract?.postconditions && contract.postconditions.length > 0
       ? contract.postconditions.slice()
-      : effectsToExpressions(t.effects);
+      : [
+          // W2 R2-2 两路：① attributeEffects 直接投影为 structured effects（零翻译直通）；
+          // ② narrative effects 走谓词翻译仅值约束子集（赋值语义不混入 guard 值约束）
+          ...attributeEffectsToExpressions(t.attributeEffects),
+          ...effectsToExpressions(t.effects),
+        ];
   const sideEffects: SchemaExpression[] =
     contract?.sideEffects && contract.sideEffects.length > 0
       ? contract.sideEffects.slice()
-      : effectsToExpressions(t.effects);
+      : [
+          ...attributeEffectsToExpressions(t.attributeEffects),
+          ...effectsToExpressions(t.effects),
+        ];
+
+  // ── W2 R2-3：跨接口谓词 invariant(INVn) 挂载 InvariantDef ──
+  // 把 guard 中引用的不变量 ID 机械提取并投影到 spec.invariantIds（复用既有观测接口
+  // 的 invariantIds 语义；引用存在性由 checker TC5 校验）。仅当 guard 命中 invariant()
+  // 谓词时挂载——老模型无此语法 → 零回归。
+  const guardInvariantIds: string[] = [];
+  if (!contract && t.guard) {
+    const pred = translatePredicate(t.guard.trim());
+    if (pred && /^invariant\(/.test(t.guard.trim())) {
+      const m = t.guard.trim().match(/^invariant\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)$/);
+      if (m) guardInvariantIds.push(m[1]);
+    }
+  }
 
   // ── E2：schemaKind 分类 + 降级理由 ──
   const schemaKind = classifySchemaKind({
@@ -386,8 +410,12 @@ function deriveSystemInterface(
   });
   const schemaDegradedReasons: string[] = [];
   if (schemaKind !== 'structured') {
-    if (!contract && t.guard && !tryParseGuardSchema(t.guard)) {
-      schemaDegradedReasons.push(`guard 表达式 "${t.guard}" 未机械提取为 JSON Schema`);
+    // guard 未能机械翻译为 json-schema（natural language / 单标识符谓词 → legacy-stub）
+    // → 显式降级并记录理由（不静默，R2-1 / NR-1 定案）。
+    if (!contract && t.guard && (tryParseGuardSchema(t.guard)?.kind ?? 'legacy-stub') !== 'json-schema') {
+      schemaDegradedReasons.push(
+        `guard 表达式 "${t.guard}" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）`
+      );
     }
   }
   // E2.1 标记：契约层字段消费来源
@@ -413,6 +441,8 @@ function deriveSystemInterface(
     sideEffects,
     schemaKind,
     schemaDegradedReasons,
+    // W2 R2-3：guard 引用不变量（invariant(INVn)）挂载到 invariantIds（如有）
+    invariantIds: guardInvariantIds.length > 0 ? guardInvariantIds : undefined,
     // E2.1：契约层来源标识（消费方可观测）
     contractSource: contract?.interface,
     // E11：接口错误响应契约（命中契约的 errorResponses 投影到 spec；无契约时为空）
@@ -721,7 +751,12 @@ function deriveInvariantObservationInterface(inv: InvariantDef): InterfaceSpec {
     forceRequired: ['holds'],
   });
   const preconditions: SchemaExpression[] = [];
-  const postconditionExpressions: SchemaExpression[] = [];
+  // W2 §5 B / TC4 ④：数据级不变量统一表达——InvariantDef → SchemaExpression 机械生成。
+  // 命中受限谓词语法（unique / nonEmpty 等）→ json-schema 进后置表达式（unique 直连 E4 SQL
+  // 校验生成器，不重做）；未命中 → 保持原文（description-only 不进表达式，零回归）。
+  const invExpr = invariantToSchemaExpression(inv);
+  const postconditionExpressions: SchemaExpression[] =
+    invExpr.kind === 'json-schema' ? [invExpr] : [];
 
   const schemaKind = classifySchemaKind({
     requestSchema,

@@ -1,0 +1,181 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><style>/* Protochain Viewer 样式（无框架；浅色主题，双击 file:// 可开） */
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --border: #e2e6ec;
+  --text: #1f2733;
+  --muted: #6b7686;
+  --accent: #2f6fed;
+  --ok: #1a7f37;
+  --warn: #9a6700;
+  --error: #cf222e;
+  --pass: #2da44e;
+  --fail: #cf222e;
+  --uncovered: #d4a72c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.brand-mark { color: var(--accent); font-size: 18px; }
+.brand-name { font-weight: 700; font-size: 16px; }
+.brand-sub { color: var(--muted); font-size: 12px; }
+.version-badge {
+  font-size: 12px;
+  color: var(--accent);
+  background: #eef3fe;
+  border: 1px solid #d6e2fb;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+/* ---------- N1 警示条 ---------- */
+.n1-banner {
+  margin: 10px 20px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.n1-banner.hidden { display: none; }
+.n1-error { background: #fff1f0; border: 1px solid #f7c5c9; color: var(--error); }
+.n1-warn  { background: #fff8e6; border: 1px solid #eedc9a; color: var(--warn); }
+
+/* ---------- 布局 ---------- */
+.layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: auto auto 1fr;
+  gap: 14px;
+  padding: 16px 20px 28px;
+}
+.import-panel { grid-column: 1; grid-row: 1; }
+.model-panel  { grid-column: 1; grid-row: 2; }
+.view-panel   { grid-column: 2; grid-row: 1 / span 2; }
+
+section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+
+/* ---------- 导入区 ---------- */
+.dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dropzone:hover, .dropzone.dragging { border-color: var(--accent); background: #f2f6fe; }
+.drop-title { font-weight: 600; }
+.drop-hint {
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0 7px;
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+.drop-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.status-line { margin-top: 6px; }
+.status-text { font-size: 12px; color: var(--muted); word-break: break-all; }
+.status-text.status-ok    { color: var(--ok); }
+.status-text.status-error { color: var(--error); }
+
+/* ---------- 模型信息 ---------- */
+.model-info .model-empty, .panel-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 12px 4px;
+}
+.model-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.model-name { font-weight: 700; font-size: 15px; }
+.model-meta { display: flex; gap: 12px; margin: 6px 0; font-size: 12px; color: var(--muted); }
+.model-roles { font-size: 12px; color: var(--muted); }
+
+/* ---------- 面板容器（TA4/TA5 挂载） ---------- */
+.panels { min-height: 360px; }
+
+/* ---------- 图例 / 面板通用 ---------- */
+.panel-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.legend { display: flex; gap: 12px; font-size: 12px; align-items: center; }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,0.15); }
+
+/* ---------- ① 主视图：状态机 SVG（TA4） ---------- */
+.sm-svg { width: 100%; min-height: 360px; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
+.sm-node { stroke: #1f2733; stroke-width: 1.5; fill: #eef2f8; }
+.sm-node-group.selected .sm-node { stroke: var(--accent); stroke-width: 2.5; fill: #dbe7ff; }
+.sm-node-label { font-size: 12px; fill: var(--text); pointer-events: none; }
+.sm-initial { fill: #1f2733; }
+.sm-initial + .sm-node-label { fill: #fff; }
+.sm-terminal { fill: #ffffff; }
+.sm-node-outer { fill: none; stroke: #1f2733; stroke-width: 1.5; }
+.sm-error { fill: #fff0f0; stroke: var(--error); }
+.sm-edge {
+  stroke: #9aa4b2;
+  stroke-width: 1.6;
+  fill: none;
+  cursor: pointer;
+}
+.sm-edge:hover { stroke: var(--accent); stroke-width: 3; }
+.sm-edge-degraded { stroke: var(--error); stroke-width: 2.2; }
+.sm-edge.selected { stroke: var(--accent); stroke-width: 3; }
+.sm-arrow-head { fill: #9aa4b2; }
+
+/* 边详情 */
+.detail-box { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #fafbfc; }
+.detail-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+.detail-hint { color: var(--muted); font-size: 12px; }
+.detail-row { display: flex; gap: 10px; font-size: 12px; padding: 3px 0; border-bottom: 1px dashed #e6e9ef; }
+.detail-row:last-child { border-bottom: none; }
+.detail-label { width: 150px; flex-shrink: 0; color: var(--muted); }
+.detail-value { word-break: break-all; }
+
+/* ---------- ③ 接口列表（TA5） ---------- */
+.iface-panel { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: #fafbfc; }
+.panel-subtitle { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.iface-list { display: flex; flex-wrap: wrap; gap: 4px; max-height: 140px; overflow: auto; }
+.iface-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #fff;
+}
+.iface-item:hover { border-color: var(--accent); }
+.iface-item.active { background: #dbe7ff; border-color: var(--accent); }
+.iface-item .iface-id { font-weight: 600; }
+.iface-item .iface-kind { float: right; color: var(--muted); font-size: 11px; }
+
+/* ③ 联动高亮（叠加在状态机 SVG 上） */
+.sm-node-group.highlight-pre { filter: drop-shadow(0 0 4px #9ecbff); }
+.sm-node-group.highlight-post { filter: drop-shadow(0 0 4px #2da44e); }
+.sm-edge.highlight { stroke: var(--accent); stroke-width: 2.5; }
+
+/* ---------- ⑥ 验证着色（TA5） ---------- */
+.sm-edge.coverage-pass { stroke: var(--pass); stroke-width: 2.2; }
+.sm-edge.coverage-fail { stroke: var(--fail); stroke-width: 2.2; }
+.sm-edge.coverage-uncovered { stroke: var(--uncovered); stroke-width: 2.2; }
+.coverage-legend-note { font-size: 11px; color: var(--muted); }
+</style></head><body style="background:#f6f7f9;padding:16px"><h2>approval-flow · 布局通用性验证（3 终态 + 回边 T5）</h2><svg viewBox="0 0 750 390" class="sm-svg" role="img"><defs></defs><g data-node-id="S1" class="sm-node-group" style="cursor: pointer;"><circle cx="135" cy="52" r="22" class="sm-node sm-initial"></circle><text x="135" y="57" text-anchor="middle" class="sm-node-label">S1 草稿</text></g><g data-node-id="S2" class="sm-node-group" style="cursor: pointer;"><rect x="230" y="30" width="150" height="44" rx="10" class="sm-node sm-normal"></rect><text x="305" y="57" text-anchor="middle" class="sm-node-label">S2 待审批</text></g><g data-node-id="S3" class="sm-node-group" style="cursor: pointer;"><circle cx="135" cy="320" r="18" class="sm-node sm-terminal"></circle><circle cx="135" cy="320" r="22" class="sm-node-outer"></circle><text x="135" y="325" text-anchor="middle" class="sm-node-label">S3 已通过</text></g><g data-node-id="S4" class="sm-node-group" style="cursor: pointer;"><circle cx="375" cy="320" r="18" class="sm-node sm-terminal"></circle><circle cx="375" cy="320" r="22" class="sm-node-outer"></circle><text x="375" y="325" text-anchor="middle" class="sm-node-label">S4 已驳回</text></g><g data-node-id="S5" class="sm-node-group" style="cursor: pointer;"><circle cx="615" cy="320" r="18" class="sm-node sm-terminal"></circle><circle cx="615" cy="320" r="22" class="sm-node-outer"></circle><text x="615" y="325" text-anchor="middle" class="sm-node-label">S5 已撤回</text></g><g><line x1="210" y1="52" x2="230" y2="52" class="sm-edge sm-edge-degraded coverage-uncovered" data-edge-id="T1" marker-end="url(#sm-arrow)"></line><path d="M 305 74 L 305 284 L 135 284 L 135 298" class="sm-edge coverage-uncovered" data-edge-id="T2" marker-end="url(#sm-arrow)"></path><path d="M 305 74 L 305 254 L 375 254 L 375 298" class="sm-edge coverage-uncovered" data-edge-id="T3" marker-end="url(#sm-arrow)"></path><path d="M 305 74 L 305 224 L 615 224 L 615 298" class="sm-edge sm-edge-degraded coverage-uncovered" data-edge-id="T4" marker-end="url(#sm-arrow)"></path><line x1="380" y1="52" x2="60" y2="52" class="sm-edge sm-edge-degraded coverage-uncovered" data-edge-id="T5" marker-end="url(#sm-arrow)"></line></g></svg></body></html>

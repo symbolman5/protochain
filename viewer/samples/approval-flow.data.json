@@ -1,0 +1,1010 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-25T03:46:44.065Z",
+  "sourceModelVersion": "1.0.0",
+  "protocol": {
+    "name": "审批流协议",
+    "version": "1.0.0",
+    "purpose": "规范申请人提交审批请求、审批人审批的协作流程，确保审批结果可追溯且满足时效约束",
+    "roles": [
+      {
+        "id": "applicant",
+        "name": "申请人",
+        "roleType": "consensus"
+      },
+      {
+        "id": "approver",
+        "name": "审批人",
+        "roleType": "participant"
+      },
+      {
+        "id": "system",
+        "name": "系统",
+        "roleType": "participant"
+      }
+    ]
+  },
+  "interfaces": [
+    {
+      "id": "IF_SYS_T1",
+      "name": "submit",
+      "kind": "system",
+      "description": "form_valid",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S1，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S2，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：create_request; notify_approver"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S1）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S2）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：create_request; notify_approver"
+        }
+      ],
+      "precondition": "form_valid",
+      "postconditions": [
+        "create_request",
+        "notify_approver"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（form_valid）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "create_request"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_approver"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "create_request"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_approver"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T2",
+      "name": "approve",
+      "kind": "system",
+      "description": "has_request",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S3，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：record_approved; notify_applicant"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S3）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：record_approved; notify_applicant"
+        }
+      ],
+      "precondition": "has_request",
+      "postconditions": [
+        "record_approved",
+        "notify_applicant"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（has_request）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "record_approved"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "record_approved"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T3",
+      "name": "reject",
+      "kind": "system",
+      "description": "has_request",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S4，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：record_rejected; notify_applicant"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S4）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：record_rejected; notify_applicant"
+        }
+      ],
+      "precondition": "has_request",
+      "postconditions": [
+        "record_rejected",
+        "notify_applicant"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（has_request）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "record_rejected"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "record_rejected"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T4",
+      "name": "withdraw",
+      "kind": "system",
+      "description": "has_request",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S5，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：record_withdrawn"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S5）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：record_withdrawn"
+        }
+      ],
+      "precondition": "has_request",
+      "postconditions": [
+        "record_withdrawn"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（has_request）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "record_withdrawn"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "record_withdrawn"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T5",
+      "name": "timeout_return",
+      "kind": "system",
+      "description": "deadline_exceeded",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S1/S2/S3/S4/S5）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5"
+            ],
+            "description": "转移后状态（期望: S1，可选枚举值: S1/S2/S3/S4/S5）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：reset_request; notify_applicant"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S1）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：reset_request; notify_applicant"
+        }
+      ],
+      "precondition": "deadline_exceeded",
+      "postconditions": [
+        "reset_request",
+        "notify_applicant"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（deadline_exceeded）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "reset_request"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "reset_request"
+        },
+        {
+          "kind": "description-only",
+          "description": "notify_applicant"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_OBS_STATE_S1",
+      "name": "observe_草稿",
+      "kind": "observation",
+      "description": "observe_草稿",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 草稿（S1）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 草稿（S1）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S2",
+      "name": "observe_待审批",
+      "kind": "observation",
+      "description": "observe_待审批",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 待审批（S2）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 待审批（S2）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S3",
+      "name": "observe_已通过",
+      "kind": "observation",
+      "description": "observe_已通过",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已通过（S3）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已通过（S3）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S4",
+      "name": "observe_已驳回",
+      "kind": "observation",
+      "description": "observe_已驳回",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已驳回（S4）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已驳回（S4）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S5",
+      "name": "observe_已撤回",
+      "kind": "observation",
+      "description": "observe_已撤回",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已撤回（S5）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已撤回（S5）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV1",
+      "name": "observe_INV1",
+      "kind": "observation",
+      "description": "observe_INV1",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 请求唯一性（INV1）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 请求唯一性（INV1）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV1"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV2",
+      "name": "observe_INV2",
+      "kind": "observation",
+      "description": "observe_INV2",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 终态不可逆（INV2）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 终态不可逆（INV2）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV2"
+      ]
+    }
+  ],
+  "testCases": [],
+  "verification": {
+    "hasReport": false,
+    "passed": false,
+    "counts": {
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0
+    },
+    "deviationSummary": {
+      "stateMismatch": 0,
+      "fieldMismatch": 0,
+      "missingAction": 0,
+      "invariantViolation": 0,
+      "timingViolation": 0,
+      "errorMismatch": 0,
+      "unexpectedError": 0,
+      "other": 0
+    },
+    "sideBySide": []
+  },
+  "diff": null,
+  "impact": null,
+  "implCheck": null,
+  "stateMachine": {
+    "mermaid": "stateDiagram-v2\n    S1 : S1: 草稿 (初始)\n    S2 : S2: 待审批\n    S3 : S3: 已通过 (终态)\n    S4 : S4: 已驳回 (终态)\n    S5 : S5: 已撤回 (终态)\n    S1 --> S2 : submit[form_valid]\n    S2 --> S3 : approve[has_request]\n    S2 --> S4 : reject[has_request]\n    S2 --> S5 : withdraw[has_request]\n    S2 --> S1 : timeout_return[deadline_exceeded]",
+    "nodes": [
+      {
+        "id": "S1",
+        "name": "草稿",
+        "type": "initial",
+        "roleIds": [
+          "applicant"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S2",
+        "name": "待审批",
+        "type": "normal",
+        "roleIds": [
+          "approver"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S3",
+        "name": "已通过",
+        "type": "terminal",
+        "terminal": true
+      },
+      {
+        "id": "S4",
+        "name": "已驳回",
+        "type": "terminal",
+        "terminal": true
+      },
+      {
+        "id": "S5",
+        "name": "已撤回",
+        "type": "terminal",
+        "terminal": true
+      }
+    ],
+    "edges": [
+      {
+        "id": "T1",
+        "action": "submit",
+        "from": [
+          "S1"
+        ],
+        "to": "S2",
+        "triggerRoleId": "applicant",
+        "degraded": true,
+        "derivedFrom": "T1",
+        "guard": "form_valid",
+        "guardSchemaKind": "description-only",
+        "timing": [
+          {
+            "id": "TM1",
+            "type": "timeout",
+            "boundMs": 86400000
+          },
+          {
+            "id": "TM2",
+            "type": "response",
+            "boundMs": 3600000
+          }
+        ]
+      },
+      {
+        "id": "T2",
+        "action": "approve",
+        "from": [
+          "S2"
+        ],
+        "to": "S3",
+        "triggerRoleId": "approver",
+        "degraded": false,
+        "derivedFrom": "T2",
+        "guard": "has_request",
+        "guardSchemaKind": "description-only",
+        "timing": [
+          {
+            "id": "TM1",
+            "type": "timeout",
+            "boundMs": 86400000
+          }
+        ]
+      },
+      {
+        "id": "T3",
+        "action": "reject",
+        "from": [
+          "S2"
+        ],
+        "to": "S4",
+        "triggerRoleId": "approver",
+        "degraded": false,
+        "derivedFrom": "T3",
+        "guard": "has_request",
+        "guardSchemaKind": "description-only"
+      },
+      {
+        "id": "T4",
+        "action": "withdraw",
+        "from": [
+          "S2"
+        ],
+        "to": "S5",
+        "triggerRoleId": "applicant",
+        "degraded": true,
+        "derivedFrom": "T4",
+        "guard": "has_request",
+        "guardSchemaKind": "description-only"
+      },
+      {
+        "id": "T5",
+        "action": "timeout_return",
+        "from": [
+          "S2"
+        ],
+        "to": "S1",
+        "triggerRoleId": "system",
+        "degraded": true,
+        "derivedFrom": "T5",
+        "guard": "deadline_exceeded",
+        "guardSchemaKind": "description-only",
+        "timing": [
+          {
+            "id": "TM2",
+            "type": "response",
+            "boundMs": 3600000
+          }
+        ]
+      }
+    ],
+    "edgeCoverage": {
+      "T1": "uncovered",
+      "T2": "uncovered",
+      "T3": "uncovered",
+      "T4": "uncovered",
+      "T5": "uncovered"
+    }
+  },
+  "redactionNotice": [
+    "本产物由 derive-web 机械生成；不含 authConfig.token/secret/password 等敏感字段。",
+    "本产物不读取 bindings.yaml；不读取进程环境变量。",
+    "P0 范围仅只读展示；编辑能力在 P1 提供。"
+  ],
+  "exceptionPaths": [
+    {
+      "id": "EX1",
+      "name": "审批超时退回"
+    },
+    {
+      "id": "EX2",
+      "name": "申请人撤回"
+    }
+  ]
+}

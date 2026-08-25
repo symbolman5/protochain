@@ -1,0 +1,2575 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-25T07:18:14.864Z",
+  "sourceModelVersion": "1.0.0",
+  "protocol": {
+    "name": "外卖订单履约协议",
+    "version": "1.0.0",
+    "purpose": "描述外卖订单从提交、支付、商家履约到骑手配送的完整生命周期，确保各参与方在协作边界上的行为一致",
+    "roles": [
+      {
+        "id": "customer",
+        "name": "顾客",
+        "roleType": "consensus"
+      },
+      {
+        "id": "merchant",
+        "name": "商家",
+        "roleType": "participant"
+      },
+      {
+        "id": "rider",
+        "name": "骑手",
+        "roleType": "participant"
+      },
+      {
+        "id": "system",
+        "name": "平台系统",
+        "roleType": "participant"
+      },
+      {
+        "id": "payment_gateway",
+        "name": "支付网关",
+        "roleType": "participant"
+      }
+    ]
+  },
+  "interfaces": [
+    {
+      "id": "IF_SYS_T1",
+      "name": "create",
+      "kind": "system",
+      "description": "create",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S1，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：order_amount = sum(item_price * item_quantity)"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S0）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S1）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：order_amount = sum(item_price * item_quantity)"
+        }
+      ],
+      "postconditions": [
+        "order_amount = sum(item_price * item_quantity)"
+      ],
+      "preconditions": [],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "order_amount = sum(item_price * item_quantity)"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "order_amount = sum(item_price * item_quantity)"
+        }
+      ],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T2",
+      "name": "pay_success",
+      "kind": "system",
+      "description": "pay_success",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S2，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：paid_amount = order_amount; payment_time = now"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S1）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S2）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：paid_amount = order_amount; payment_time = now"
+        }
+      ],
+      "postconditions": [
+        "paid_amount = order_amount",
+        "payment_time = now"
+      ],
+      "preconditions": [],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "paid_amount = order_amount"
+        },
+        {
+          "kind": "description-only",
+          "description": "payment_time = now"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "paid_amount = order_amount"
+        },
+        {
+          "kind": "description-only",
+          "description": "payment_time = now"
+        }
+      ],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T3",
+      "name": "accept",
+      "kind": "system",
+      "description": "accept_within_deadline",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S3，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S3）",
+          "required": true
+        }
+      ],
+      "precondition": "accept_within_deadline",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（accept_within_deadline）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"accept_within_deadline\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T4",
+      "name": "finish_preparing",
+      "kind": "system",
+      "description": "finish_preparing",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S3，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S4，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：ready_at = now"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S3）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S4）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：ready_at = now"
+        }
+      ],
+      "postconditions": [
+        "ready_at = now"
+      ],
+      "preconditions": [],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "ready_at = now"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "ready_at = now"
+        }
+      ],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T5",
+      "name": "assign_rider",
+      "kind": "system",
+      "description": "rider_available && rider_in_flight_orders < 10",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S4，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "rider_available": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: rider_available && rider_in_flight_orders < 10）（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          },
+          "rider_in_flight_orders": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: rider_available && rider_in_flight_orders < 10）（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          }
+        },
+        "required": [
+          "currentState",
+          "rider_available",
+          "rider_in_flight_orders"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S5，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S4）",
+          "required": true
+        },
+        {
+          "name": "rider_available",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: rider_available && rider_in_flight_orders < 10）",
+          "required": true
+        },
+        {
+          "name": "rider_in_flight_orders",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: rider_available && rider_in_flight_orders < 10）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S5）",
+          "required": true
+        }
+      ],
+      "precondition": "rider_available && rider_in_flight_orders < 10",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "json-schema",
+          "description": "guard 表达式（rider_available && rider_in_flight_orders < 10），机械抽取为 boolean 类型",
+          "schema": {
+            "type": "boolean",
+            "description": "rider_available && rider_in_flight_orders < 10"
+          }
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T5b",
+      "name": "auto_cancel_no_rider",
+      "kind": "system",
+      "description": "!(rider_available && rider_in_flight_orders < 10)",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S4，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "rider_available": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: !(rider_available && rider_in_flight_orders < 10)）（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          },
+          "rider_in_flight_orders": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: !(rider_available && rider_in_flight_orders < 10)）（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          }
+        },
+        "required": [
+          "currentState",
+          "rider_available",
+          "rider_in_flight_orders"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S7，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：delivery_fee = 0"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S4）",
+          "required": true
+        },
+        {
+          "name": "rider_available",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: !(rider_available && rider_in_flight_orders < 10)）",
+          "required": true
+        },
+        {
+          "name": "rider_in_flight_orders",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: !(rider_available && rider_in_flight_orders < 10)）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S7）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：delivery_fee = 0"
+        }
+      ],
+      "precondition": "!(rider_available && rider_in_flight_orders < 10)",
+      "postconditions": [
+        "delivery_fee = 0"
+      ],
+      "preconditions": [
+        {
+          "kind": "json-schema",
+          "description": "guard 表达式（!(rider_available && rider_in_flight_orders < 10)），机械抽取为 boolean 类型",
+          "schema": {
+            "type": "boolean",
+            "description": "!(rider_available && rider_in_flight_orders < 10)"
+          }
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T6",
+      "name": "confirm_delivery",
+      "kind": "system",
+      "description": "confirm_delivery",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S5，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S6，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：delivered_at = now; delivery_completed = true"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S5）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S6）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：delivered_at = now; delivery_completed = true"
+        }
+      ],
+      "postconditions": [
+        "delivered_at = now",
+        "delivery_completed = true"
+      ],
+      "preconditions": [],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "delivered_at = now"
+        },
+        {
+          "kind": "description-only",
+          "description": "delivery_completed = true"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "delivered_at = now"
+        },
+        {
+          "kind": "description-only",
+          "description": "delivery_completed = true"
+        }
+      ],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T7",
+      "name": "cancel",
+      "kind": "system",
+      "description": "cancel",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S1/S2，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S7，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：refund_triggered = true; delivery_fee = 0"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S1/S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S7）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：refund_triggered = true; delivery_fee = 0"
+        }
+      ],
+      "postconditions": [
+        "refund_triggered = true",
+        "delivery_fee = 0"
+      ],
+      "preconditions": [],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "refund_triggered = true"
+        },
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "refund_triggered = true"
+        },
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T8",
+      "name": "auto_cancel_accept_timeout",
+      "kind": "system",
+      "description": "accept_timeout",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S7，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：delivery_fee = 0"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S7）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：delivery_fee = 0"
+        }
+      ],
+      "precondition": "accept_timeout",
+      "postconditions": [
+        "delivery_fee = 0"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（accept_timeout）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"accept_timeout\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T9",
+      "name": "auto_cancel_delivery_timeout",
+      "kind": "system",
+      "description": "delivery_timeout",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S5，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S7，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：delivery_fee = 0"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S5）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S7）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：delivery_fee = 0"
+        }
+      ],
+      "precondition": "delivery_timeout",
+      "postconditions": [
+        "delivery_fee = 0"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 单标识符（delivery_timeout）是谓词形式，自然语言未机械提取；guard params 不进 requestSchema"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"delivery_timeout\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T10",
+      "name": "reject_by_merchant",
+      "kind": "system",
+      "description": "reject_by_merchant",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4/S5/S6/S7）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7"
+            ],
+            "description": "转移后状态（期望: S7，可选枚举值: S0/S1/S2/S3/S4/S5/S6/S7）"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "副作用：delivery_fee = 0"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S7）",
+          "required": true
+        },
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "副作用：delivery_fee = 0"
+        }
+      ],
+      "postconditions": [
+        "delivery_fee = 0"
+      ],
+      "preconditions": [],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "delivery_fee = 0"
+        }
+      ],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_OBS_STATE_S0",
+      "name": "observe_未创建",
+      "kind": "observation",
+      "description": "observe_未创建",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 未创建（S0）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 未创建（S0）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S1",
+      "name": "observe_已创建",
+      "kind": "observation",
+      "description": "observe_已创建",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已创建（S1）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已创建（S1）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S2",
+      "name": "observe_已支付",
+      "kind": "observation",
+      "description": "observe_已支付",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已支付（S2）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已支付（S2）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S3",
+      "name": "observe_备餐中",
+      "kind": "observation",
+      "description": "observe_备餐中",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 备餐中（S3）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 备餐中（S3）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S4",
+      "name": "observe_已出餐",
+      "kind": "observation",
+      "description": "observe_已出餐",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已出餐（S4）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已出餐（S4）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S5",
+      "name": "observe_配送中",
+      "kind": "observation",
+      "description": "observe_配送中",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 配送中（S5）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 配送中（S5）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S6",
+      "name": "observe_已送达",
+      "kind": "observation",
+      "description": "observe_已送达",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已送达（S6）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已送达（S6）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S7",
+      "name": "observe_已取消",
+      "kind": "observation",
+      "description": "observe_已取消",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已取消（S7）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已取消（S7）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV1",
+      "name": "observe_INV1",
+      "kind": "observation",
+      "description": "observe_INV1",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 金额一致性（INV1）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 金额一致性（INV1）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV1"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV2",
+      "name": "observe_INV2",
+      "kind": "observation",
+      "description": "observe_INV2",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 送达不早于出餐（INV2）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 送达不早于出餐（INV2）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV2"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV3",
+      "name": "observe_INV3",
+      "kind": "observation",
+      "description": "observe_INV3",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 取消订单不产生配送费（INV3）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 取消订单不产生配送费（INV3）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV3"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV4",
+      "name": "observe_INV4",
+      "kind": "observation",
+      "description": "observe_INV4",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 骑手在途单量受限（INV4）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 骑手在途单量受限（INV4）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV4"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV5",
+      "name": "observe_INV5",
+      "kind": "observation",
+      "description": "observe_INV5",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 实付金额与订单金额一致（INV5）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 实付金额与订单金额一致（INV5）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV5"
+      ]
+    },
+    {
+      "id": "IF_OBS_POOL_RP1",
+      "name": "observe_pool_骑手运力池",
+      "kind": "observation",
+      "description": "observe_pool_骑手运力池",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "资源池 骑手运力池 当前是否可用"
+          },
+          "capacity": {
+            "type": "string",
+            "description": "容量：dynamic"
+          },
+          "allocationRule": {
+            "type": "string",
+            "description": "分配规则：订单进入配送中（S5）时分配一名骑手，占用一份运力"
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "available",
+          "type": "boolean",
+          "description": "资源池 骑手运力池 当前是否可用",
+          "required": true
+        },
+        {
+          "name": "capacity",
+          "type": "string",
+          "description": "容量：dynamic"
+        },
+        {
+          "name": "allocationRule",
+          "type": "string",
+          "description": "分配规则：订单进入配送中（S5）时分配一名骑手，占用一份运力"
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "observesResourcePoolId": "RP1"
+    }
+  ],
+  "testCases": [
+    {
+      "id": "P1",
+      "length": 6,
+      "stateIds": [
+        "S0",
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "transitionIds": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6"
+      ],
+      "deviations": [],
+      "verificationPassed": true
+    },
+    {
+      "id": "P2",
+      "length": 3,
+      "stateIds": [
+        "S0",
+        "S1",
+        "S2",
+        "S7"
+      ],
+      "transitionIds": [
+        "T1",
+        "T2",
+        "T7"
+      ],
+      "deviations": [
+        {
+          "action": "cancel",
+          "state": "S2",
+          "kind": "state_mismatch",
+          "expected": "S7",
+          "actual": "S2"
+        }
+      ],
+      "verificationPassed": false
+    },
+    {
+      "id": "P3",
+      "length": 3,
+      "stateIds": [
+        "S0",
+        "S1",
+        "S2",
+        "S7"
+      ],
+      "transitionIds": [
+        "T1",
+        "T2",
+        "T8"
+      ],
+      "deviations": [],
+      "verificationPassed": true
+    },
+    {
+      "id": "P4",
+      "length": 5,
+      "stateIds": [
+        "S0",
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "S7"
+      ],
+      "transitionIds": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5b"
+      ],
+      "deviations": [],
+      "verificationPassed": true
+    },
+    {
+      "id": "P5",
+      "length": 6,
+      "stateIds": [
+        "S0",
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "S5",
+        "S7"
+      ],
+      "transitionIds": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T9"
+      ],
+      "deviations": [
+        {
+          "action": "auto_cancel_delivery_timeout",
+          "state": "S5",
+          "kind": "timing_violation",
+          "expected": "S6",
+          "actual": "S7"
+        }
+      ],
+      "verificationPassed": false
+    }
+  ],
+  "verification": {
+    "hasReport": true,
+    "passed": false,
+    "counts": {
+      "passed": 3,
+      "failed": 2,
+      "skipped": 0
+    },
+    "verifiedAt": "2026-08-25T07:18:14.849Z",
+    "deviationSummary": {
+      "stateMismatch": 1,
+      "fieldMismatch": 0,
+      "missingAction": 0,
+      "invariantViolation": 0,
+      "timingViolation": 1,
+      "errorMismatch": 0,
+      "unexpectedError": 0,
+      "other": 0
+    },
+    "sideBySide": [
+      {
+        "action": "cancel",
+        "state": "S2",
+        "field": "state.S7",
+        "legacy": "S7",
+        "impl": "S2",
+        "matched": false
+      },
+      {
+        "action": "auto_cancel_delivery_timeout",
+        "state": "S5",
+        "field": "state.S6",
+        "legacy": "S6",
+        "impl": "S7",
+        "matched": false
+      }
+    ]
+  },
+  "diff": null,
+  "impact": null,
+  "implCheck": null,
+  "stateMachine": {
+    "mermaid": "stateDiagram-v2\n    S0 : S0: 未创建 (初始)\n    S1 : S1: 已创建\n    S2 : S2: 已支付\n    S3 : S3: 备餐中\n    S4 : S4: 已出餐\n    S5 : S5: 配送中\n    S6 : S6: 已送达 (终态)\n    S7 : S7: 已取消 (终态)\n    S0 --> S1 : create\n    S1 --> S2 : pay_success\n    S2 --> S3 : accept[accept_within_deadline]\n    S3 --> S4 : finish_preparing\n    S4 --> S5 : assign_rider[rider_available && rider_in_flight_orders < 10]\n    S4 --> S7 : auto_cancel_no_rider[!(rider_available && rider_in_flight_orders < 10)]\n    S5 --> S6 : confirm_delivery\n    S1 --> S7 : cancel\n    S2 --> S7 : cancel\n    S2 --> S7 : auto_cancel_accept_timeout[accept_timeout]\n    S5 --> S7 : auto_cancel_delivery_timeout[delivery_timeout]\n    S2 --> S7 : reject_by_merchant",
+    "nodes": [
+      {
+        "id": "S0",
+        "name": "未创建",
+        "type": "initial",
+        "roleIds": [
+          "customer"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S1",
+        "name": "已创建",
+        "type": "normal",
+        "roleIds": [
+          "customer"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S2",
+        "name": "已支付",
+        "type": "normal",
+        "roleIds": [
+          "customer",
+          "merchant"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S3",
+        "name": "备餐中",
+        "type": "normal",
+        "roleIds": [
+          "merchant"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S4",
+        "name": "已出餐",
+        "type": "normal",
+        "roleIds": [
+          "merchant",
+          "system"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S5",
+        "name": "配送中",
+        "type": "normal",
+        "roleIds": [
+          "rider"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S6",
+        "name": "已送达",
+        "type": "terminal",
+        "roleIds": [
+          "customer"
+        ],
+        "terminal": true
+      },
+      {
+        "id": "S7",
+        "name": "已取消",
+        "type": "terminal",
+        "roleIds": [
+          "customer",
+          "merchant"
+        ],
+        "terminal": true
+      }
+    ],
+    "edges": [
+      {
+        "id": "T1",
+        "action": "create",
+        "from": [
+          "S0"
+        ],
+        "to": "S1",
+        "triggerRoleId": "customer",
+        "degraded": false,
+        "derivedFrom": "T1"
+      },
+      {
+        "id": "T2",
+        "action": "pay_success",
+        "from": [
+          "S1"
+        ],
+        "to": "S2",
+        "triggerRoleId": "payment_gateway",
+        "degraded": false,
+        "derivedFrom": "T2",
+        "timing": [
+          {
+            "id": "TM1",
+            "type": "timeout",
+            "boundMs": 300000
+          }
+        ]
+      },
+      {
+        "id": "T3",
+        "action": "accept",
+        "from": [
+          "S2"
+        ],
+        "to": "S3",
+        "triggerRoleId": "merchant",
+        "degraded": false,
+        "derivedFrom": "T3",
+        "guard": "accept_within_deadline",
+        "guardSchemaKind": "description-only",
+        "timing": [
+          {
+            "id": "TM1",
+            "type": "timeout",
+            "boundMs": 300000
+          }
+        ]
+      },
+      {
+        "id": "T4",
+        "action": "finish_preparing",
+        "from": [
+          "S3"
+        ],
+        "to": "S4",
+        "triggerRoleId": "merchant",
+        "degraded": false,
+        "derivedFrom": "T4",
+        "timing": [
+          {
+            "id": "TM2",
+            "type": "deadline",
+            "boundMs": 1800000
+          }
+        ]
+      },
+      {
+        "id": "T5",
+        "action": "assign_rider",
+        "from": [
+          "S4"
+        ],
+        "to": "S5",
+        "triggerRoleId": "system",
+        "degraded": false,
+        "derivedFrom": "T5",
+        "guard": "rider_available && rider_in_flight_orders < 10",
+        "guardSchemaKind": "json-schema"
+      },
+      {
+        "id": "T5b",
+        "action": "auto_cancel_no_rider",
+        "from": [
+          "S4"
+        ],
+        "to": "S7",
+        "triggerRoleId": "system",
+        "degraded": false,
+        "derivedFrom": "T5b",
+        "guard": "!(rider_available && rider_in_flight_orders < 10)",
+        "guardSchemaKind": "json-schema",
+        "timing": [
+          {
+            "id": "TM4",
+            "type": "continuous"
+          }
+        ]
+      },
+      {
+        "id": "T6",
+        "action": "confirm_delivery",
+        "from": [
+          "S5"
+        ],
+        "to": "S6",
+        "triggerRoleId": "rider",
+        "degraded": false,
+        "derivedFrom": "T6",
+        "timing": [
+          {
+            "id": "TM2",
+            "type": "deadline",
+            "boundMs": 1800000
+          }
+        ]
+      },
+      {
+        "id": "T7",
+        "action": "cancel",
+        "from": [
+          "S1",
+          "S2"
+        ],
+        "to": "S7",
+        "triggerRoleId": "customer",
+        "degraded": false,
+        "derivedFrom": "T7",
+        "timing": [
+          {
+            "id": "TM4",
+            "type": "continuous"
+          }
+        ]
+      },
+      {
+        "id": "T8",
+        "action": "auto_cancel_accept_timeout",
+        "from": [
+          "S2"
+        ],
+        "to": "S7",
+        "triggerRoleId": "system",
+        "degraded": true,
+        "derivedFrom": "T8",
+        "guard": "accept_timeout",
+        "guardSchemaKind": "description-only",
+        "timing": [
+          {
+            "id": "TM4",
+            "type": "continuous"
+          }
+        ]
+      },
+      {
+        "id": "T9",
+        "action": "auto_cancel_delivery_timeout",
+        "from": [
+          "S5"
+        ],
+        "to": "S7",
+        "triggerRoleId": "system",
+        "degraded": true,
+        "derivedFrom": "T9",
+        "guard": "delivery_timeout",
+        "guardSchemaKind": "description-only",
+        "timing": [
+          {
+            "id": "TM4",
+            "type": "continuous"
+          }
+        ]
+      },
+      {
+        "id": "T10",
+        "action": "reject_by_merchant",
+        "from": [
+          "S2"
+        ],
+        "to": "S7",
+        "triggerRoleId": "merchant",
+        "degraded": false,
+        "derivedFrom": "T10",
+        "timing": [
+          {
+            "id": "TM4",
+            "type": "continuous"
+          }
+        ]
+      }
+    ],
+    "edgeCoverage": {
+      "T1": "fail",
+      "T2": "fail",
+      "T3": "fail",
+      "T4": "fail",
+      "T5": "fail",
+      "T5b": "pass",
+      "T6": "pass",
+      "T7": "fail",
+      "T8": "pass",
+      "T9": "fail",
+      "T10": "uncovered"
+    },
+    "invariantScope": {
+      "INV1": {
+        "name": "金额一致性",
+        "scopeStateIds": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "carrierRoleIds": [
+          "customer",
+          "merchant",
+          "rider",
+          "system"
+        ]
+      },
+      "INV2": {
+        "name": "送达不早于出餐",
+        "scopeStateIds": [
+          "S6"
+        ],
+        "carrierRoleIds": [
+          "customer"
+        ]
+      },
+      "INV3": {
+        "name": "取消订单不产生配送费",
+        "scopeStateIds": [
+          "S7"
+        ],
+        "carrierRoleIds": [
+          "customer",
+          "merchant"
+        ]
+      },
+      "INV4": {
+        "name": "骑手在途单量受限",
+        "scopeStateIds": [
+          "S5"
+        ],
+        "carrierRoleIds": [
+          "rider"
+        ]
+      },
+      "INV5": {
+        "name": "实付金额与订单金额一致",
+        "scopeStateIds": [
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "carrierRoleIds": [
+          "customer",
+          "merchant",
+          "rider",
+          "system"
+        ]
+      }
+    }
+  },
+  "relations": {
+    "sourceModelVersion": "1.0.0",
+    "entries": [
+      {
+        "kind": "causes_state_change",
+        "fromId": "T1",
+        "toId": "S1",
+        "derivedFrom": [
+          "T1"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T10",
+        "toId": "S7",
+        "derivedFrom": [
+          "T10"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T2",
+        "toId": "S2",
+        "derivedFrom": [
+          "T2"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T3",
+        "toId": "S3",
+        "derivedFrom": [
+          "T3"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T4",
+        "toId": "S4",
+        "derivedFrom": [
+          "T4"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T5",
+        "toId": "S5",
+        "derivedFrom": [
+          "T5"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T5b",
+        "toId": "S7",
+        "derivedFrom": [
+          "T5b"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T6",
+        "toId": "S6",
+        "derivedFrom": [
+          "T6"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T7",
+        "toId": "S7",
+        "derivedFrom": [
+          "T7"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T8",
+        "toId": "S7",
+        "derivedFrom": [
+          "T8"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T9",
+        "toId": "S7",
+        "derivedFrom": [
+          "T9"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV1",
+        "toId": "S1,S2,S3,S4,S5,S6",
+        "derivedFrom": [
+          "INV1"
+        ],
+        "scopeStateIds": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV2",
+        "toId": "S6",
+        "derivedFrom": [
+          "INV2"
+        ],
+        "scopeStateIds": [
+          "S6"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV3",
+        "toId": "S7",
+        "derivedFrom": [
+          "INV3"
+        ],
+        "scopeStateIds": [
+          "S7"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV4",
+        "toId": "S5",
+        "derivedFrom": [
+          "INV4"
+        ],
+        "scopeStateIds": [
+          "S5"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV5",
+        "toId": "S2,S3,S4,S5,S6",
+        "derivedFrom": [
+          "INV5"
+        ],
+        "scopeStateIds": [
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T1",
+        "toId": "T2",
+        "derivedFrom": [
+          "T1",
+          "T2"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T1",
+        "toId": "T7",
+        "derivedFrom": [
+          "T1",
+          "T7"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T2",
+        "toId": "T10",
+        "derivedFrom": [
+          "T2",
+          "T10"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T2",
+        "toId": "T3",
+        "derivedFrom": [
+          "T2",
+          "T3"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T2",
+        "toId": "T7",
+        "derivedFrom": [
+          "T2",
+          "T7"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T2",
+        "toId": "T8",
+        "derivedFrom": [
+          "T2",
+          "T8"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T3",
+        "toId": "T4",
+        "derivedFrom": [
+          "T3",
+          "T4"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T4",
+        "toId": "T5",
+        "derivedFrom": [
+          "T4",
+          "T5"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T4",
+        "toId": "T5b",
+        "derivedFrom": [
+          "T4",
+          "T5b"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T5",
+        "toId": "T6",
+        "derivedFrom": [
+          "T5",
+          "T6"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T5",
+        "toId": "T9",
+        "derivedFrom": [
+          "T5",
+          "T9"
+        ]
+      },
+      {
+        "kind": "timing",
+        "fromId": "finish_preparing",
+        "toId": "confirm_delivery",
+        "derivedFrom": [
+          "TM2"
+        ],
+        "boundMs": 1800000
+      },
+      {
+        "kind": "timing",
+        "fromId": "pay_success",
+        "toId": "accept",
+        "derivedFrom": [
+          "TM1"
+        ],
+        "boundMs": 300000
+      },
+      {
+        "kind": "timing",
+        "fromId": "S2",
+        "toId": "S2",
+        "derivedFrom": [
+          "TM3"
+        ],
+        "degraded": true,
+        "degradedReason": "timing type=scheduled（定时规则 */1 * * * *）无 boundMs，\"≤X 时限\"语义未定义，显式降级"
+      },
+      {
+        "kind": "timing",
+        "fromId": "S5",
+        "toId": "S5",
+        "derivedFrom": [
+          "TM4"
+        ],
+        "degraded": true,
+        "degradedReason": "timing type=continuous（onViolation 违约转移）无 boundMs，\"≤X 时限\"语义未定义，显式降级"
+      }
+    ]
+  },
+  "redactionNotice": [
+    "本产物由 derive-web 机械生成；不含 authConfig.token/secret/password 等敏感字段。",
+    "本产物不读取 bindings.yaml；不读取进程环境变量。",
+    "P0 范围仅只读展示；编辑能力在 P1 提供。"
+  ],
+  "exceptionPaths": [
+    {
+      "id": "EX1",
+      "name": "商家接单超时"
+    },
+    {
+      "id": "EX2",
+      "name": "配送严重超时"
+    }
+  ]
+}

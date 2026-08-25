@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Protochain Viewer · 协议模型浏览器</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◈</span>
+      <span class="brand-name">Protochain Viewer</span>
+      <span class="brand-sub">通用静态模型浏览器</span>
+    </div>
+    <div class="topbar-right">
+      <span id="parser-version" class="version-badge" title="内嵌 parser 版本（与工具链 package.json version 对齐，防版本漂移）">内嵌 parser v…</span>
+    </div>
+  </header>
+
+  <!-- N1 新鲜度守卫警示条（默认隐藏） -->
+  <div id="n1-banner" class="n1-banner hidden" role="alert"></div>
+
+  <main class="layout">
+    <!-- 导入区（W3-a） -->
+    <section class="import-panel">
+      <h2>导入</h2>
+
+      <div id="model-drop" class="dropzone" tabindex="0">
+        <div class="drop-title">model.md <span class="drop-hint">主输入</span></div>
+        <div class="drop-desc">拖拽或点击选择协议模型文件（浏览器端解析）</div>
+        <input id="model-file" type="file" accept=".md,.markdown" hidden />
+      </div>
+
+      <div id="data-drop" class="dropzone" tabindex="0">
+        <div class="drop-title">data.json <span class="drop-hint">增强数据</span></div>
+        <div class="drop-desc">拖拽或点击选择 derive-web 产物（验证着色唯一数据源）</div>
+        <input id="data-file" type="file" accept=".json,application/json" hidden />
+      </div>
+
+      <div class="status-line">
+        <span id="import-status" class="status-text">未导入文件</span>
+      </div>
+    </section>
+
+    <!-- 模型信息（TA3 验收③：模型名/版本/状态数） -->
+    <section class="model-panel">
+      <h2>模型</h2>
+      <div id="model-info" class="model-info">
+        <div class="model-empty">导入 model.md 后显示模型名称、版本与状态空间规模</div>
+      </div>
+    </section>
+
+    <!-- 面板容器：TA4 主视图 / TA5 ③⑥ 面板在此挂载 -->
+    <section class="view-panel">
+      <h2>视图</h2>
+      <div id="panels" class="panels">
+        <div class="panel-empty">导入 model.md 后渲染生命周期主视图（①）</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 浏览器端 parser bundle（TA2 产物；IIFE + globalName=ProtochainParser） -->
+  <script src="assets/parser.js"></script>
+  <!-- N1 新鲜度守卫（纯函数，UMD；可独立测试） -->
+  <script src="n1-guard.js"></script>
+  <!-- viewer 应用逻辑（无框架，手写） -->
+  <script src="app.js"></script>
+  <!-- ① 生命周期主视图（TA4；注册 ProtochainViewerHooks.renderAll） -->
+  <script src="main-view.js"></script>
+  <!-- ③ 接口↔状态联动 + ⑥ edgeCoverage 着色（TA5） -->
+  <script src="link-coverage.js"></script>
+  <!-- ② 角色泳道 + 约束承载联动（TB3） -->
+  <script src="swimlanes.js"></script>
+  <!-- 用例路径回放（TB4） -->
+  <script src="replay.js"></script>
+  <!-- 关系展示面板（W1-a 消费端，TB5） -->
+  <script src="relations-panel.js"></script>
+  <!-- ⑦ 演进 diff 面板（W3-f，TC9） -->
+  <script src="diff-panel.js"></script>
+  <!-- 组合层面板（W3-f，TC8；消费 schemaVersion=1.1 组合层 data.json） -->
+  <script src="composition-panel.js"></script>
+</body>
+</html>

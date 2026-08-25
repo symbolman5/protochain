@@ -27,8 +27,13 @@ import type {
   ContractEntry,
   ErrorResponseDef,
   JSONSchema,
+  RelationAssertion,
+  RelationAssertionKind,
 } from '../model/types.js';
 import { decomposeStateMachines } from '../model/state-machines.js';
+import { buildRelations, type RelationKind, type RelationProjectionEntry } from '../webgen/relations.js';
+import { tryParseGuardSchema } from '../specifier/schema-builder.js';
+import { extractPredicateFieldRefs } from '../specifier/predicates.js';
 import Ajv from 'ajv';
 
 export function checkCompleteness(
@@ -68,6 +73,16 @@ export function checkCompleteness(
   // 5b. E11：错误契约一致性校验（唯一性 / 命名 / 异常路径↔契约闭合 / 5xx warning）
   // ----------------------------------------------------------------------
   checkErrorContracts(model, fieldIssues, referenceIssues);
+
+  // ----------------------------------------------------------------------
+  // 5c. W1-b：关系断言规则模块（TC2；断言 vs buildRelations 机械投影比对，硬失败）
+  // ----------------------------------------------------------------------
+  checkRelationAssertions(model, referenceIssues);
+
+  // ----------------------------------------------------------------------
+  // 5d. W2：guard schema 自检（TC5；ajv 编译 / 跨字段引用闭合 / invariant 引用存在性）
+  // ----------------------------------------------------------------------
+  checkGuardSchemaSelfCheck(model, referenceIssues);
 
   // ----------------------------------------------------------------------
   // 5. 跨协议引用收集（① 阶段标记，①-C 阶段在 composition-checker 校验）
@@ -1037,6 +1052,235 @@ export function checkErrorContracts(
         c.interface
       )
     );
+  }
+}
+
+// ============================================================================
+// W1-b 关系断言规则模块（07-execution-T3 TC2）
+// ============================================================================
+
+/**
+ * 断言 → 投影 kind → 比对口径映射表（01-relations-modeling.md §3 W1-b NR1-2 定案，随模块交付）。
+ * 规则模块只做机械比对（复用 T2 buildRelations 投影，不建第二事实源），零 AI 判断。
+ */
+export const RELATION_ASSERTION_RULES: ReadonlyArray<{
+  kind: RelationAssertionKind;
+  /** 比对的投影 kind */
+  projectionKind: RelationKind;
+  /** 比对口径（通过条件）：断言 (a,b) 在投影条目上成立 */
+  matches: (entry: RelationProjectionEntry, a: string, b: string) => boolean;
+  /** 人读口径说明（用于不一致错误消息） */
+  describe: (a: string, b: string) => string;
+}> = [
+  {
+    // depends_on a b：b 前置 a → sequence 投影存在 fromId=b、toId=a 条目
+    kind: 'depends_on',
+    projectionKind: 'sequence',
+    matches: (e, a, b) => e.kind === 'sequence' && e.fromId === b && e.toId === a,
+    describe: (a, b) =>
+      `depends_on ${a} ${b} 声明「${b} 前置 ${a}」，但 relations 投影中不存在 sequence(fromId=${b}, toId=${a}) 条目（${b} 的 to 态 ∩ ${a} 的 from 态 无衔接）`,
+  },
+  {
+    // sequence a b：a 先于 b → sequence 投影存在 fromId=a、toId=b 条目
+    kind: 'sequence',
+    projectionKind: 'sequence',
+    matches: (e, a, b) => e.kind === 'sequence' && e.fromId === a && e.toId === b,
+    describe: (a, b) =>
+      `sequence ${a} ${b} 声明「${a} 先于 ${b}」，但 relations 投影中不存在 sequence(fromId=${a}, toId=${b}) 条目`,
+  },
+  {
+    // shares_invariant a b：a、b 共享不变量 → invariant_scope 投影存在 scopeStateIds ⊇ {a, b} 条目
+    kind: 'shares_invariant',
+    projectionKind: 'invariant_scope',
+    matches: (e, a, b) =>
+      e.kind === 'invariant_scope' &&
+      Array.isArray(e.scopeStateIds) &&
+      e.scopeStateIds.includes(a) &&
+      e.scopeStateIds.includes(b),
+    describe: (a, b) =>
+      `shares_invariant ${a} ${b} 声明「${a}、${b} 共享不变量」，但 relations 投影中不存在覆盖集合 ⊇ {${a}, ${b}} 的 invariant_scope 条目`,
+  },
+];
+
+/**
+ * 关系断言规则模块：断言 vs buildRelations 机械投影比对（W1-b / TC2）。
+ *
+ * - 比对对象 = buildRelations(model)（直接调用 T2 纯函数，红线 1：不建第二投影/第二事实源）；
+ * - 断言引用不存在的转移/状态 ID → 硬错误（引用闭合，parser 不负责、此处收口）；
+ * - 断言与投影不一致 → 硬错误（非 warning），check 不通过——与 invariant 失败同纪律；
+ * - 无断言段（老 model.md）→ 零输出（既有 checker 测试全绿，零回归）。
+ */
+export function checkRelationAssertions(
+  model: SourceProtocolModel,
+  issues: CheckIssue[]
+): void {
+  const assertions = model.relationAssertions;
+  if (!assertions || assertions.length === 0) return;
+
+  // 复用 T2 buildRelations 机械投影（单一事实源）
+  const projections = buildRelations(model);
+
+  const transitionIds = new Set(model.derivable.transitions.map((t) => t.id));
+  const stateIds = new Set(model.derivable.states.map((s) => s.id));
+
+  for (const as of assertions) {
+    // ── 引用闭合（depends_on/sequence → 转移 ID；shares_invariant → 状态 ID）──
+    const elementsAreStates = as.kind === 'shares_invariant';
+    const universe = elementsAreStates ? stateIds : transitionIds;
+    const elementLabel = elementsAreStates ? '状态' : '转移';
+    const closureFailed = [as.a, as.b].some((ref) => !universe.has(ref));
+    if (closureFailed) {
+      for (const ref of [as.a, as.b]) {
+        if (!universe.has(ref)) {
+          issues.push(
+            errorIssue(
+              `关系断言 "${as.id}"（${as.kind} ${as.a} ${as.b}）引用的${elementLabel} ID "${ref}" 在模型中不存在`,
+              'derivable.relationAssertions',
+              as.id
+            )
+          );
+        }
+      }
+      continue; // 引用闭合失败时不重复比对（投影比对必然不成立）
+    }
+
+    // ── 断言 vs 投影比对（映射表机械执行）──
+    const rule = RELATION_ASSERTION_RULES.find((r) => r.kind === as.kind);
+    if (!rule) {
+      // parser 已按白名单拒绝未知种类（硬错误在前置层）；此处防御性兜底
+      issues.push(
+        errorIssue(
+          `关系断言 "${as.id}" 的种类 "${as.kind}" 不在映射表（无机械校验对象，拒绝解析语义应在 parser 层拦截）`,
+          'derivable.relationAssertions',
+          as.id
+        )
+      );
+      continue;
+    }
+    const ok = projections.entries.some((e) => rule.matches(e, as.a, as.b));
+    if (!ok) {
+      issues.push(
+        errorIssue(`关系断言 "${as.id}"：${rule.describe(as.a, as.b)}`, 'derivable.relationAssertions', as.id)
+      );
+    }
+  }
+}
+
+// ============================================================================
+// W2 guard schema 自检（07-execution-T3 TC5）
+// ============================================================================
+
+/**
+ * 收集模型中"已声明字段"命名空间（跨字段引用闭合的判定域）：
+ * - 状态维度（StateDef.dimensions[].name）
+ * - 属性效果字段（TransitionDef.attributeEffects[].field）
+ * - 影响维度（TransitionDef.affectsDimensions）
+ * - 契约层 requestSchema/responseSchema 的 properties 键
+ * guard 谓词引用的字段必须在此命名空间内，否则视为引用不存在的字段（硬错误）。
+ */
+function collectModelFieldNames(model: SourceProtocolModel): Set<string> {
+  const names = new Set<string>();
+  for (const s of model.derivable.states) {
+    for (const d of s.dimensions ?? []) {
+      if (d.name) names.add(d.name);
+    }
+  }
+  for (const t of model.derivable.transitions) {
+    for (const e of t.attributeEffects ?? []) {
+      if (e.field) names.add(e.field);
+    }
+    for (const dim of t.affectsDimensions ?? []) {
+      if (dim) names.add(dim);
+    }
+  }
+  for (const c of model.contractInput?.contracts ?? []) {
+    for (const sch of [c.requestSchema, c.responseSchema]) {
+      if (sch?.properties) {
+        for (const k of Object.keys(sch.properties)) names.add(k);
+      }
+    }
+  }
+  return names;
+}
+
+/**
+ * 从 guard 文本中机械提取 invariant(INVn) 引用（R2-3 挂载语义的引用侧）。
+ * 不做自然语言模式匹配：仅命中受限谓词 `invariant(INVn)` 语法。
+ */
+function extractInvariantRefsFromGuard(guard: string): string[] {
+  const out: string[] = [];
+  const re = /invariant\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(guard)) !== null) {
+    out.push(m[1]);
+  }
+  return out;
+}
+
+/**
+ * W2 guard schema 机械自检（TC5 / 02 §3 W2-b）：
+ * - 所有 kind='json-schema' 的 guard 表达式必须可被 ajv 编译（编译失败 → 硬错误；
+ *   如 matchesPattern 携带非法正则）；
+ * - 跨字段引用闭合：谓词引用的字段必须在模型已声明字段命名空间内（引用不存在字段 → 硬错误）；
+ * - invariant(INVn) 引用存在性：引用的不变量必须已声明（不存在 → 硬错误）。
+ *
+ * 复用 tryParseGuardSchema（specifier 同一纯函数）——单一事实源，与 specifier 判定一致。
+ * 老模型（无谓词命中 guard）→ 零输出。
+ */
+export function checkGuardSchemaSelfCheck(
+  model: SourceProtocolModel,
+  issues: CheckIssue[]
+): void {
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const invariantIds = new Set(model.derivable.invariants.map((i) => i.id));
+  const fieldUniverse = collectModelFieldNames(model);
+
+  for (const t of model.derivable.transitions) {
+    if (!t.guard) continue;
+    const trimmed = t.guard.trim();
+
+    // ① ajv 编译自检（json-schema 表达式必须可编译）
+    const expr = tryParseGuardSchema(trimmed);
+    if (expr?.kind === 'json-schema' && expr.schema) {
+      try {
+        ajv.compile(expr.schema as object);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        issues.push(
+          errorIssue(
+            `转移 "${t.id}" 的 guard "${t.guard}" 生成的 JSON Schema 不可被 ajv 编译：${msg}`,
+            'derivable.transitions.guard',
+            t.id
+          )
+        );
+      }
+    }
+
+    // ② 跨字段引用闭合（谓词引用字段必须存在）
+    for (const field of extractPredicateFieldRefs(trimmed)) {
+      if (!fieldUniverse.has(field)) {
+        issues.push(
+          errorIssue(
+            `转移 "${t.id}" 的 guard "${t.guard}" 引用字段 "${field}"，但该字段未在模型中声明（状态维度 / attributeEffects / affectsDimensions / 契约 schema）`,
+            'derivable.transitions.guard',
+            t.id
+          )
+        );
+      }
+    }
+
+    // ③ invariant(INVn) 引用存在性
+    for (const invId of extractInvariantRefsFromGuard(trimmed)) {
+      if (!invariantIds.has(invId)) {
+        issues.push(
+          errorIssue(
+            `转移 "${t.id}" 的 guard "${t.guard}" 引用不变量 "${invId}"，但该不变量未在 invariants 中声明`,
+            'derivable.transitions.guard',
+            t.id
+          )
+        );
+      }
+    }
   }
 }
 

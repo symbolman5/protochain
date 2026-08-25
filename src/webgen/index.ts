@@ -59,6 +59,8 @@ import {
   isSpecsEnvelope,
   type SpecsEnvelope,
 } from '../specifier/envelope.js';
+import { buildRelations, type RelationsProjection } from './relations.js';
+import { tryParseGuardSchema } from '../specifier/schema-builder.js';
 
 // ============================================================================
 // 类型定义
@@ -85,7 +87,27 @@ export interface WebDataJson {
   diff: WebDiffView | null;
   impact: WebImpactView | null;
   implCheck: WebImplCheckView | null;
-  stateMachine: { mermaid: string };
+  /**
+   * W3-d（05-execution-T1 TA1）：状态机结构化视图。
+   * - mermaid 字符串保留（VitePress 快照页兼容）；
+   * - nodes/edges 为 viewer 渲染链路的结构化数据（机械投影，无端内推导）；
+   * - edgeCoverage 为验证着色数据（transitionId → pass/fail/uncovered）。
+   */
+  stateMachine: WebStateMachineView;
+  /**
+   * W1-a（06-execution-T2 TB1）：关系机械推导投影（relations.json 同源同批产物）。
+   * - 四种 kind（sequence / causes_state_change / invariant_scope / timing）；
+   * - 顶层 sourceModelVersion 与 WebDataJson.sourceModelVersion 同源（N1 守卫复用）；
+   * - 供 viewer 关系展示面板（TB5）与 Web 关系视图消费。
+   */
+  relations: RelationsProjection;
+  /**
+   * W3-f ⑦（07-execution-T3 TC9）：演进 diff 机械投影（结构化、viewer 查表）。
+   * - 从 diff（derived/diff/model-diff.json）投影变更状态/转移集合；
+   * - 受影响接口/用例清单由工具链机械投影（specs 命中变更转移 / testCases 命中变更转移）；
+   * - 无 diff 数据 → 字段缺省（既有 data.json 契约不变，零回归）。
+   */
+  diffView?: WebDiffViewProjection;
   redactionNotice: string[];
   /**
    * E11：绑定视图（bindings.yaml 非敏感投影子集）。
@@ -205,6 +227,72 @@ export interface WebVerificationView {
   };
 }
 
+// ============================================================================
+// W3-d 状态机结构化视图（viewer 渲染链路的机械投影契约）
+// ============================================================================
+
+/** 边验证着色状态（W3-d：transitionId → pass/fail/uncovered） */
+export type EdgeCoverageStatus = 'pass' | 'fail' | 'uncovered';
+
+/** 状态机节点（StateDef → 机械投影；viewer 只查表显示，不做端内推导） */
+export interface WebStateMachineNode {
+  id: string;
+  name: string;
+  type: 'initial' | 'normal' | 'terminal' | 'error';
+  /** 状态关联角色 ID（StateDef.roleIds 投影） */
+  roleIds?: string[];
+  /** 终态标记（terminal 或 error 视为终态；供视图形态区分） */
+  terminal: boolean;
+}
+
+/** 状态机边（TransitionDef → 机械投影；viewer 只查表显示，不做端内推导） */
+export interface WebStateMachineEdge {
+  /** 转移 ID（transitionId，edgeCoverage 的键） */
+  id: string;
+  action: string;
+  /** 源状态 ID（多源转移为数组） */
+  from: string[];
+  /** 目标状态 ID */
+  to: string;
+  /** 触发角色 ID */
+  triggerRoleId?: string;
+  /** 守卫条件原文（自然语言；W2 语义层落地前一律 description-only） */
+  guard?: string;
+  /** guard 的 schemaKind（语法命中 → json-schema；未命中显式降级 → description-only） */
+  guardSchemaKind?: 'json-schema' | 'legacy-stub' | 'description-only';
+  /** 关联时序约束（timing.source/target === transition.action 或 onViolation 匹配） */
+  timing?: Array<{ id: string; type: string; boundMs?: number }>;
+  /** 异常/降级路径标记（转移出现在异常路径 transitionIds 中 → true） */
+  degraded: boolean;
+  /** 溯源：投影来源元素（恒等于 id，供 viewer 展示 derived-from） */
+  derivedFrom: string;
+}
+
+/** 状态机视图（W3-d 契约补强；mermaid 字符串保留兼容） */
+export interface WebStateMachineView {
+  mermaid: string;
+  nodes: WebStateMachineNode[];
+  edges: WebStateMachineEdge[];
+  /**
+   * 验证着色数据：transitionId → pass/fail/uncovered。
+   * 机械投影（与 W1 relations 投影同构）：uncovered 优先取用例覆盖报告；
+   * 被覆盖的转移按 verification caseResults 聚合（任一失败 → fail，全过 → pass）；
+   * 无验证报告 → 全部 uncovered（无验证证据不谎报 pass）。
+   */
+  edgeCoverage: Record<string, EdgeCoverageStatus>;
+  /**
+   * W3-e（06-execution-T2 TB2）：不变量 × 状态 × 角色 的机械投影。
+   * - 泳道判据"关键运力类约束由哪个角色承载"需要跨元素聚合，属 viewer 端
+   *   被否决的二次推导 → 上移工具链由本字段承载；
+   * - carrierRoleIds = scope 状态 roleIds 的并集（scopeStateIds 空 = 全部状态）；
+   * - 供泳道面板（TB3）约束承载联动直接查表（零推导）。
+   */
+  invariantScope: Record<
+    string,
+    { name: string; scopeStateIds: string[]; carrierRoleIds: string[] }
+  >;
+}
+
 /**
  * E11：Web 绑定视图（bindings.yaml 非敏感投影子集）。
  * 红线：
@@ -264,6 +352,25 @@ export interface WebImpactView {
   incrementalPlan: string[];
   analyzedAt: string;
   humanReadable: Array<{ trigger: string; affected: string[] }>;
+}
+
+/**
+ * W3-f ⑦（TC9）：演进 diff 机械投影（viewer 查表渲染；不做端内推导）。
+ * 变更集合 = model-diff.json derivableChanges 机械投影；受影响接口/用例 = 工具链投影。
+ */
+export interface WebDiffViewProjection {
+  /** 变更的转移 ID 集合（diff.derivableChanges 中 elementType=transition） */
+  changedTransitions: string[];
+  /** 变更的状态 ID 集合（elementType=state） */
+  changedStates: string[];
+  /** 变更的其他元素（invariant/timing/exception 等） */
+  changedOthers: Array<{ elementType: string; elementId: string; kind: string }>;
+  /** 受影响接口 ID 清单（spec.id，sourceId/派生 id 命中变更转移） */
+  affectedInterfaces: string[];
+  /** 受影响用例 ID 清单（testCases.paths[].transitionIds 命中变更转移） */
+  affectedCases: string[];
+  /** 人读摘要（复用 summarizeDiff） */
+  summary: string;
 }
 
 /** 实现完整性视图 */
@@ -389,6 +496,154 @@ export function buildMermaidStateMachine(model: SourceProtocolModel): string {
     }
   }
   return lines.join('\n');
+}
+
+// ============================================================================
+// W3-d 状态机结构化投影（05-execution-T1 TA1）
+// 机械投影原则：只做字段搬运 + 既有数据源聚合，不做任何端内推导。
+// ============================================================================
+
+/**
+ * 边验证着色投影：transitionId → pass/fail/uncovered。
+ * - uncovered 优先：testCases.coverage.transitionCoverage.uncoveredIds；
+ * - 被覆盖的转移：按 verification.authoritative.caseResults 聚合——
+ *   （覆盖该转移的 path 中）任一 failed → fail；存在 passed → pass；
+ *   无对应 caseResult（skipped / 未验证）→ uncovered；
+ * - 无 verification 报告 → 全部 uncovered（无验证证据不谎报 pass）。
+ */
+export function buildEdgeCoverage(
+  model: SourceProtocolModel,
+  testCases?: TestCaseSet,
+  verification?: VerificationReport
+): Record<string, EdgeCoverageStatus> {
+  const result: Record<string, EdgeCoverageStatus> = {};
+  // 用例覆盖报告的未覆盖转移集合（可选数据源）
+  const uncoveredIds = new Set<string>();
+  if (testCases?.coverage?.transitionCoverage?.uncoveredIds) {
+    for (const id of testCases.coverage.transitionCoverage.uncoveredIds) {
+      uncoveredIds.add(id);
+    }
+  }
+  // verification caseResults 索引（pathId → 结果）
+  const caseIndex = new Map<string, { passed: boolean; skipped?: boolean }>();
+  if (verification?.authoritative.caseResults) {
+    for (const cr of verification.authoritative.caseResults) {
+      caseIndex.set(cr.pathId, { passed: cr.passed, skipped: cr.skipped });
+    }
+  }
+  for (const t of model.derivable.transitions) {
+    if (uncoveredIds.has(t.id)) {
+      result[t.id] = 'uncovered';
+      continue;
+    }
+    // 被用例覆盖：需要 verification 才可能产生 pass/fail
+    if (verification && testCases) {
+      const paths = testCases.paths.filter((p) => p.transitionIds.includes(t.id));
+      const results = paths
+        .map((p) => caseIndex.get(p.id))
+        .filter((r): r is { passed: boolean; skipped?: boolean } => r !== undefined);
+      const anyFailed = results.some((r) => !r.passed && !r.skipped);
+      const anyPassed = results.some((r) => r.passed);
+      if (anyFailed) result[t.id] = 'fail';
+      else if (anyPassed) result[t.id] = 'pass';
+      else result[t.id] = 'uncovered';
+    } else {
+      result[t.id] = 'uncovered';
+    }
+  }
+  return result;
+}
+
+/**
+ * 状态机结构化视图投影（W3-d）：StateDef → nodes，TransitionDef → edges。
+ * - degraded：转移出现在 model.derivable.exceptions[].transitionIds 中 → true；
+ * - timing：model.derivable.timing 中 source/target 匹配该转移 action，或
+ *   onViolation 匹配转移 id / 目标状态 id 的时序约束（机械关联，不改语义）；
+ * - guardSchemaKind：从 specifier 的 guard 表达式 kind 机械投影（TC5）——
+ *   语法命中 → 'json-schema'；未命中（legacy-stub / description-only）→ 'description-only'。
+ *   由 buildWebData 计算 guardSchemaKinds 传入（单一事实源 tryParseGuardSchema）；
+ *   未传 map（直接调用/老数据）→ 缺省 'description-only'（W2 前占位行为，零回归）。
+ */
+export function buildStateMachineView(
+  model: SourceProtocolModel,
+  testCases?: TestCaseSet,
+  verification?: VerificationReport,
+  guardSchemaKinds?: ReadonlyMap<string, 'json-schema' | 'description-only'>
+): WebStateMachineView {
+  const exceptionTransitionIds = new Set<string>();
+  for (const ex of model.derivable.exceptions ?? []) {
+    for (const tid of ex.transitionIds) exceptionTransitionIds.add(tid);
+  }
+  const timingDefs = model.derivable.timing ?? [];
+  const nodes: WebStateMachineNode[] = model.derivable.states.map((s) => ({
+    id: s.id,
+    name: s.name,
+    type: s.type,
+    roleIds: s.roleIds,
+    terminal: s.type === 'terminal' || s.type === 'error',
+  }));
+  const edges: WebStateMachineEdge[] = model.derivable.transitions.map((t) => {
+    const edge: WebStateMachineEdge = {
+      id: t.id,
+      action: t.action ?? t.name,
+      from: t.from.slice(),
+      to: t.to,
+      triggerRoleId: t.triggerRoleId,
+      degraded: exceptionTransitionIds.has(t.id),
+      derivedFrom: t.id,
+    };
+    if (t.guard) {
+      edge.guard = t.guard;
+      edge.guardSchemaKind = guardSchemaKinds?.get(t.id) ?? 'description-only';
+    }
+    const relatedTiming = timingDefs
+      .filter(
+        (tm) =>
+          tm.source === t.action ||
+          tm.target === t.action ||
+          tm.onViolation === t.id ||
+          tm.onViolation === t.to
+      )
+      .map((tm) => {
+        const o: { id: string; type: string; boundMs?: number } = {
+          id: tm.id,
+          type: tm.type,
+        };
+        if (tm.boundMs !== undefined) o.boundMs = tm.boundMs;
+        return o;
+      });
+    if (relatedTiming.length > 0) edge.timing = relatedTiming;
+    return edge;
+  });
+  // W3-e（TB2）：不变量 × 状态 × 角色 机械投影（invariantScope）
+  const stateById = new Map(model.derivable.states.map((s) => [s.id, s]));
+  const allStateIds = model.derivable.states.map((s) => s.id);
+  const invariantScope: WebStateMachineView['invariantScope'] = {};
+  for (const inv of model.derivable.invariants ?? []) {
+    const scope =
+      inv.scopeStateIds && inv.scopeStateIds.length > 0
+        ? inv.scopeStateIds.slice()
+        : allStateIds.slice();
+    const carrier = new Set<string>();
+    for (const sid of scope) {
+      const st = stateById.get(sid);
+      if (st && st.roleIds) {
+        for (const r of st.roleIds) carrier.add(r);
+      }
+    }
+    invariantScope[inv.id] = {
+      name: inv.name,
+      scopeStateIds: scope,
+      carrierRoleIds: [...carrier].sort(),
+    };
+  }
+  return {
+    mermaid: buildMermaidStateMachine(model),
+    nodes,
+    edges,
+    edgeCoverage: buildEdgeCoverage(model, testCases, verification),
+    invariantScope,
+  };
 }
 
 /** 摘要派生：diff → 人读文本（最多 200 字符） */
@@ -717,6 +972,57 @@ export function buildDiffView(
   };
 }
 
+/**
+ * W3-f ⑦（TC9）：diffView 机械投影（结构化、viewer 查表；无 diff 数据 → undefined）。
+ *
+ * 投影规则（纯机械，viewer 端零 join/零推导）：
+ * - changedTransitions / changedStates / changedOthers：diff.derivableChanges 逐条投影；
+ * - affectedInterfaces：specs 中 id/sourceId 命中变更转移的系统接口（IF_SYS_<tid> / action 名）；
+ * - affectedCases：testCases.paths[].transitionIds 与变更转移集合相交的用例；
+ * - 同输入同输出（可复现）。
+ */
+export function buildDiffViewProjection(
+  diff: ModelDiff | undefined,
+  specs: InterfaceSpec[],
+  testCases?: TestCaseSet
+): WebDiffViewProjection | undefined {
+  if (!diff) return undefined;
+
+  const changedTransitions = diff.derivableChanges
+    .filter((c) => c.elementType === 'transition')
+    .map((c) => c.elementId);
+  const changedStates = diff.derivableChanges
+    .filter((c) => c.elementType === 'state')
+    .map((c) => c.elementId);
+  const changedOthers = diff.derivableChanges
+    .filter((c) => c.elementType !== 'transition' && c.elementType !== 'state')
+    .map((c) => ({ elementType: c.elementType, elementId: c.elementId, kind: c.kind }));
+
+  // 受影响接口：spec.id === `IF_SYS_<changedTransition>` 或 spec.sourceId === changedTransition
+  const changedSet = new Set(changedTransitions);
+  const affectedInterfaces = specs
+    .filter((s) => {
+      if (s.id && changedSet.has(s.id.replace(/^IF_SYS_/, ''))) return true;
+      if (s.sourceId && changedSet.has(s.sourceId)) return true;
+      return false;
+    })
+    .map((s) => s.id);
+
+  // 受影响用例：paths[].transitionIds ∩ changedTransitions ≠ ∅
+  const affectedCases = (testCases?.paths ?? [])
+    .filter((p) => p.transitionIds.some((tid) => changedSet.has(tid)))
+    .map((p) => p.id);
+
+  return {
+    changedTransitions,
+    changedStates,
+    changedOthers,
+    affectedInterfaces,
+    affectedCases,
+    summary: summarizeDiff(diff),
+  };
+}
+
 /** ImpactAnalysis + ModelDiff → WebImpactView */
 export function buildImpactView(
   impact: ImpactAnalysis | undefined,
@@ -808,6 +1114,8 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
   const verificationView = buildVerificationView(verification);
   const diffView = buildDiffView(diff);
   const impactView = buildImpactView(impact, diff);
+  // W3-f ⑦（TC9）：diffView 机械投影（变更集合 + 受影响接口/用例；无 diff → 缺省，契约不变）
+  const diffViewProjection = buildDiffViewProjection(diff, specs, testCases);
   const implCheckView = buildImplCheckView(implCheck);
   const bindingView = buildBindingView(bindings, specs, { allProjectErrorCodes });
   const exceptionPaths = (model.derivable.exceptions ?? []).map((e) => {
@@ -818,6 +1126,17 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
     if (e.errorCode) out.errorCode = e.errorCode;
     return out;
   });
+  // W1-a：关系机械投影（与 data.json 同批；sourceModelVersion 与 WebDataJson 同源）
+  const relations = buildRelations(model);
+  // W2（TC5）：guardSchemaKind 端到端——逐转移从 specifier 同一纯函数 tryParseGuardSchema
+  // 机械投影 guard 表达式 kind：语法命中 → 'json-schema'；未命中（legacy-stub/description-only）
+  // → 'description-only'。viewer 边详情零改动查表显示。
+  const guardSchemaKinds = new Map<string, 'json-schema' | 'description-only'>();
+  for (const t of model.derivable.transitions) {
+    if (!t.guard) continue;
+    const expr = tryParseGuardSchema(t.guard);
+    guardSchemaKinds.set(t.id, expr?.kind === 'json-schema' ? 'json-schema' : 'description-only');
+  }
   return {
     schemaVersion: WEB_DATA_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -838,7 +1157,9 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
     diff: diffView,
     impact: impactView,
     implCheck: implCheckView,
-    stateMachine: { mermaid: buildMermaidStateMachine(model) },
+    stateMachine: buildStateMachineView(model, testCases, verification, guardSchemaKinds),
+    relations,
+    diffView: diffViewProjection,
     redactionNotice: REDACTION_NOTICE_LINES,
     binding: bindingView.hasBindings ? bindingView : undefined,
     exceptionPaths: exceptionPaths.length > 0 ? exceptionPaths : undefined,
@@ -1715,14 +2036,18 @@ export async function deriveWeb(
   data = redactSensitiveFields(data) as WebDataJson;
 
   // E7-I8 修复：--force 检查（在所有写出之前；已存在产物时未传 force → 抛错）
-  if (!options.force && existsSync(dataJsonPath)) {
+  // W1-a（TB1）：relations.json 与 data.json 同批写出，force 语义对齐
+  const relationsJsonPath = join(rootDir, 'derived/relations.json');
+  if (!options.force && (existsSync(dataJsonPath) || existsSync(relationsJsonPath))) {
     throw new Error(
-      `web 产物已存在（${dataJsonPath}）；如需覆盖请传 --force`
+      `web 产物已存在（${dataJsonPath} 或 ${relationsJsonPath}）；如需覆盖请传 --force`
     );
   }
 
   // 6. 写出 web/data.json
   writeJson(dataJsonPath, data);
+  // 6.1 写出 derived/relations.json（W1-a：与 data.json 同批机械投影，sourceModelVersion 同源）
+  writeJson(relationsJsonPath, buildRelations(model));
   // 7. 写出 web/docs/public/data.json（站点工程副本）
   writeJson(join(publicDir, 'data.json'), data);
 

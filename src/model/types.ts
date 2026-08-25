@@ -154,6 +154,38 @@ export interface GuardInvariantDef {
   expression: string;
 }
 
+// ============================================================================
+// W1-b 关系断言（01-relations-modeling.md §3 W1-b 定案）
+// ============================================================================
+
+/**
+ * W1-b 关系断言种类（仅三种；excludes 首版裁出，R1-1 定案）。
+ * 断言 → 投影 kind → 比对口径映射表（NR1-2 定案）：
+ * - depends_on（B 前置 A）→ sequence 投影存在 fromId=b、toId=a 条目
+ * - sequence（A 先于 B）→ sequence 投影存在 fromId=a、toId=b 条目
+ * - shares_invariant（A、B 共享不变量）→ invariant_scope 投影存在 scopeStateIds ⊇ {a, b} 条目
+ * 不在映射表的断言种类（如 excludes）→ parser 拒绝解析并报硬错误（无映射即无校验）。
+ */
+export type RelationAssertionKind = 'depends_on' | 'sequence' | 'shares_invariant';
+
+/**
+ * W1-b 关系断言（人写声明，仅断言语义——不是关系事实源）。
+ * 断言 a/b 的元素语义：depends_on / sequence 为转移 ID；shares_invariant 为状态 ID。
+ * checker 机械层对照 buildRelations(model) 投影比对，不一致即硬失败。
+ */
+export interface RelationAssertion {
+  id: string;
+  kind: RelationAssertionKind;
+  /** 关系元素 A（depends_on/sequence 为转移 ID；shares_invariant 为状态 ID） */
+  a: string;
+  /** 关系元素 B（depends_on/sequence 为转移 ID；shares_invariant 为状态 ID） */
+  b: string;
+  /** 可选说明（人读） */
+  note?: string;
+  /** 断言标记（恒 true：仅断言语义，关系永远由机械投影推导） */
+  assert: true;
+}
+
 export interface StateDef {
   id: string;
   name: string;
@@ -415,6 +447,13 @@ export interface SourceProtocolModel {
   derivable: DerivableLayer;
   /** 契约层输入（仅用于校验） */
   contractInput?: ContractLayerInput;
+  /**
+   * W1-b 关系断言（01 §3 W1-b 定案，T3 TC1 交付）。
+   * - 可选声明段"关系断言"解析产物；仅断言语义（assert: true），不是关系事实源；
+   * - checker 机械层（TC2）对照 buildRelations(model) 投影比对，不一致即硬失败；
+   * - 无断言段 → 缺省（老 model.md 零回归）。
+   */
+  relationAssertions?: RelationAssertion[];
   /** 源文件路径 */
   sourcePath?: string;
   /** 解析时间戳 */
@@ -836,6 +875,19 @@ export interface JSONSchema {
   /** 数组场景下的最小/最大元素数（约束次数） */
   minItems?: number;
   maxItems?: number;
+  // ── W2 谓词翻译扩展（07-execution-T3 TC3）──
+  /** 字符串最小长度（nonEmpty 谓词） */
+  minLength?: number;
+  maxLength?: number;
+  /** 正则模式（matchesPattern 谓词） */
+  pattern?: string;
+  /** 数值下界（nonNegative 谓词） */
+  minimum?: number;
+  maximum?: number;
+  /** 数组元素唯一（unique 谓词；数据级不变量直连 E4 SQL 校验生成器） */
+  uniqueItems?: boolean;
+  /** 常量相等（跨字段相等约束的结构承载，可选） */
+  const?: unknown;
 }
 
 /**
