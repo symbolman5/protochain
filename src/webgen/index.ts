@@ -1093,6 +1093,13 @@ export interface DeriveWebInputs {
    * 不误报"可能是残留"。单协议项目不传。
    */
   allProjectErrorCodes?: string[];
+  /**
+   * T4（09-execution-T4 TD2 / 08 §5.2.2 R17）：warnings 收集通道（可选）。
+   * triggerRoleId backfill 遇到同名 action 多条转移且 triggerRoleId 不同（消歧失败）时
+   * 推入此处；不传则静默不填充（零回归）。调用方（deriveWeb / deriveProjectWeb）传入
+   * 各自 warnings 数组即可复用既有报告通道。
+   */
+  warnings?: string[];
 }
 
 /** 由 inputs 构造 WebDataJson（pure function） */
@@ -1137,6 +1144,30 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
     const expr = tryParseGuardSchema(t.guard);
     guardSchemaKinds.set(t.id, expr?.kind === 'json-schema' ? 'json-schema' : 'description-only');
   }
+  // T4（09-execution-T4 TD2 / 08 §5.2.2 R17）：stateMachine 提升为局部常量，
+  // 以便在 return 前对 interfaces 做 triggerRoleId backfill（WebInterfaceView.triggerRoleId
+  // 类型已声明 L148，此前投影缺失——R11 定案"直接修复"，由死转活，pN.data.json 与
+  // interface-details.json 共同受益）。
+  const stateMachine = buildStateMachineView(model, testCases, verification, guardSchemaKinds);
+  // R17 同名 action 消歧规则：edges.filter(e => e.action === iface.name) 命中集合的
+  // triggerRoleId 去重——唯一值 → 填充；多个不同值 → 不填 + warnings（工具链信号，
+  // 与 S3"工具链自身一致性"同精神，防静默取首）；零命中（观测接口等）→ 保持空。
+  for (const iface of interfaces) {
+    if (iface.triggerRoleId !== undefined) continue; // 已有值不覆盖
+    const roles = new Set<string>();
+    for (const e of stateMachine.edges) {
+      if (e.action === iface.name && e.triggerRoleId !== undefined && e.triggerRoleId !== null) {
+        roles.add(e.triggerRoleId);
+      }
+    }
+    if (roles.size === 1) {
+      iface.triggerRoleId = [...roles][0];
+    } else if (roles.size > 1) {
+      inputs.warnings?.push(
+        `triggerRoleId backfill 跳过：接口 ${iface.id}（action=${iface.name}）命中 ${roles.size} 个不同 triggerRoleId（${[...roles].join(' / ')}），不填充`
+      );
+    }
+  }
   return {
     schemaVersion: WEB_DATA_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -1157,7 +1188,7 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
     diff: diffView,
     impact: impactView,
     implCheck: implCheckView,
-    stateMachine: buildStateMachineView(model, testCases, verification, guardSchemaKinds),
+    stateMachine,
     relations,
     diffView: diffViewProjection,
     redactionNotice: REDACTION_NOTICE_LINES,

@@ -39,10 +39,12 @@
  *   视图仍在单协议 webgen 的 bindings.md；B1 强调组合层 data.json 轻量化）
  */
 
-import { readFileSync, existsSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
+import { createHash } from 'node:crypto';
 import { parseCompositionFile } from '../composition-parser/index.js';
 import { parseProtocolFile } from '../parser/index.js';
+import { findConfigPath } from '../project/context.js';
 import {
   envelopeMigrate,
   isSpecsEnvelope,
@@ -53,6 +55,7 @@ import type {
   SubProtocolRef,
   DependencyEdge,
   CrossInvariantDef,
+  ProjectManifest,
 } from '../model/types.js';
 import type {
   InterfaceSpec,
@@ -80,7 +83,9 @@ import {
   renderDiffPage,
   renderBindingViewPage,
   type WebBindingView,
+  type WebDataJson,
 } from './index.js';
+import { buildInterfaceDetails } from './interface-details.js';
 
 // ============================================================================
 // 类型定义
@@ -190,6 +195,138 @@ export interface CompositionWebData {
   sharedMatrix: SharedMatrix;
   /** 数据采集 warnings（specs.json 缺失 / 老格式迁移提示等） */
   warnings: string[];
+}
+
+// ============================================================================
+// T4 项目级 manifest 投影（09-execution-T4 TD3 / 08-project-viewer-design.md §4）
+// ============================================================================
+
+/** manifest redactionNotice 独立两条文案（08 §4.3 / R14：不复用 REDACTION_NOTICE_LINES 第三条，不含 P0/P1 阶段编号） */
+export const PROJECT_MANIFEST_REDACTION_NOTICE = [
+  '本产物由 derive-web --project 机械生成；不含 authConfig.token/secret/password 等敏感字段。',
+  '本产物不读取 bindings.yaml 内容与进程环境变量；bindings 仅以 sha256 指纹声明存在性。',
+];
+
+/** 单条子协议的 manifest 输入（deriveProjectWeb 采集阶段产出：读 pN.data.json / model.md / specs） */
+export interface ProjectProtocolManifestInput {
+  id: string;
+  name: string;
+  modelPath: string;
+  /** model.md metadata.version（parseProtocolFile 字段搬运） */
+  modelVersion: string;
+  /** <Pn>.data.json（约定：protocolId.toLowerCase() + '.data.json'） */
+  dataFile: string;
+  /** 读 pN.data.json.schemaVersion（异常/缺失 → null） */
+  dataSchemaVersion: string | null;
+  /** 读 pN.data.json.sourceModelVersion（异常/缺失 → null） */
+  dataSourceModelVersion: string | null;
+  /** sha256(bindings.yaml 原始字节)；无 bindings.yaml → null */
+  bindingsFingerprint: string | null;
+  /** 该协议 specs.json 接口数（specs.length） */
+  interfaceCount: number;
+}
+
+/** 单条 diff 快照的原始读取数据（deriveProjectWeb 发现阶段产出：扫描 webDir/*.diff.data.json） */
+export interface ProjectDiffSnapshotInput {
+  /** 文件名（如 'payment.diff.data.json'） */
+  file: string;
+  /** 读该文件 schemaVersion */
+  schemaVersion: string;
+  /** 读该文件 sourceModelVersion（= targetModelVersion） */
+  sourceModelVersion: string;
+  /** 读该文件 protocol.name（用于匹配 composition.subProtocols 得 sourceProtocolId） */
+  protocolName: string;
+  /** diff.metadataChanges 中 metadata.version 的 oldValue */
+  baseModelVersion: string;
+}
+
+export interface BuildProjectManifestInputs {
+  /** parseCompositionFile 产物（project.systemName/version/changeType 与 composition.modelVersion 来源） */
+  composition: CompositionModel;
+  /** 逐子协议采集结果（deriveProjectWeb 已解析 model / 读 pN.data.json / specs / bindings 指纹） */
+  protocols: ProjectProtocolManifestInput[];
+  /** diff 快照清单（无 → 空数组） */
+  diffSnapshots: ProjectDiffSnapshotInput[];
+}
+
+/**
+ * T4：buildProjectManifest 纯函数投影器（08 §4.2 全字段逐行实现）。
+ * 投影纪律：全部字段 = 常量 / 字段搬运 / 既有纯函数产物复用；manifest 自身不做任何
+ * 跨文件 join 计算（modelVersion 与 dataSourceModelVersion 是否一致由 viewer 守卫
+ * S3 比对，工具链不在此断言——08 §4.2 投影纪律注）。diff 段仅声明 file/schemaVersion/
+ * sourceProtocolId/baseModelVersion/targetModelVersion，不消费内容（viewer 按需读快照）。
+ */
+export function buildProjectManifest(inputs: BuildProjectManifestInputs): ProjectManifest {
+  const { composition, protocols, diffSnapshots } = inputs;
+  // sourceProtocolId：diff 快照 protocol.name → composition.subProtocols[].protocolId（08 §4.2 约定：diff 所属子协议）
+  const nameToProtocolId = new Map<string, string>();
+  for (const sub of composition.subProtocols) nameToProtocolId.set(sub.name, sub.protocolId);
+  const diff: ProjectManifest['bundles']['diff'] = diffSnapshots.map((d) => {
+    // id 约定（08 §4.2 "工具链按 源协议+基线+目标版本 命名"）：<文件前缀>-v<基线主版本>-v<基线主版本+1>
+    // 示例：payment.diff.data.json + base=1.0.0 → "payment-v1-v2"（与 08 §4.3 示例一致）
+    const prefix = d.file.replace(/\.diff\.data\.json$/, '');
+    const baseMajor = Number.parseInt(d.baseModelVersion.split('.')[0], 10);
+    const n = Number.isFinite(baseMajor) ? baseMajor : 1;
+    return {
+      id: `${prefix}-v${n}-v${n + 1}`,
+      file: d.file,
+      schemaVersion: d.schemaVersion,
+      sourceProtocolId: nameToProtocolId.get(d.protocolName) ?? '',
+      baseModelVersion: d.baseModelVersion,
+      targetModelVersion: d.sourceModelVersion,
+    };
+  });
+  return {
+    schemaVersion: '1.0',
+    kind: 'project-manifest',
+    generatedAt: new Date().toISOString(),
+    project: {
+      systemName: composition.metadata.systemName,
+      version: composition.metadata.version,
+      changeType: composition.metadata.changeType,
+    },
+    bundles: {
+      composition: {
+        file: 'data.json',
+        schemaVersion: '1.1',
+        modelVersion: composition.metadata.version,
+      },
+      interfaceDetails: { file: 'interface-details.json', schemaVersion: '1.0' },
+      protocols: protocols.map((p) => ({
+        id: p.id,
+        name: p.name,
+        modelPath: p.modelPath,
+        modelVersion: p.modelVersion,
+        dataFile: p.dataFile,
+        dataSchemaVersion: p.dataSchemaVersion,
+        dataSourceModelVersion: p.dataSourceModelVersion,
+        bindingsFingerprint: p.bindingsFingerprint,
+        interfaceCount: p.interfaceCount,
+      })),
+      diff,
+    },
+    redactionNotice: PROJECT_MANIFEST_REDACTION_NOTICE.slice(),
+  };
+}
+
+/**
+ * T4：bindings.yaml sha256 指纹（08 §4.2 bindingsFingerprint 行）。
+ * 定位与 readBindingsFileSafely 同源路径（rootDir / derived / 系统根 bindings.yaml）；
+ * 命中 → sha256(原始字节，Buffer)；无 → null（内联 bindings 段无独立文件 → null）。
+ * 仅用于变更检测，不还原内容；不读 authConfig/tls 密钥段。
+ */
+export function computeBindingsFingerprint(rootDir: string): string | null {
+  const candidates = [join(rootDir, 'bindings.yaml'), join(rootDir, 'derived', 'bindings.yaml')];
+  const configPath = findConfigPath(rootDir);
+  if (configPath) {
+    candidates.push(join(dirname(configPath), 'bindings.yaml'));
+  }
+  for (const p of candidates) {
+    if (existsSync(p)) {
+      return createHash('sha256').update(readFileSync(p)).digest('hex');
+    }
+  }
+  return null;
 }
 
 // ============================================================================
@@ -1418,6 +1555,112 @@ export async function deriveProjectWeb(
   const publicDir = join(docsDir, 'public');
   writeJson(join(publicDir, 'data.json'), data);
 
+  // 6b. T4（09-execution-T4 TD3/TD4）：项目级 manifest + interface-details 同批写出。
+  //     manifest 采集 = 读 web/<Pn>.data.json（dataSchemaVersion/dataSourceModelVersion）
+  //     + model.md（modelVersion）+ specs（interfaceCount）+ bindings.yaml（sha256 指纹）
+  //     + 扫描 webDir/*.diff.data.json（diff 快照清单）。全部字段 = 常量/字段搬运，
+  //     manifest 自身零跨文件 join（一致性比对留给 viewer 守卫 S3/S1）。
+  {
+    const manifestProtocols: ProjectProtocolManifestInput[] = [];
+    for (const proto of data.protocols) {
+      const pid = proto.id;
+      const dataFile = `${pid.toLowerCase()}.data.json`;
+      let dataSchemaVersion: string | null = null;
+      let dataSourceModelVersion: string | null = null;
+      const subDataPath = join(webDir, dataFile);
+      if (existsSync(subDataPath)) {
+        try {
+          const subDataRaw = JSON.parse(readFileSync(subDataPath, 'utf-8')) as {
+            schemaVersion?: unknown;
+            sourceModelVersion?: unknown;
+          };
+          dataSchemaVersion =
+            typeof subDataRaw.schemaVersion === 'string' ? subDataRaw.schemaVersion : null;
+          dataSourceModelVersion =
+            typeof subDataRaw.sourceModelVersion === 'string'
+              ? subDataRaw.sourceModelVersion
+              : null;
+        } catch {
+          allWarnings.push(`[${pid}] ${dataFile} JSON 解析失败；manifest 该协议版本字段记 null`);
+        }
+      } else {
+        allWarnings.push(`[${pid}] 未找到 ${dataFile}（请先对 protocol/${pid} 跑 derive-web 生成单协议产物）；manifest 该协议版本字段记 null`);
+      }
+      // modelVersion：model.md metadata.version 字段搬运（08 §4.2）
+      let modelVersion = proto.version;
+      try {
+        const subModel = parseProtocolFile(join(rootDir, 'protocol', pid, 'model.md'), {
+          allowDegraded: true,
+        });
+        modelVersion = subModel.metadata.version;
+      } catch {
+        allWarnings.push(`[${pid}] model.md 解析失败；manifest modelVersion 用 composition.md 声明版本 ${proto.version}`);
+      }
+      manifestProtocols.push({
+        id: pid,
+        name: proto.name,
+        modelPath: proto.modelPath,
+        modelVersion,
+        dataFile,
+        dataSchemaVersion,
+        dataSourceModelVersion,
+        bindingsFingerprint: computeBindingsFingerprint(rootDir),
+        interfaceCount: proto.interfaceCount,
+      });
+    }
+    // diff 快照发现：扫描 webDir/*.diff.data.json（08 §4.2 bundles.diff[]）
+    const diffSnapshots: ProjectDiffSnapshotInput[] = [];
+    let diffFiles: string[] = [];
+    try {
+      diffFiles = readdirSync(webDir).filter((f) => f.endsWith('.diff.data.json'));
+    } catch {
+      // webDir 不可读 → 无 diff 快照（warnings 由 dataJsonPath 校验兜底）
+    }
+    for (const f of diffFiles) {
+      try {
+        const raw = JSON.parse(readFileSync(join(webDir, f), 'utf-8')) as {
+          schemaVersion?: unknown;
+          sourceModelVersion?: unknown;
+          protocol?: { name?: unknown };
+          diff?: { metadataChanges?: Array<{ path?: string; kind?: string; oldValue?: unknown }> };
+        };
+        if (typeof raw.schemaVersion !== 'string' || typeof raw.sourceModelVersion !== 'string') {
+          allWarnings.push(`[diff] ${f} 缺 schemaVersion/sourceModelVersion，跳过 diff 清单登记`);
+          continue;
+        }
+        const protocolName = typeof raw.protocol?.name === 'string' ? raw.protocol.name : '';
+        if (!protocolName) {
+          allWarnings.push(`[diff] ${f} 缺 protocol.name，无法归属子协议，跳过 diff 清单登记`);
+          continue;
+        }
+        // baseModelVersion：diff.metadataChanges 中 metadata.version 的 oldValue（08 §4.2）
+        const versionChange = (raw.diff?.metadataChanges ?? []).find(
+          (c) => c.path === 'metadata.version' && c.kind === 'modified'
+        );
+        if (!versionChange || typeof versionChange.oldValue !== 'string') {
+          allWarnings.push(`[diff] ${f} 缺 diff.metadataChanges 中 metadata.version oldValue，跳过 diff 清单登记`);
+          continue;
+        }
+        diffSnapshots.push({
+          file: f,
+          schemaVersion: raw.schemaVersion,
+          sourceModelVersion: raw.sourceModelVersion,
+          protocolName,
+          baseModelVersion: versionChange.oldValue,
+        });
+      } catch {
+        allWarnings.push(`[diff] ${f} JSON 解析失败，跳过 diff 清单登记`);
+      }
+    }
+    const manifest = buildProjectManifest({
+      composition,
+      protocols: manifestProtocols,
+      diffSnapshots,
+    });
+    writeJson(join(webDir, 'manifest.json'), manifest);
+    writeJson(join(publicDir, 'manifest.json'), manifest);
+  }
+
   // 7. 写出 VitePress config + package.json（与单协议 webgen 保持路径一致）
   //    注意：本模式与单协议模式共用 web/ 目录；CLI 调用方负责在 --project 时不冲突。
   const { mkdirSync } = await import('node:fs');
@@ -1463,6 +1706,9 @@ export async function deriveProjectWeb(
 
   // protocols/<id>/index.md + protocols/<id>/<iface>.md
   // B1-I5：拆出独立目录（避免 protocols/<id>.md 与 protocols/<id>/index.md 路由冲突）
+  // T4：同时保存逐子协议 buildWebData 产物（interface-details 投影器消费：triggerRoleId
+  //     backfill 搬运 + stateMachine/diffView join 数据源）
+  const subWebDataMap = new Map<string, WebDataJson>();
   for (const proto of data.protocols) {
     const specs = subSpecs.get(proto.id) ?? [];
     const protoDir = join(protocolsDir, encodeURIComponent(proto.id));
@@ -1507,6 +1753,15 @@ export async function deriveProjectWeb(
           allProjectErrorCodes: collectProjectErrorCodes(allSpecs),
         });
         const subDataRedacted = redactSensitiveFields(subData) as typeof subData;
+        subWebDataMap.set(proto.id, subDataRedacted);
+        // T4（09-execution-T4 TD5）：组合层模式下子协议单协议产物同批落盘
+        // （web/<pn>.data.json），使 pN.data.json 携带 TD2 triggerRoleId backfill 新值
+        // （与 G3 基线 diff 仅此字段，预期交付）。force 语义：非 force 且已存在 → 跳过
+        // （主 data.json 已拦截重复跑）；force → 覆盖。
+        const subDataOut = join(webDir, `${proto.id.toLowerCase()}.data.json`);
+        if (options.force || !existsSync(subDataOut)) {
+          writeJson(subDataOut, subDataRedacted);
+        }
         writeText(join(protoDir, 'test-cases.md'), renderTestCasesPage(subDataRedacted));
         writeText(join(protoDir, 'verification.md'), renderVerificationPage(subDataRedacted));
         writeText(join(protoDir, 'diff.md'), renderDiffPage(subDataRedacted));
@@ -1523,6 +1778,25 @@ export async function deriveProjectWeb(
 
   // cross-refs.md
   writeText(join(docsDir, 'cross-refs.md'), renderCrossRefsPage(data));
+
+  // 8b. T4（09-execution-T4 TD4）：interface-details 同批写出（依赖循环内 subWebDataMap 已填充）。
+  //      输入 = 逐子协议（specs 权威 + buildWebData 产物）+ 组合层 crossRefs + bindingView。
+  {
+    const ifaceDetailsProtocols = data.protocols
+      .filter((p) => subWebDataMap.has(p.id) && (subSpecs.get(p.id)?.length ?? 0) > 0)
+      .map((p) => ({
+        protocolId: p.id,
+        specs: subSpecs.get(p.id) ?? [],
+        webData: subWebDataMap.get(p.id)!,
+      }));
+    const interfaceDetails = buildInterfaceDetails({
+      protocols: ifaceDetailsProtocols,
+      crossRefs: data.crossRefs,
+      bindingView,
+    });
+    writeJson(join(webDir, 'interface-details.json'), interfaceDetails);
+    writeJson(join(publicDir, 'interface-details.json'), interfaceDetails);
+  }
 
   // cross-diff.md（骨架）
   writeText(join(docsDir, 'cross-diff.md'), renderCrossDiffSkeleton(data));

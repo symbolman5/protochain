@@ -38,6 +38,13 @@
         <input id="data-file" type="file" accept=".json,application/json" hidden />
       </div>
 
+      <!-- T4（09-execution-T4 TD7）：项目导入（R5 三模 A：拖拽 web/ 目录 / webkitdirectory） -->
+      <div id="project-drop" class="dropzone" tabindex="0">
+        <div class="drop-title">项目（web 目录） <span class="drop-hint">项目级导航</span></div>
+        <div class="drop-desc">拖拽或选择 derive-web --project 的 web/ 目录（自动定位 manifest + 全部子产物）</div>
+        <input id="project-file" type="file" webkitdirectory multiple hidden />
+      </div>
+
       <div class="status-line">
         <span id="import-status" class="status-text">未导入文件</span>
       </div>
@@ -80,5 +87,9 @@
   <script src="diff-panel.js"></script>
   <!-- 组合层面板（W3-f，TC8；消费 schemaVersion=1.1 组合层 data.json） -->
   <script src="composition-panel.js"></script>
+  <!-- T4 项目级导航控制器（09-execution-T4 TD8：renderScope + tab/侧栏/面包屑 + diff tab） -->
+  <script src="project-nav.js"></script>
+  <!-- T4 接口详情面板（09-execution-T4 TD9：五段查表渲染 + crossRefs downlink） -->
+  <script src="interface-detail-panel.js"></script>
 </body>
 </html>

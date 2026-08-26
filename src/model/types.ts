@@ -1935,3 +1935,202 @@ export interface ProtochainConfig {
   /** 独立绑定配置文件路径（相对 protochain.config.yaml；加载后覆盖内联 bindings） */
   bindingsFile?: string;
 }
+
+// ============================================================================
+// T4 项目级 viewer 契约类型（08-project-viewer-design.md §4.2 / §5.1-5.2 / §5.2.3）
+// 来源：08 §4.2 字段表（ProjectManifest）；08 §5.1-5.2 字段表（ProjectInterfaceDetailData
+//       / ProjectInterfaceDetailEntry）；08 §5.2.3（DownlinkRef 统一形态）。
+// 纪律：字段与可选性逐字对齐 08 字段表；不加 08 字段表之外的字段（含注释性字段）。
+// ============================================================================
+
+/** 项目级 manifest（08 §4.2 字段表；R1=A1 独立文件 + kind 判别，R13 composition.modelVersion，R15 manifest 侧不存 protocolVersions 拷贝，R14 独立两条文案） */
+export interface ProjectManifest {
+  /** "1.0"（常量，08 §4.2 schemaVersion 行） */
+  schemaVersion: '1.0';
+  /** "project-manifest"（常量，viewer 判别字段，08 §4.2 kind 行） */
+  kind: 'project-manifest';
+  /** ISO 8601 生成时刻（08 §4.2 generatedAt 行） */
+  generatedAt: string;
+  /** 项目元数据（08 §4.2 project.* 行：composition.md → CompositionModel.metadata 字段搬运） */
+  project: {
+    systemName: string;
+    version: string;
+    changeType: string;
+  };
+  /** 产物 bundle 清单（08 §4.2 bundles.* 行） */
+  bundles: {
+    /** 组合层 data.json（08 §4.2 bundles.composition.* 行；modelVersion = composition.metadata.version 字段搬运，R13 守卫源对 S6 声明） */
+    composition: {
+      file: string;
+      schemaVersion: '1.1';
+      modelVersion: string;
+    };
+    /** 接口详情产物（08 §4.2 bundles.interfaceDetails.* 行；仅声明 file/schemaVersion，不消费内容——R15） */
+    interfaceDetails: {
+      file: string;
+      schemaVersion: '1.0';
+    };
+    /** 逐子协议条目（08 §4.2 bundles.protocols[] 行） */
+    protocols: ProjectManifestProtocol[];
+    /** diff 快照清单（08 §4.2 bundles.diff[] 行；无 diff 快照 → 空数组） */
+    diff: ProjectManifestDiff[];
+  };
+  /** 独立两条文案（08 §4.3 redactionNotice，R14：不复用 REDACTION_NOTICE_LINES 第三条，不含 P0/P1 阶段编号） */
+  redactionNotice: string[];
+}
+
+/** manifest 单条子协议声明（08 §4.2 bundles.protocols[].* 行；版本指纹字段均为守卫源对声明，非工具链断言） */
+export interface ProjectManifestProtocol {
+  /** 子协议 ID（如 'P1'）——SubProtocolRef.protocolId 字段搬运（08 §4.2） */
+  id: string;
+  /** 子协议名——SubProtocolRef.name 字段搬运 */
+  name: string;
+  /** model.md 相对路径（如 'protocol/P1/model.md'）——SubProtocolRef.modelPath 字段搬运 */
+  modelPath: string;
+  /** model.md metadata.version 字段搬运（守卫源对 S2/S3 的 manifest 侧取值） */
+  modelVersion: string;
+  /** pN.data.json 文件名（约定，如 'p1.data.json'） */
+  dataFile: string;
+  /** 该协议 pN.data.json.schemaVersion 读产物字段搬运（防御性：异常记 warnings，缺省 null） */
+  dataSchemaVersion: string | null;
+  /** 该协议 pN.data.json.sourceModelVersion 读产物字段搬运（守卫源对 S1/S5 的 manifest 侧取值） */
+  dataSourceModelVersion: string | null;
+  /** 系统根 bindings.yaml sha256 指纹；无 bindings.yaml → null（仅变更检测，不还原内容） */
+  bindingsFingerprint: string | null;
+  /** 该协议 specs.json 接口数（specs.length，与 SubProtocolSummary.interfaceCount 同源） */
+  interfaceCount: number;
+}
+
+/** manifest 单条 diff 快照声明（08 §4.2 bundles.diff[].* 行；diff 段不参与任何守卫比对——防误报，08 §7.2） */
+export interface ProjectManifestDiff {
+  /** 快照 id（如 'payment-v1-v2'，工具链按 源协议+基线+目标版本 命名） */
+  id: string;
+  /** 产物文件名（如 'payment.diff.data.json'） */
+  file: string;
+  /** 该文件 schemaVersion 读产物字段搬运 */
+  schemaVersion: string;
+  /** diff 所属子协议（导航关联键 sourceProtocolId，R8；不参与守卫比对） */
+  sourceProtocolId: string;
+  /** diff.metadataChanges 中 metadata.version 的 oldValue（读 diff 段字段搬运） */
+  baseModelVersion: string;
+  /** 该文件 sourceModelVersion（读产物字段搬运） */
+  targetModelVersion: string;
+}
+
+/** 接口详情产物顶层（08 §5.1 契约形态；R7 顶层 protocolVersions = 各协议 dataFile.sourceModelVersion 字段搬运；R18-1 kind 判别常量） */
+export interface ProjectInterfaceDetailData {
+  /** "1.0"（常量，08 §5.1） */
+  schemaVersion: '1.0';
+  /** "interface-details"（常量，C 模内容判别字段，08 §5.1 / R18-1） */
+  kind: 'interface-details';
+  /** ISO 8601 生成时刻 */
+  generatedAt: string;
+  /** { "<Pn>": "<sourceModelVersion>" }（R7；与 manifest protocols[].dataSourceModelVersion 同源同值；守卫源对 S5 的产物侧取值） */
+  protocolVersions: Record<string, string>;
+  /** { "<Pn>": { "<IF_ID>": ProjectInterfaceDetailEntry } } */
+  entries: Record<string, Record<string, ProjectInterfaceDetailEntry>>;
+}
+
+/** 单接口详情条目（08 §5.2 字段表逐行；五类来源归属：① 接口自身 InterfaceSpec / ② 关系 工具链 join / ③ binding 非敏感投影 / ④ diffImpact diffView 投影 / ⑤ crossRefs 组合层 crossRefs + downlink） */
+export interface ProjectInterfaceDetailEntry {
+  /** 协议 ID（08 §5.2 protocolId 行：manifest protocols[].id 字段搬运，冗余便于扁平消费） */
+  protocolId: string;
+  /** ① 接口自身段（08 §5.2 interface.* 行） */
+  interface: ProjectInterfaceDetailInterface;
+  /** ② 关系段（08 §5.2 relation.* 行；工具链 join，viewer 零推导） */
+  relation: ProjectInterfaceRelation;
+  /** ③ binding 段（08 §5.2 binding 行；无 bindings → { hasBindings: false }） */
+  binding: ProjectInterfaceBinding | null;
+  /** ⑤ crossRefs 段（08 §5.2 crossRefs 行 + §5.2.3 downlink；组合层 crossRefs.filter(fromApi === interface.id)，每条内嵌 downlink） */
+  crossRefs: ProjectCrossRefWithDownlink[];
+}
+
+/** 接口自身段（08 §5.2 interface.* 行；全部来自 InterfaceSpec 字段搬运，sourceId 必须从 specs.json 补——WebDataJson 视图不含） */
+export interface ProjectInterfaceDetailInterface {
+  id: string;
+  name: string;
+  kind: 'system' | 'observation';
+  sourceId: string;
+  actionType?: string;
+  /** 触发角色 ID（TD2 backfill 后由 pN.data.json 搬运；可空） */
+  triggerRoleId?: string | null;
+  description: string;
+  schemaKind?: string;
+  schemaDegradedReasons?: string[];
+  isContractCarrier?: boolean | null;
+  requestSchema?: JSONSchema;
+  responseSchema?: JSONSchema;
+  inputs: FieldSpec[];
+  outputs: FieldSpec[];
+  precondition?: string;
+  preconditions?: SchemaExpression[];
+  postconditions: string[];
+  postconditionExpressions?: SchemaExpression[];
+  sideEffects?: SchemaExpression[];
+  invariantIds?: string[];
+  observesResourcePoolId?: string | null;
+  errorResponses?: ErrorResponseDef[];
+}
+
+/** 关系段（08 §5.2 relation.* 行；工具链 join：ownedTransitions = edges 中 action===sourceId 的 edge.id，观测接口空数组） */
+export interface ProjectInterfaceRelation {
+  ownedTransitions: string[];
+  preconditionStates: string[];
+  postconditionStates: string[];
+  /** invariantScope.scopeStateIds 包含后置状态的不变量（08 §5.2 coveredInvariants 行） */
+  coveredInvariants: ProjectCoveredInvariant[];
+  /** diffView.affectedInterfaces 命中 → affected=true 携带全部字段；否则 false 全空（08 §5.2.1 防误报口径） */
+  diffImpact: ProjectDiffImpact;
+}
+
+/** 覆盖不变量条目（08 §5.2 coveredInvariants 行：name/scopeStateIds/carrierRoleIds） */
+export interface ProjectCoveredInvariant {
+  id: string;
+  name: string;
+  scopeStateIds: string[];
+  carrierRoleIds: string[];
+}
+
+/** diffImpact 口径（08 §5.2.1：affected=false 时其余字段为空） */
+export interface ProjectDiffImpact {
+  affected: boolean;
+  changedTransitions: string[];
+  changedStates: string[];
+  changedOthers: Array<{ elementType: string; elementId: string; kind: string }>;
+  summary: string | null;
+}
+
+/** binding 段（08 §5.2 binding.* 行；非敏感投影，不读 authConfig/tls 密钥段；无 bindings → hasBindings=false 空视图） */
+export interface ProjectInterfaceBinding {
+  hasBindings: boolean;
+  /** bindings.interfaces[].transport 过滤命中行（method/path/type + roleId/protocol） */
+  transport?: Array<{ type: string; method?: string; path?: string; roleId?: string; protocol?: string }>;
+  /** 该接口声明的 errorCode 命中 errorMap 的行（ErrorMapEntry 字段，types.ts L1799-1811） */
+  errorMapHits?: Array<{ errorCode: string } & ErrorMapEntry>;
+  /** 状态词表映射（项目级共享展示） */
+  stateMap?: Record<string, string> | null;
+  /** 该接口声明但 errorMap 未覆盖的码（buildBindingView 计算过滤） */
+  unmappedErrorCodes?: string[];
+}
+
+/** crossRefs 条目（08 §5.2 crossRefs 行：组合层 crossRefs 原字段 + 内嵌 downlink 解析，R10） */
+export interface ProjectCrossRefWithDownlink {
+  kind: string;
+  toProtocol: string;
+  target?: string;
+  sourceField: string;
+  context: string;
+  /** downlink 解析对象（08 §5.2.3：viewer 只读 resolved，不做任何 target 语义推断） */
+  downlink: DownlinkRef;
+}
+
+/** downlink 统一形态（08 §5.2.3 R10：工具链预解析 target 归属；resolved=false 时 kind=null + reason 语义别名文案） */
+export interface DownlinkRef {
+  resolved: boolean;
+  /** 下钻目标 kind（状态 id → 接口 id → 资源池 id 查表命中）；全部未命中 → null */
+  kind: 'state' | 'interface' | 'resourcePool' | null;
+  protocolId: string;
+  target: string;
+  /** resolved=false 时携带降级原因（08 §5.2.3 文案：语义别名或跨版本引用） */
+  reason?: string;
+}
