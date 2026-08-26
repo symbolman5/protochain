@@ -114,22 +114,25 @@ describe('viewer 静态资产冒烟（W3-a / TA3）', () => {
     expect(win.ProtochainViewer!.state.n1.fresh).toBe(true);
   });
 
-  test('② 静态扫描：viewer 三件套无 fetch/XHR/远程 http 引用（纯本地离线）', () => {
+  test('② 静态扫描：viewer 三件套无 XHR/远程 http 引用；B 模 fetch 仅限 http 协议分支（纯本地离线）', () => {
     const html = readViewerFile('index.html');
     const app = readViewerFile('app.js');
     const n1 = readViewerFile('n1-guard.js');
-    // 无网络请求 API
-    for (const bad of ['fetch(', 'XMLHttpRequest', 'WebSocket(', 'navigator.sendBeacon']) {
+    // 无网络请求 API（T4 08 §8.1 B 模例外：fetch 仅出现在 http/https 协议分支内——
+    // file:// 场景零网络调用；XMLHttpRequest/WebSocket/sendBeacon 全禁）
+    for (const bad of ['XMLHttpRequest', 'WebSocket(', 'navigator.sendBeacon']) {
       expect(app).not.toContain(bad);
       expect(n1).not.toContain(bad);
     }
+    // B 模 fetch 存在但受协议分支保护（08 红线 4：http 模 B 例外）
+    expect(app).toContain('fetch(');
+    expect(app).toMatch(/proto !== 'http:' && proto !== 'https:'/);
     // 无远程资源引用（script/link href 均为本地相对路径）
     const remoteRefs = html.match(/(?:src|href)="https?:\/\//g);
     expect(remoteRefs).toBeNull();
     // 不引用 CDN / 不内联远程 import
     expect(app).not.toMatch(/import\s+.*from\s+['"]https?:/);
-    // 无 console.error 硬编码路径（排障用）
-    expect(app).not.toContain('http://');
+    expect(n1).not.toMatch(/import\s+.*from\s+['"]https?:/);
   });
 
   test('② 骨架 DOM 结构完整：导入区/版本角标/警示条/面板容器齐备', () => {
@@ -137,10 +140,12 @@ describe('viewer 静态资产冒烟（W3-a / TA3）', () => {
     const d = dom.window.document;
     expect(d.querySelector('#model-drop')).not.toBeNull();
     expect(d.querySelector('#data-drop')).not.toBeNull();
+    expect(d.querySelector('#project-drop')).not.toBeNull();
     expect(d.querySelector('#parser-version')).not.toBeNull();
     expect(d.querySelector('#n1-banner')).not.toBeNull();
     expect(d.querySelector('#panels')).not.toBeNull();
-    // 无框架：无外部框架脚本（仅本地 10 件套 + 无 CDN；T2 新增 swimlanes/replay/relations-panel，T3 新增 diff-panel/composition-panel）
+    // 无框架：无外部框架脚本（仅本地 12 件套 + 无 CDN；T2 新增 swimlanes/replay/relations-panel，
+    // T3 新增 diff-panel/composition-panel，T4 新增 project-nav/interface-detail-panel）
     const scripts = [...d.querySelectorAll('script[src]')].map((s) => s.getAttribute('src'));
     expect(scripts).toEqual([
       'assets/parser.js',
@@ -153,6 +158,8 @@ describe('viewer 静态资产冒烟（W3-a / TA3）', () => {
       'relations-panel.js',
       'diff-panel.js',
       'composition-panel.js',
+      'project-nav.js',
+      'interface-detail-panel.js',
     ]);
   });
 });
