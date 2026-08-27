@@ -71,6 +71,8 @@
   <script src="assets/parser.js"></script>
   <!-- N1 新鲜度守卫（纯函数，UMD；可独立测试） -->
   <script src="n1-guard.js"></script>
+  <!-- G5 Wave 4 共享纯函数（TI7/TI8/TI9：默认落地页判定 / catalog 查表 / schema 树 / 错误码表） -->
+  <script src="interface-view-utils.js"></script>
   <!-- viewer 应用逻辑（无框架，手写） -->
   <script src="app.js"></script>
   <!-- ① 生命周期主视图（TA4；注册 ProtochainViewerHooks.renderAll） -->
@@ -89,7 +91,11 @@
   <script src="composition-panel.js"></script>
   <!-- T4 项目级导航控制器（09-execution-T4 TD8：renderScope + tab/侧栏/面包屑 + diff tab） -->
   <script src="project-nav.js"></script>
-  <!-- T4 接口详情面板（09-execution-T4 TD9：五段查表渲染 + crossRefs downlink） -->
+  <!-- T4 接口详情面板（09-execution-T4 TD9 → G5 TI9 升级：schema 全量递归 + 错误码表 + 双向跳转） -->
   <script src="interface-detail-panel.js"></script>
+  <!-- G5 TI8 接口目录面板（catalog 三索引查表，独立文件挂载） -->
+  <script src="interface-catalog-panel.js"></script>
+  <!-- G5 TI9 状态机→接口 跳转桥（document 级委托，不改动 main-view） -->
+  <script src="interface-jump-bridge.js"></script>
 </body>
 </html>

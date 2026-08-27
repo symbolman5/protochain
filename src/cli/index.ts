@@ -45,6 +45,7 @@ import { checkCrossInvariants } from '../cross-invariant-checker/index.js';
 import { crossFormalize } from '../cross-formalizer/index.js';
 import { deriveCrossContracts } from '../cross-contractor/index.js';
 import { generateCrossCases } from '../cross-casegen/index.js';
+import { checkProjectBindingsFreshness } from './bindings-present-value-guard.js';
 import { createAIRouter } from '../ai/router.js';
 import {
   registerExecutor,
@@ -2047,6 +2048,20 @@ program
         // 修正：#008 缺陷 4 修复时误用协议 role 的 resolveCtx，导致多协议项目
         // 无 --protocol 直接报错、组合层 rootDir 落到协议根找不到 composition.md。
         const compCtx = resolveCtx(opts, 'composition');
+        // C-8a 现值守卫前置检查（10 §3-3 C-8a；TI5）：读根 bindings.yaml 现值 sha256
+        // 与已有 web/manifest.json 各协议 bindingsFingerprint 比对。非致命告警——
+        // 不一致仅提示重跑 derive-web --project 刷新，不阻断本次 derive。无 bindings.yaml
+        // 的项目（演示实例）按 noBindingsFile 跳过，不误报。
+        try {
+          const c8a = checkProjectBindingsFreshness(compCtx.systemRoot);
+          if (!c8a.noBindingsFile && c8a.staleProtocolIds.length > 0) {
+            console.warn(
+              `[C-8a] 警告：以下协议的 interface-details binding 投影可能过期（根 bindings.yaml 现值与 manifest 指纹不一致），请重新运行 derive-web --project 刷新：${c8a.staleProtocolIds.join(', ')}`
+            );
+          }
+        } catch {
+          // 守卫非致命：任何异常都不阻断 derive
+        }
         const result = await deriveProjectWeb({
           rootDir: compCtx.systemRoot,
           dataJsonPath: opts.dataJson ? resolveRelative(opts.dataJson, compCtx.systemRoot) : undefined,

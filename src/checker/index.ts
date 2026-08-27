@@ -29,11 +29,15 @@ import type {
   JSONSchema,
   RelationAssertion,
   RelationAssertionKind,
+  InterfaceSpec,
+  InterfaceType,
+  ProjectInterfaceDetailData,
 } from '../model/types.js';
 import { decomposeStateMachines } from '../model/state-machines.js';
 import { buildRelations, type RelationKind, type RelationProjectionEntry } from '../webgen/relations.js';
 import { tryParseGuardSchema } from '../specifier/schema-builder.js';
 import { extractPredicateFieldRefs } from '../specifier/predicates.js';
+import { specify } from '../specifier/index.js';
 import Ajv from 'ajv';
 
 export function checkCompleteness(
@@ -83,6 +87,14 @@ export function checkCompleteness(
   // 5d. W2：guard schema 自检（TC5；ajv 编译 / 跨字段引用闭合 / invariant 引用存在性）
   // ----------------------------------------------------------------------
   checkGuardSchemaSelfCheck(model, referenceIssues);
+
+  // ----------------------------------------------------------------------
+  // 5e. TI4 (C-5)：分型交叉校验 + schema 完整度断言（10 §3-2 / §4 C-5）
+  //   - Rule 1 分型一致性（声明 vs 机械可推导）；权威方向 = 契约声明
+  //   - Rule 2 schema 完整度（防两层漂移；最小可测版）
+  //   - Rule 3 报错分层（引用完整优先，引用不完整则跳过分型交叉校验）
+  // ----------------------------------------------------------------------
+  checkTypingCrossValidation(model, referenceIssues, fieldIssues, structuralIssues);
 
   // ----------------------------------------------------------------------
   // 5. 跨协议引用收集（① 阶段标记，①-C 阶段在 composition-checker 校验）
@@ -1285,6 +1297,146 @@ export function checkGuardSchemaSelfCheck(
 }
 
 // ============================================================================
+// 5e. TI4 (C-5)：分型交叉校验 + schema 完整度断言（10 §3-2 / §4 C-5）
+// ============================================================================
+
+/**
+ * TI4 机械可推导分型（与 TI3 投影兜底一致，10 §3-2 三值映射表）。
+ * 给定 InterfaceSpec，按以下顺序推导：
+ * - kind === 'observation' 或 observesResourcePoolId != null → 'observation'
+ * - isContractCarrier === true → 'contract_carrier'
+ * - 否则 → 'state_machine'
+ *
+ * 权威方向（10 §3-2 IR-7）：契约声明（declaredInterfaceType）为权威，
+ * 本函数仅为校验基准（机械派生），不得反向约束声明。
+ */
+function computeMechanicalInterfaceType(spec: InterfaceSpec): InterfaceType {
+  if (spec.kind === 'observation' || spec.observesResourcePoolId != null) {
+    return 'observation';
+  }
+  if (spec.isContractCarrier === true) {
+    return 'contract_carrier';
+  }
+  return 'state_machine';
+}
+
+/**
+ * TI4 (C-5) 入口：分型"契约声明 vs 机械可推导"交叉校验 + schema 完整度断言。
+ *
+ * 触发条件：model.contractInput.contracts 中至少有一条声明了 interfaceType（C-4 可选扩展）。
+ * 老模型（无 interfaceType 声明）→ 整段跳过（零回归，10 §3-2「老模型零回归」）。
+ *
+ * 报错分层（Rule 3 / 10 §3-2 R2-7）：仅当该契约的 interface/sourceId 引用完整性通过
+ * （指向已存在的 transition，或该 spec 为观测接口不引用 transition）时才比对分型；
+ * 引用不完整的 orphan 契约由既有 R-E6 报 warning，此处跳过分型交叉校验避免双重报告。
+ */
+function checkTypingCrossValidation(
+  model: SourceProtocolModel,
+  referenceIssues: CheckIssue[],
+  fieldIssues: CheckIssue[],
+  _structuralIssues: CheckIssue[]
+): void {
+  const contracts = model.contractInput?.contracts;
+  if (!contracts || contracts.length === 0) return;
+
+  // 无任何分型声明 → 无交叉校验基准，整段跳过（老模型零回归）
+  const hasDeclaration = contracts.some((c) => c.interfaceType != null);
+  if (!hasDeclaration) return;
+
+  // 投影 specs：获取 declaredInterfaceType 与机械派生字段（kind / isContractCarrier / observesResourcePoolId）
+  let specs: InterfaceSpec[];
+  try {
+    specs = specify(model).specs;
+  } catch {
+    // 投影失败（极少见）→ 稳妥降级，不阻断既有检查
+    return;
+  }
+
+  // 引用完整性基线：transition.id / transition.action 命名空间
+  const transitionRefs = new Set<string>();
+  for (const t of model.derivable.transitions) {
+    if (t.id) transitionRefs.add(t.id);
+    if (t.action) transitionRefs.add(t.action);
+  }
+
+  for (const c of contracts) {
+    if (c.interfaceType == null) continue; // 无声明 → 无比较基准
+
+    // 找到该契约投影出的 spec（specifier 以 contractSource === c.interface 对齐）
+    const spec = specs.find((s) => s.contractSource === c.interface);
+    if (!spec) continue; // 该契约未投影出 spec（极少见）→ 跳过
+
+    // ── Rule 3：报错分层（引用完整性优先）──
+    const referenceComplete =
+      spec.kind === 'observation' ||
+      transitionRefs.has(c.interface) ||
+      (c.sourceId != null && transitionRefs.has(c.sourceId));
+    if (!referenceComplete) {
+      // 引用不完整（R-E6 已报 orphan warning）→ 跳过分型交叉校验，避免双重报告
+      continue;
+    }
+
+    // ── Rule 1：分型一致性（声明为准）──
+    const mechanical = computeMechanicalInterfaceType(spec);
+    if (mechanical !== c.interfaceType) {
+      referenceIssues.push(
+        errorIssue(
+          `接口 "${c.interface}" 的分型声明 "${c.interfaceType}" 与机械可推导分型 "${mechanical}" 不一致（契约声明为权威，机械推导仅作校验基准） [TYPING_MISMATCH]`,
+          `contractInput.contracts.${c.interface}.interfaceType`,
+          c.interface
+        )
+      );
+    }
+
+    // ── Rule 2：schema 完整度（防两层漂移）──
+    checkTypingSchemaDrift(spec, c, fieldIssues);
+  }
+}
+
+/**
+ * TI4 Rule 2：schema 完整度（防契约/模型两层漂移，10 §3-2 末 bullet）。
+ *
+ * 简化版（按 10 §3-2 容许）：仅对携带契约（contractSource 非空）且机械分型为
+ * state_machine / contract_carrier 的接口做断言——当 requestSchema 缺省或仅为自然语言
+ * description（无 type 字段，无法承载 JSON Schema）时，guard/effects 引用的状态字段
+ * 无法与 requestSchema 断言存在性，报 drift warning。
+ *
+ * 关键：完整度判定以「契约层原始声明 requestSchema」为准，而非 spec 投影后的 requestSchema。
+ * 原因：specifier 的 mergeContractRequestSchema 会把 currentState 字段自动并入，
+ * 使仅含 description 的契约 requestSchema 被升级为 structured（丢失"用户仅给自然语言描述"
+ * 的语义）。若以 spec.schemaKind 判定会漏报两层漂移，故此处直接看 contract.requestSchema 是否
+ * 仍是真正的 JSON Schema（含 type 字段）。
+ *
+ * 注：完整版应遍历 guard 谓词引用的字段并逐一断言出现在 requestSchema.properties；
+ * 本实现按契约采用最小可测版本，聚焦"requestSchema 为真正 JSON Schema 才做字段级断言"的前置门槛，
+ * 且因本函数仅在声明了 interfaceType 的契约上触发（见 checkTypingCrossValidation），
+ * 对未声明 interfaceType 的老模型零回归。
+ */
+function checkTypingSchemaDrift(
+  spec: InterfaceSpec,
+  contract: ContractEntry,
+  issues: CheckIssue[]
+): void {
+  const mechanical = computeMechanicalInterfaceType(spec);
+  if (mechanical !== 'state_machine' && mechanical !== 'contract_carrier') return;
+  if (!spec.contractSource) return;
+
+  // 以契约层原始声明 requestSchema 判定：含 type 字段即视为真正的 JSON Schema（可承载字段级断言）；
+  // 缺省或仅 description（无 type）则无法校验 guard/effects 引用的状态字段 → 两层漂移风险。
+  const reqSchema = contract.requestSchema;
+  const reqIsStructured = reqSchema != null && (reqSchema as { type?: unknown }).type != null;
+  if (!reqIsStructured) {
+    issues.push(
+      warningIssue(
+        `接口 "${contract.interface}" 的 requestSchema 非 structured（契约层声明缺 type 字段或仅为自然语言 description），guard/effects 引用的状态字段无法与 requestSchema 断言存在性，存在契约/模型两层漂移风险 [TYPING_SCHEMA_DRIFT]`,
+        `contractInput.contracts.${contract.interface}.requestSchema`,
+        contract.interface
+      )
+    );
+  }
+}
+
+// ============================================================================
 // 跨协议引用收集（① 阶段标记，①-C 阶段在 composition-checker 校验）
 // ============================================================================
 
@@ -1381,4 +1533,91 @@ function warningIssue(
   elementId?: string
 ): CheckIssue {
   return { severity: 'warning', category: 'mechanical', message, elementPath, elementId };
+}
+
+// ============================================================================
+// G6（C-G6-4 / 10 §17.4 G6-1~G6-2）：interface-details 示例/代码样例断言
+// ----------------------------------------------------------------------------
+// 校验工具链预投影产物（interface-details.json 1.1）的示例字段，防合成漂移：
+//  ① requestExample/responseExample 顶层字段集 ⊆ 对应 schema 叶子 path 集；
+//  ② codeSamples 非空数组时每条 code 非空字符串；
+//  ③ 老模型无 schema → 示例记 null（不硬失败）。
+// 仅做查表式断言，不推导、不读 bindings；与 10 §17 红线②一致。
+// ============================================================================
+
+/** 收集 object schema 顶层叶子 key（§17.6 未决③：首版仅顶层示例） */
+function topLevelLeafKeys(schema: JSONSchema | undefined): Set<string> {
+  const s = schema as { type?: string; properties?: Record<string, unknown> } | undefined;
+  if (s && s.type === 'object' && s.properties) return new Set(Object.keys(s.properties));
+  return new Set();
+}
+
+function checkExampleSubset(
+  example: unknown,
+  schema: JSONSchema | undefined,
+  fieldName: 'requestExample' | 'responseExample',
+  protocolId: string,
+  interfaceId: string,
+  issues: CheckIssue[]
+): void {
+  // 老模型无 schema / 示例为 null → 不硬失败（G6-1③）
+  if (!schema || example === null || example === undefined) return;
+  const leaves = topLevelLeafKeys(schema);
+  if (leaves.size === 0) return; // 非 object schema 不约束顶层字段集
+  if (typeof example !== 'object' || Array.isArray(example)) {
+    issues.push(
+      errorIssue(
+        `${fieldName} 顶层应为 object（与 schema 形态不一致）`,
+        `${protocolId}/${interfaceId}.interface.${fieldName}`,
+        interfaceId
+      )
+    );
+    return;
+  }
+  const keys = Object.keys(example as Record<string, unknown>);
+  for (const k of keys) {
+    if (!leaves.has(k)) {
+      issues.push(
+        errorIssue(
+          `${fieldName} 含 schema 外字段 "${k}"（合成漂移，应 ⊆ schema 叶子）`,
+          `${protocolId}/${interfaceId}.interface.${fieldName}.${k}`,
+          interfaceId
+        )
+      );
+    }
+  }
+}
+
+/**
+ * G6-4 校验入口：对 interface-details.json 全部条目断言示例/代码样例。
+ * @returns MechanicalCheckResult（passed=无 error 级 issue）
+ */
+export function checkInterfaceDetailsExamples(data: ProjectInterfaceDetailData): MechanicalCheckResult {
+  const fieldIssues: CheckIssue[] = [];
+  if (!data || !data.entries) {
+    return { passed: true, structuralIssues: [], fieldIssues, referenceIssues: [] };
+  }
+  for (const [protocolId, protoEntries] of Object.entries(data.entries)) {
+    for (const [interfaceId, entry] of Object.entries(protoEntries)) {
+      const i = entry.interface || {};
+      // G6-1：示例字段集 ⊆ schema 叶子
+      checkExampleSubset(i.requestExample, i.requestSchema, 'requestExample', protocolId, interfaceId, fieldIssues);
+      checkExampleSubset(i.responseExample, i.responseSchema, 'responseExample', protocolId, interfaceId, fieldIssues);
+      // G6-2：codeSamples 非空数组时每条 code 非空
+      if (Array.isArray(i.codeSamples)) {
+        i.codeSamples.forEach((s, idx) => {
+          if (!s || typeof s.code !== 'string' || s.code.length === 0) {
+            fieldIssues.push(
+              errorIssue(
+                `codeSamples[${idx}].code 为空（G6-2 要求非空）`,
+                `${protocolId}/${interfaceId}.interface.codeSamples[${idx}]`,
+                interfaceId
+              )
+            );
+          }
+        });
+      }
+    }
+  }
+  return { passed: fieldIssues.length === 0, structuralIssues: [], fieldIssues, referenceIssues: [] };
 }

@@ -21,11 +21,13 @@
 
 import type {
   InterfaceSpec,
+  InterfaceType,
   FieldSpec,
   JSONSchema,
   SchemaExpression,
   ErrorResponseDef,
   DownlinkRef,
+  CatalogIndex,
   ProjectInterfaceDetailData,
   ProjectInterfaceDetailEntry,
   ProjectInterfaceDetailInterface,
@@ -37,6 +39,7 @@ import type {
 } from '../model/types.js';
 import type { WebDataJson, WebBindingView } from './index.js';
 import type { CrossProtocolRef } from './composition.js';
+import { synthesizeExample, buildCodeSamples } from './example-synth.js';
 
 /** 单个子协议的接口详情输入 */
 export interface InterfaceDetailsProtocolInput {
@@ -45,6 +48,8 @@ export interface InterfaceDetailsProtocolInput {
   specs: InterfaceSpec[];
   /** buildWebData 产物（含 TD2 triggerRoleId backfill；stateMachine/diffView 为 join 数据源） */
   webData: WebDataJson;
+  /** per-protocol bindings.yaml sha256 快照 // C-3 源（P3-10：实际为 root 指纹，按协议键挂载） */
+  bindingsFingerprint?: string | null;
 }
 
 export interface BuildInterfaceDetailsInputs {
@@ -67,21 +72,42 @@ export function buildInterfaceDetails(inputs: BuildInterfaceDetailsInputs): Proj
 
   const entries: ProjectInterfaceDetailData['entries'] = {};
   const protocolVersions: Record<string, string> = {};
+  // C-1（10 §3-1）：接口目录三索引；独立于 interfaceType 声明（老模型亦生成，Gif-4①）
+  const catalog: CatalogIndex = { byProtocol: {}, byRole: {}, byPreconditionState: {} };
   for (const p of protocols) {
     protocolVersions[p.protocolId] = p.webData.sourceModelVersion;
     const protoEntries: Record<string, ProjectInterfaceDetailEntry> = {};
     for (const spec of p.specs) {
-      protoEntries[spec.id] = buildEntry(p, spec, crossRefs, bindingView, targetData);
+      const entry = buildEntry(p, spec, crossRefs, bindingView, targetData, p.bindingsFingerprint ?? null);
+      protoEntries[spec.id] = entry;
+      // —— C-1 catalog 投影（10 §3-1 归组边界规则）——
+      const key = { protocolId: p.protocolId, interfaceId: spec.id };
+      (catalog.byProtocol[p.protocolId] ??= []).push(key);
+      // byRole：观测接口 → "观测"；triggerRoleId==null 系统接口 → "系统/未指派角色"；否则 triggerRoleId
+      let roleKey: string;
+      if (entry.interface.interfaceType === 'observation' || spec.kind === 'observation') {
+        roleKey = '观测';
+      } else if (entry.interface.triggerRoleId == null) {
+        roleKey = '系统/未指派角色';
+      } else {
+        roleKey = entry.interface.triggerRoleId;
+      }
+      (catalog.byRole[roleKey] ??= []).push(key);
+      // byPreconditionState：多 from → 多个前置状态键重复出现（不去重，标多归属）
+      for (const sid of entry.relation.preconditionStates) {
+        (catalog.byPreconditionState[sid] ??= []).push(key);
+      }
     }
     entries[p.protocolId] = protoEntries;
   }
 
   return {
-    schemaVersion: '1.0',
+    schemaVersion: '1.1', // C-1/C-3 加法式演进（10 §4）；老模型亦升 1.1（Gif-4①）
     kind: 'interface-details',
     generatedAt: new Date().toISOString(),
     protocolVersions,
     entries,
+    catalog,
   };
 }
 
@@ -91,18 +117,21 @@ function buildEntry(
   spec: InterfaceSpec,
   crossRefs: CrossProtocolRef[],
   bindingView: WebBindingView | undefined,
-  targetData: Map<string, WebDataJson>
+  targetData: Map<string, WebDataJson>,
+  bindingsFingerprint: string | null
 ): ProjectInterfaceDetailEntry {
   const view = p.webData.interfaces.find((v) => v.id === spec.id);
   const edges = p.webData.stateMachine.edges;
   // ownedTransitions：系统接口 = edges 中 action === sourceId 的 edge.id；观测接口空数组
   const ownedEdges = spec.kind === 'system' ? edges.filter((e) => e.action === spec.sourceId) : [];
+  // G6（C-G6-3）：transport 行（含 server 拼接）供 ① codeSamples 与 ③ transport 共用，仅计算一次
+  const transportRows = computeTransportRows(spec, bindingView);
   const preconditionStates = unique(ownedEdges.flatMap((e) => e.from));
   const postconditionStates = unique(ownedEdges.map((e) => e.to));
 
   const entry: ProjectInterfaceDetailEntry = {
     protocolId: p.protocolId,
-    interface: buildInterfaceSection(spec, view),
+    interface: buildInterfaceSection(spec, view, p.protocolId, transportRows),
     relation: {
       ownedTransitions: ownedEdges.map((e) => e.id),
       preconditionStates,
@@ -110,17 +139,58 @@ function buildEntry(
       coveredInvariants: computeCoveredInvariants(p.webData.stateMachine.invariantScope ?? {}, postconditionStates),
       diffImpact: computeDiffImpact(p.webData.diffView, spec.id),
     },
-    binding: buildInterfaceBinding(spec, bindingView),
+    binding: buildInterfaceBinding(spec, bindingView, bindingsFingerprint, transportRows),
     crossRefs: buildCrossrefs(crossRefs.filter((r) => r.fromApi === spec.id), targetData),
   };
   return entry;
 }
 
+/** ① transport 行（含 server）中间计算：供 buildInterfaceSection(codeSamples) 与 buildInterfaceBinding(transport) 共用 */
+function computeTransportRows(
+  spec: InterfaceSpec,
+  bindingView: WebBindingView | undefined
+): Array<{ type: string; method?: string; path?: string; roleId?: string; protocol?: string; server?: string }> {
+  if (!bindingView || !bindingView.hasBindings) return [];
+  const hits = (bindingView.interfaces ?? []).filter(
+    (ib) => ib.action === spec.sourceId || ib.action === spec.id
+  );
+  return hits.map((ib) => {
+    const t: { type: string; method?: string; path?: string; roleId?: string; protocol?: string; server?: string } = {
+      type: ib.transport?.type ?? 'unknown',
+    };
+    if (ib.transport?.method) t.method = ib.transport.method;
+    if (ib.transport?.path) t.path = ib.transport.path;
+    if (ib.roleId !== undefined) t.roleId = ib.roleId;
+    if (ib.protocol !== undefined) t.protocol = ib.protocol;
+    // server 按 roleId 查 roles[roleId].baseUrl 拼接（无 bindings/无 roleId → 省略，不硬失败，Gif-3/老模型零回归）
+    const role = ib.roleId !== undefined ? bindingView.roles.find((r) => r.roleId === ib.roleId) : undefined;
+    const server = role?.baseUrl;
+    if (server) t.server = server;
+    return t;
+  });
+}
+
 /** ① 接口自身段（08 §5.2 interface.* 行；InterfaceSpec 权威 + view 补 triggerRoleId） */
 function buildInterfaceSection(
   spec: InterfaceSpec,
-  view: WebDataJson['interfaces'][number] | undefined
+  view: WebDataJson['interfaces'][number] | undefined,
+  protocolId: string,
+  transportRows: Array<{ type: string; method?: string; path?: string; roleId?: string; protocol?: string; server?: string }>
 ): ProjectInterfaceDetailInterface {
+  // C-2（10 §3-2 / C-2）：interfaceType 必填非空——契约声明权威优先；否则机械兜底。
+  // 机械兜底：observation(kind/observesResourcePoolId) → 'observation'；isContractCarrier →
+  // 'contract_carrier'；其余 → 'state_machine'。兜底失败仍压 'state_machine'（断言非空）。
+  let interfaceType: InterfaceType;
+  if (spec.declaredInterfaceType !== undefined) {
+    interfaceType = spec.declaredInterfaceType; // 契约声明权威（10 §3-2）
+  } else if (spec.kind === 'observation' || spec.observesResourcePoolId != null) {
+    interfaceType = 'observation';
+  } else if (spec.isContractCarrier === true) {
+    interfaceType = 'contract_carrier';
+  } else {
+    interfaceType = 'state_machine';
+  }
+  interfaceType = interfaceType ?? 'state_machine';
   return {
     id: spec.id,
     name: spec.name,
@@ -132,8 +202,14 @@ function buildInterfaceSection(
     schemaKind: spec.schemaKind,
     schemaDegradedReasons: spec.schemaDegradedReasons,
     isContractCarrier: spec.isContractCarrier ?? null,
+    interfaceType,
     requestSchema: spec.requestSchema,
     responseSchema: spec.responseSchema,
+    // G6（C-G6-2 / §17.2）：工具链确定性合成示例——仅在 interface-details 1.1 生成，绝不回写 specs/data.json 1.0（红线③）
+    requestExample: spec.requestSchema ? synthesizeExample(spec.requestSchema, `${protocolId}.${spec.id}.request`) : null,
+    responseExample: spec.responseSchema ? synthesizeExample(spec.responseSchema, `${protocolId}.${spec.id}.response`) : null,
+    // G6（C-G6-2 / §17.2）：多语言代码样例（curl/javascript/python），由 transport(method/path/server) + schema 预投影
+    codeSamples: buildCodeSamples(spec, transportRows),
     inputs: (spec.inputs ?? []) as FieldSpec[],
     outputs: (spec.outputs ?? []) as FieldSpec[],
     precondition: spec.precondition,
@@ -202,28 +278,19 @@ function computeDiffImpact(
 /** ③ binding 段（08 §5.2 binding 行：复用 buildBindingView + 按接口过滤；无 bindings → hasBindings=false） */
 function buildInterfaceBinding(
   spec: InterfaceSpec,
-  bindingView: WebBindingView | undefined
+  bindingView: WebBindingView | undefined,
+  bindingsFingerprint: string | null,
+  transportRows: Array<{ type: string; method?: string; path?: string; roleId?: string; protocol?: string; server?: string }>
 ): ProjectInterfaceBinding | null {
   if (!bindingView || !bindingView.hasBindings) {
-    return { hasBindings: false };
+    // C-3（10 §3-3）：纯记录字段，无 bindings 亦记该协议 bindings.yaml 快照（null = 无 bindings.yaml）
+    return { hasBindings: false, bindingsFingerprintAtBuild: bindingsFingerprint };
   }
-  // 命中行：iface.id/sourceId 匹配 bindings.interfaces[].action（与 composition.ts
-  // renderProjectInterfaceBindingSection L1186-1189 口径一致）
-  const hits = (bindingView.interfaces ?? []).filter(
-    (ib) => ib.action === spec.sourceId || ib.action === spec.id
-  );
-  const out: ProjectInterfaceBinding = { hasBindings: true };
-  if (hits.length > 0) {
-    out.transport = hits.map((ib) => {
-      const t: { type: string; method?: string; path?: string; roleId?: string; protocol?: string } = {
-        type: ib.transport?.type ?? 'unknown',
-      };
-      if (ib.transport?.method) t.method = ib.transport.method;
-      if (ib.transport?.path) t.path = ib.transport.path;
-      if (ib.roleId !== undefined) t.roleId = ib.roleId;
-      if (ib.protocol !== undefined) t.protocol = ib.protocol;
-      return t;
-    });
+  // C-3（10 §3-3）：bindings.yaml sha256 构建期快照，纯记录、无 `fresh` 语义、不自我判定
+  const out: ProjectInterfaceBinding = { hasBindings: true, bindingsFingerprintAtBuild: bindingsFingerprint };
+  // G6（C-G6-3）：transport 行（含 server）由 computeTransportRows 预计算（按 roleId 查 baseUrl 拼接）
+  if (transportRows.length > 0) {
+    out.transport = transportRows;
   }
   // errorMapHits：该接口声明的 errorCode 命中 errorMap 的行（ErrorMapEntry 字段搬运）
   const errorMapHits: ProjectInterfaceBinding['errorMapHits'] = [];

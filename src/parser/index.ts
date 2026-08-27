@@ -50,6 +50,8 @@ import type {
   ErrorResponseDef,
   RelationAssertion,
   RelationAssertionKind,
+  // C-4（10 §4）：契约段分型声明取值类型（TI1 已在 types.ts 定义）
+  InterfaceType,
 } from '../model/types.js';
 import {
   parseMarkdownAst,
@@ -1076,6 +1078,9 @@ function parseContractInput(sections: Section[]): ContractLayerInput | undefined
  * - requestSchema / responseSchema 形态须符合 JSON Schema 子集
  * - preconditions / postconditions / sideEffects 为 SchemaExpression[]；字符串数组自动归一
  * 非法 schema 抛 ParseError（拒绝静默）
+ *
+ * C-4（10 §4）：可选键 interfaceType（分型声明）——与 E2.1 其余可选键同构解析，
+ * 老协议无此键 → undefined（无声明）；非三值抛 ParseError（拒绝静默）。
  */
 function parseContractEntry(raw: unknown, path: string): ContractEntry {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -1120,7 +1125,27 @@ function parseContractEntry(raw: unknown, path: string): ContractEntry {
       `${path}.errorResponses`
     );
   }
+  // C-4（10 §4）：分型声明（可选键；缺省 → 无声明，兼容老协议）
+  if (r.interfaceType !== undefined && r.interfaceType !== null) {
+    entry.interfaceType = parseInterfaceTypeValue(
+      r.interfaceType,
+      `${path}.interfaceType`
+    );
+  }
   return entry;
+}
+
+/**
+ * C-4（10 §4）：契约段分型声明取值校验（三值枚举，10 §3-2）。
+ * 非三值 → ParseError（与 parseJsonSchemaValue 同口径：拒绝静默）。
+ */
+function parseInterfaceTypeValue(raw: unknown, path: string): InterfaceType {
+  if (raw === 'state_machine' || raw === 'contract_carrier' || raw === 'observation') {
+    return raw;
+  }
+  throw new ParseError(
+    `${path} 非法：${String(raw)}（仅允许 state_machine / contract_carrier / observation）`
+  );
 }
 
 /**

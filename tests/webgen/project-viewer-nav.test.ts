@@ -2,7 +2,7 @@
  * T4 TD8 project-nav 导航控制器测试（09-execution-T4.md TD8 / 08-project-viewer-design.md §8.2/8.3 R8）
  *
  * 机械判据（TD8 验收）：
- * ① jsdom 演示实例：tab 数 = 5（项目总览/组合层/P1/P2/diff），tab 标题与 manifest 逐字段一致；
+ * ① jsdom 演示实例：tab 数 = 6（项目总览/接口目录[G5 新增]/组合层/P1/P2/diff），tab 标题与 manifest 逐字段一致；
  * ② scope 切换：项目→P1→接口 → 面包屑文本逐级正确；
  * ③ diff tab：payment-v1-v2 条目显示 diffView 摘要（changedTransitions=[T5] 可数）+ IF_SYS_T5 可点击；
  * ④ L3 下钻 IF_SYS_T5 → 面包屑"项目 → P2 → IF_SYS_T5（diff 新增）"+ 快照摘要渲染；
@@ -82,21 +82,22 @@ function click(dom: JSDOM, el: Element | null): void {
   if (el) el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
 }
 
-describe('TD8 ① tab 数 = 5 且标题对齐 manifest', () => {
-  test('项目总览/组合层/P1/P2/diff', async () => {
+describe('TD8 ① tab 数 = 6（含 G5 新增"接口目录"）且标题对齐 manifest', () => {
+  test('项目总览/接口目录/组合层/P1/P2/diff', async () => {
     const { dom, win } = setupDom();
     await importDemo(dom, win);
     win.ProtochainProjectNav.renderScope(win.ProtochainViewer.state, dom.window.document.querySelector('#panels'));
     const tabs = [...dom.window.document.querySelectorAll('.pn-tab')];
-    expect(tabs.length).toBe(5);
+    expect(tabs.length).toBe(6);
     const labels = tabs.map((t) => t.querySelector('.pn-tab-label')?.textContent?.trim());
     expect(labels[0]).toBe('项目总览');
-    expect(labels[1]).toBe('组合层');
-    expect(labels[2]).toBe('P1');
-    expect(labels[3]).toBe('P2');
-    expect(labels[4]).toBe('diff');
-    // tab 数 = protocols.length + 3
-    expect(tabs.length).toBe(win.ProtochainViewer.state.manifest!.bundles.protocols.length + 3);
+    expect(labels[1]).toBe('接口目录'); // G5 TI7：interface-details/catalog 在场即出现，自动启停（红线二）
+    expect(labels[2]).toBe('组合层');
+    expect(labels[3]).toBe('P1');
+    expect(labels[4]).toBe('P2');
+    expect(labels[5]).toBe('diff');
+    // tab 数 = protocols.length + 4（项目总览 + 接口目录 + 组合层 + diff）
+    expect(tabs.length).toBe(win.ProtochainViewer.state.manifest!.bundles.protocols.length + 4);
   });
 });
 

@@ -137,6 +137,8 @@
         }
         state.manifest = json;
         state.projectMode = true;
+        // TI7（Ob-6=A）：首屏 scope 由导入数据决定（manifest+interface-details → 接口目录）
+        state.nav = defaultScopeNav(state);
         setStatus(`✓ 项目 manifest 已导入：${json.project.systemName}（其余子产物请分别导入，或拖入 web/ 目录一次装配）`, 'ok');
         runRenderHooks();
         return;
@@ -285,7 +287,7 @@
       const f = located.index[d.file];
       state.diffData[d.id] = f ? JSON.parse(await readFileAsText(f)) : null;
     }
-    state.nav = { scope: 'project' };
+    state.nav = defaultScopeNav(state);
     runProjectFreshness();
     const warnText = allWarnings.length > 0 ? `（${allWarnings.join('；')}）` : '';
     const missing = [];
@@ -322,7 +324,7 @@
       for (const d of manifest.bundles.diff || []) {
         state.diffData[d.id] = await fetchJsonSafely(d.file);
       }
-      state.nav = { scope: 'project' };
+      state.nav = defaultScopeNav(state);
       runProjectFreshness();
       setStatus(`✓ 项目已导入（http 模式）：${manifest.project.systemName}`, 'ok');
       runRenderHooks();
@@ -343,6 +345,12 @@
     } catch {
       return null;
     }
+  }
+
+  /** TI7（Ob-6=A）：默认落地页 scope 决策委托给纯函数模块（缺省降级 'project'） */
+  function defaultScopeNav(state) {
+    const U = window.InterfaceViewUtils;
+    return U && U.decideDefaultScope ? U.decideDefaultScope(state) : { scope: 'project' };
   }
 
   /** 项目级守卫（TD6）：checkProjectFreshness → 顶栏横幅 + state.projectFreshness */

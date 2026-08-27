@@ -124,6 +124,24 @@
       }
     }
 
+    // S4（C-8b 同源一致性守卫，10 §3-3 / C-8b，TI5）：逐 interface-details entry 取 protocolId，
+    // 比对 entry.binding.bindingsFingerprintAtBuild（C-3 纯记录，per-entry）与
+    // manifest.bundles.protocols[pid].bindingsFingerprint（per-protocol）——检测 manifest /
+    // interface-details 产物集合内部非同轮漂移。viewer 无文件系统，不检测 bindings.yaml 手改；
+    // bindingsFingerprintAtBuild === null（无 bindings.yaml，如演示实例）→ 跳过、不报告（不误报
+    // 为 fresh/新）；两者均非 null 且不一致 → interfaceDetails 降级；均匹配（含 demo 的 null vs null
+    // 跳过）→ clean。diff 段不参与比对（08 §7.2）。
+    const s4 = compareS4(manifest, details);
+    // 仅当 S5 未降级时，用 S4 结果覆盖 interfaceDetails（S4 非同轮漂移同样属接口详情过期）
+    if (s4.degraded && !interfaceDetails.degraded) {
+      interfaceDetails = {
+        fresh: false,
+        degraded: true,
+        alert: s4.summary.alert,
+        level: 'error',
+      };
+    }
+
     // S6（composition.modelVersion vs 组合层 data.json composition.version → warning 不锁视图）
     let composition = Object.assign({}, FRESH);
     const compData = imp.compositionData;
@@ -140,7 +158,59 @@
       }
     }
 
-    return { perProtocol, interfaceDetails, composition };
+    return { perProtocol, interfaceDetails, composition, bindingConsistency: s4.summary };
+  }
+
+  /**
+   * S4（C-8b 同源一致性守卫，10 §3-3 / C-8b）：比对 interface-details 各 entry 的
+   * bindingsFingerprintAtBuild（C-3 纯记录）与 manifest 同协议 bindingsFingerprint。
+   * - 任意 entry 的 atBuild 为 null/undefined（无 bindings.yaml，如演示实例）→ 跳过该 entry，
+   *   整体退化为 unknown（不报告 fresh/新、不降级）；
+   * - atBuild 非 null 但与 manifest 指纹不一致 → 非同轮漂移，degraded（error）；
+   * - atBuild 非 null 且全部一致 → 同源一致（ok）。
+   * 返回 { degraded, summary }，summary 为对外暴露的 bindingConsistency 结果。
+   */
+  function compareS4(manifest, details) {
+    const protocols = (manifest && manifest.bundles && manifest.bundles.protocols) || [];
+    const protoFp = {};
+    for (const proto of protocols) {
+      protoFp[proto.id] = proto.bindingsFingerprint !== undefined ? proto.bindingsFingerprint : null;
+    }
+    let anyCompared = false;
+    if (details && details.entries) {
+      for (const pid of Object.keys(details.entries)) {
+        const entries = details.entries[pid] || {};
+        const manifestFp = Object.prototype.hasOwnProperty.call(protoFp, pid) ? protoFp[pid] : null;
+        for (const iid of Object.keys(entries)) {
+          const binding = entries[iid] && entries[iid].binding;
+          const atBuild = binding ? binding.bindingsFingerprintAtBuild : undefined;
+          // Gif-6b 边界：atBuild === null（无 bindings.yaml，如演示实例）→ 跳过，不误报为 fresh/新
+          if (atBuild === null || atBuild === undefined) continue;
+          anyCompared = true;
+          if (manifestFp !== atBuild) {
+            return {
+              degraded: true,
+              summary: {
+                degraded: true,
+                level: 'error',
+                alert: '接口详情与 manifest 非同轮生成（binding 指纹不一致），请重新 derive-web --project',
+              },
+            };
+          }
+        }
+      }
+    }
+    if (!anyCompared) {
+      // 无可供比对的 fingerprint（演示实例 atBuild 全为 null）→ unknown：不报告 fresh、不降级
+      return {
+        degraded: false,
+        summary: { degraded: false, level: 'unknown', alert: null },
+      };
+    }
+    return {
+      degraded: false,
+      summary: { degraded: false, level: 'ok', alert: null },
+    };
   }
 
   /** S1：manifest.dataSourceModelVersion vs 已导入 pN.data.json.sourceModelVersion */

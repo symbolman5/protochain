@@ -129,7 +129,12 @@
   function tabsHtml(state) {
     const manifest = state.manifest;
     const nav = state.nav || { scope: 'project' };
-    const tabs = [{ id: 'project', label: '项目总览' }, { id: 'composition', label: '组合层' }];
+    const tabs = [{ id: 'project', label: '项目总览' }];
+    // TI7（Ob-6=A）：interface-details/catalog 在场时追加"接口目录"tab（自动启停，红线二）
+    if (state.interfaceDetails && state.interfaceDetails.catalog) {
+      tabs.push({ id: 'catalog', label: '接口目录', nav: { scope: 'catalog' } });
+    }
+    tabs.push({ id: 'composition', label: '组合层' });
     const diffCountByProto = {};
     for (const d of manifest.bundles.diff || []) {
       diffCountByProto[d.sourceProtocolId] = (diffCountByProto[d.sourceProtocolId] || 0) + 1;
@@ -152,9 +157,11 @@
           ? nav.scope === 'diff'
           : t.id === 'project'
             ? nav.scope === 'project'
-            : t.id === 'composition'
-              ? nav.scope === 'composition'
-              : nav.scope === 'protocol' && nav.protocolId === t.nav.protocolId;
+            : t.id === 'catalog'
+              ? nav.scope === 'catalog'
+              : t.id === 'composition'
+                ? nav.scope === 'composition'
+                : nav.scope === 'protocol' && nav.protocolId === t.nav.protocolId;
       const badge = t.badge
         ? `<span class="pn-badge" title="${esc(t.badgeText)}">${t.badge}</span>`
         : '';
@@ -331,6 +338,9 @@
       renderProtocolScopeInner(state, layout);
     } else if (nav.scope === 'interface') {
       renderInterfaceScope(state, panels);
+    } else if (nav.scope === 'catalog') {
+      // TI7/TI8：接口目录（catalog 面板已注册为 'catalog' scope 渲染器）
+      renderCatalogScope(state, panels);
     } else if (nav.scope === 'diff') {
       renderDiffScope(state, panels);
     } else if (nav.scope === 'composition') {
@@ -394,6 +404,19 @@
     const p = document.createElement('div');
     p.className = 'panel-empty';
     p.textContent = '接口详情面板未注册';
+    panels.appendChild(p);
+  }
+
+  /** catalog scope：接口目录面板（TI8 注册的渲染器；无渲染器 → 提示） */
+  function renderCatalogScope(state, panels) {
+    const renderer = scopeRenderers['catalog'];
+    if (renderer) {
+      renderer(state, panels);
+      return;
+    }
+    const p = document.createElement('div');
+    p.className = 'panel-empty';
+    p.textContent = '接口目录面板未注册';
     panels.appendChild(p);
   }
 

@@ -147,9 +147,13 @@ describe('viewer 静态资产冒烟（W3-a / TA3）', () => {
     // 无框架：无外部框架脚本（仅本地 12 件套 + 无 CDN；T2 新增 swimlanes/replay/relations-panel，
     // T3 新增 diff-panel/composition-panel，T4 新增 project-nav/interface-detail-panel）
     const scripts = [...d.querySelectorAll('script[src]')].map((s) => s.getAttribute('src'));
+    // G5 Wave 4（TI7/TI8/TI9）在 T4 骨架之上新增 3 个本地脚本：
+    //   interface-view-utils.js（共享纯函数）、interface-catalog-panel.js（接口目录）、
+    //   interface-jump-bridge.js（状态机→接口跳转）。全部本地相对路径、无 CDN、无框架。
     expect(scripts).toEqual([
       'assets/parser.js',
       'n1-guard.js',
+      'interface-view-utils.js',
       'app.js',
       'main-view.js',
       'link-coverage.js',
@@ -160,6 +164,8 @@ describe('viewer 静态资产冒烟（W3-a / TA3）', () => {
       'composition-panel.js',
       'project-nav.js',
       'interface-detail-panel.js',
+      'interface-catalog-panel.js',
+      'interface-jump-bridge.js',
     ]);
   });
 });

@@ -445,6 +445,8 @@ function deriveSystemInterface(
     invariantIds: guardInvariantIds.length > 0 ? guardInvariantIds : undefined,
     // E2.1：契约层来源标识（消费方可观测）
     contractSource: contract?.interface,
+    // C-4（10 §4）：契约层分型声明投影（无声明 → undefined，机械兜底不在本层）
+    declaredInterfaceType: contract?.interfaceType,
     // E11：接口错误响应契约（命中契约的 errorResponses 投影到 spec；无契约时为空）
     errorResponses:
       contract?.errorResponses && contract.errorResponses.length > 0
@@ -533,6 +535,8 @@ function deriveContractCarrierInterface(
     schemaDegradedReasons,
     // 契约层来源标识
     contractSource: contractIface,
+    // C-4（10 §4）：契约层分型声明投影（无声明 → undefined，机械兜底不在本层）
+    declaredInterfaceType: contract.interfaceType,
     // E11：接口错误响应契约（承载：把契约 errorResponses 投影进 specs，补 errorMap 缺口）
     errorResponses:
       contract.errorResponses && contract.errorResponses.length > 0

@@ -93,7 +93,7 @@ describe('TD4 ① P1/IF_SYS_T4 条目与 08 §5.3 示例逐字段一致', () => 
   });
 
   test('binding 段 = {hasBindings:false}（实例无 bindings.yaml）', () => {
-    expect(entry.binding).toEqual({ hasBindings: false });
+    expect(entry.binding).toEqual({ hasBindings: false, bindingsFingerprintAtBuild: null });
   });
 
   test('crossRefs 4 条均 downlink.resolved=false + reason 语义别名文案', () => {
@@ -146,7 +146,7 @@ describe('TD4 ③ protocolVersions（R7）', () => {
   test('protocolVersions = {P1:"1.0.0", P2:"1.0.0"}（dataFile.sourceModelVersion 字段搬运）', () => {
     const details = buildDetails();
     expect(details.protocolVersions).toEqual({ P1: '1.0.0', P2: '1.0.0' });
-    expect(details.schemaVersion).toBe('1.0');
+    expect(details.schemaVersion).toBe('1.1');
     expect(details.kind).toBe('interface-details');
   });
 });

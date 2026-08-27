@@ -79,7 +79,7 @@ describe('TD5 ① 六文件存在 + manifest 判别（演示实例临时副本 d
   test('interface-details kind 判别 + IF_SYS_T4 五段关键值', () => {
     const id = JSON.parse(readFileSync(join(tmp, 'web', 'interface-details.json'), 'utf-8'));
     expect(id.kind).toBe('interface-details');
-    expect(id.schemaVersion).toBe('1.0');
+    expect(id.schemaVersion).toBe('1.1');
     expect(id.protocolVersions).toEqual({ P1: '1.0.0', P2: '1.0.0' });
     const t4 = id.entries.P1.IF_SYS_T4;
     expect(t4.interface.triggerRoleId).toBe('platform');

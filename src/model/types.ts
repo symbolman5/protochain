@@ -434,6 +434,11 @@ export interface ContractEntry {
    * 缺省视为兼容老协议（不报错）。
    */
   errorResponses?: ErrorResponseDef[];
+  /**
+   * 接口分型声明 // C-4（10 §4）contract-layer declaration；TI2
+   * 可选扩展：老协议无此键 → undefined（无声明，机械兜底由投影器负责）。
+   */
+  interfaceType?: InterfaceType;
   /** 可选描述 */
   description?: string;
 }
@@ -855,6 +860,12 @@ export interface InterfaceSpec {
    * - 缺省视为正常状态机系统接口。
    */
   isContractCarrier?: boolean;
+  /**
+   * 接口分型声明投影 // C-4（10 §4）projection of contract-layer declaration
+   * - 搬运契约层 ContractEntry.interfaceType（权威声明，10 §3-2）；无声明 → undefined
+   * - specs/WebDataJson 1.0 schemaVersion 不变（可选扩展字段）
+   */
+  declaredInterfaceType?: InterfaceType;
 }
 
 // ============================================================================
@@ -1965,10 +1976,10 @@ export interface ProjectManifest {
       schemaVersion: '1.1';
       modelVersion: string;
     };
-    /** 接口详情产物（08 §4.2 bundles.interfaceDetails.* 行；仅声明 file/schemaVersion，不消费内容——R15） */
+    /** 接口详情产物（08 §4.2 bundles.interfaceDetails.* 行；仅声明 file/schemaVersion，不消费内容——R15；G6 起产物 schemaVersion 演进为 1.1） */
     interfaceDetails: {
       file: string;
-      schemaVersion: '1.0';
+      schemaVersion: '1.1';
     };
     /** 逐子协议条目（08 §4.2 bundles.protocols[] 行） */
     protocols: ProjectManifestProtocol[];
@@ -2019,8 +2030,8 @@ export interface ProjectManifestDiff {
 
 /** 接口详情产物顶层（08 §5.1 契约形态；R7 顶层 protocolVersions = 各协议 dataFile.sourceModelVersion 字段搬运；R18-1 kind 判别常量） */
 export interface ProjectInterfaceDetailData {
-  /** "1.0"（常量，08 §5.1） */
-  schemaVersion: '1.0';
+  /** "1.0"（T4 基线，08 §5.1）/ "1.1"（G5 加法式演进：新增 catalog / interfaceType / bindingsFingerprintAtBuild，10 §3-3） */
+  schemaVersion: '1.0' | '1.1';
   /** "interface-details"（常量，C 模内容判别字段，08 §5.1 / R18-1） */
   kind: 'interface-details';
   /** ISO 8601 生成时刻 */
@@ -2029,6 +2040,8 @@ export interface ProjectInterfaceDetailData {
   protocolVersions: Record<string, string>;
   /** { "<Pn>": { "<IF_ID>": ProjectInterfaceDetailEntry } } */
   entries: Record<string, Record<string, ProjectInterfaceDetailEntry>>;
+  /** 接口目录三索引 // C-1（10 §4）defensive optional；投影器恒生成（TI3） */
+  catalog?: CatalogIndex;
 }
 
 /** 单接口详情条目（08 §5.2 字段表逐行；五类来源归属：① 接口自身 InterfaceSpec / ② 关系 工具链 join / ③ binding 非敏感投影 / ④ diffImpact diffView 投影 / ⑤ crossRefs 组合层 crossRefs + downlink） */
@@ -2058,8 +2071,16 @@ export interface ProjectInterfaceDetailInterface {
   schemaKind?: string;
   schemaDegradedReasons?: string[];
   isContractCarrier?: boolean | null;
+  /** 接口分型 // C-2（10 §4） */
+  interfaceType?: InterfaceType;
   requestSchema?: JSONSchema;
   responseSchema?: JSONSchema;
+  /** 请求示例（G6 · 10 §17.2）工具链确定性合成值，仅在 interface-details 1.1 生成，绝不回写 specs/data.json 1.0（红线③） // C-G6-1 */
+  requestExample?: unknown;
+  /** 响应示例（G6 · 10 §17.2） // C-G6-1 */
+  responseExample?: unknown;
+  /** 多语言代码样例（G6 · 10 §17.2）curl / javascript(fetch) / python(requests) // C-G6-1 */
+  codeSamples?: Array<{ lang: string; label: string; code: string }>;
   inputs: FieldSpec[];
   outputs: FieldSpec[];
   precondition?: string;
@@ -2104,13 +2125,15 @@ export interface ProjectDiffImpact {
 export interface ProjectInterfaceBinding {
   hasBindings: boolean;
   /** bindings.interfaces[].transport 过滤命中行（method/path/type + roleId/protocol） */
-  transport?: Array<{ type: string; method?: string; path?: string; roleId?: string; protocol?: string }>;
+  transport?: Array<{ type: string; method?: string; path?: string; roleId?: string; protocol?: string; server?: string }>;
   /** 该接口声明的 errorCode 命中 errorMap 的行（ErrorMapEntry 字段，types.ts L1799-1811） */
   errorMapHits?: Array<{ errorCode: string } & ErrorMapEntry>;
   /** 状态词表映射（项目级共享展示） */
   stateMap?: Record<string, string> | null;
   /** 该接口声明但 errorMap 未覆盖的码（buildBindingView 计算过滤） */
   unmappedErrorCodes?: string[];
+  /** bindings.yaml sha256 构建期快照 // C-3（10 §4）纯记录字段，无 `fresh` 语义、不自我判定；不可用时记 null（纯记录，不判断） */
+  bindingsFingerprintAtBuild?: string | null;
 }
 
 /** crossRefs 条目（08 §5.2 crossRefs 行：组合层 crossRefs 原字段 + 内嵌 downlink 解析，R10） */
@@ -2133,4 +2156,26 @@ export interface DownlinkRef {
   target: string;
   /** resolved=false 时携带降级原因（08 §5.2.3 文案：语义别名或跨版本引用） */
   reason?: string;
+}
+
+// ============================================================================
+// G5 接口详情主视图契约类型（10-interface-view-proposal.md §4 变更表 C-1 / C-2）
+// 纪律：字段与可选性逐字对齐 10 §4 变更表；不加变更表之外的字段（含注释性字段）。
+// ============================================================================
+
+/** 接口分型三值 // C-2（10 §4）；三值语义与现状映射见 10 §3-2 */
+export type InterfaceType = 'state_machine' | 'contract_carrier' | 'observation';
+
+/**
+ * 接口目录三索引 // C-1（10 §4）
+ * - byProtocol / byRole / byPreconditionState：工具链机械投影，viewer 只读查表（10 §3-1）
+ * - 键：协议 ID / 角色 ID / 前置状态 ID；归组边界规则见 10 §3-1（triggerRoleId=null 系统接口
+ *   归"系统/未指派角色"组、观测接口归"观测"组；多 from 接口在多个前置状态组重复出现、不去重）
+ * - 值：entries 定位引用（接口 ID 跨协议不唯一，故用 { protocolId, interfaceId } 二元键——
+ *   与 viewer state.nav 既有定位约定同构，查表即定位、无推导）
+ */
+export interface CatalogIndex {
+  byProtocol: Record<string, Array<{ protocolId: string; interfaceId: string }>>;
+  byRole: Record<string, Array<{ protocolId: string; interfaceId: string }>>;
+  byPreconditionState: Record<string, Array<{ protocolId: string; interfaceId: string }>>;
 }

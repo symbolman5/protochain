@@ -431,3 +431,62 @@ h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacin
 .inv-span-id { font-weight: 600; }
 .inv-span-protos { color: var(--muted); font-size: 11px; margin-left: auto; }
 .composition-empty { color: #9a6700; }
+
+/* ═══════════════════════════════════════════════════════════════
+   接口详情面板（G6 · apifox-like 升级，13-execution-G6 T8）
+   数据全部查表渲染；两栏布局纯 CSS grid，不引框架（合规红线④）
+   运行时由 interface-detail-panel.js 内联注入同款 IDP_CSS，此处为规范主样式
+   ═════════════════════════════════════════════════════════════ */
+.idp-card{border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--panel)}
+.idp-block{margin:8px 0}
+.idp-block-title{font-weight:600;font-size:13px;margin:10px 0 4px;color:var(--muted)}
+.idp-kv{font-size:13px;margin:2px 0}
+.idp-kv b{display:inline-block;min-width:110px;color:var(--muted)}
+.idp-chip{display:inline-block;padding:2px 8px;margin:2px;border-radius:10px;background:#fff;border:1px solid var(--border);font-size:12px}
+.idp-chip.hl{background:#ffe3ec;border-color:var(--error);color:var(--error);font-weight:600}
+.idp-inv{display:inline-block;padding:2px 8px;margin:2px;border-radius:10px;background:#e6f7e6;border:1px solid #b7e4b7;font-size:12px}
+.idp-ref-row{padding:6px 8px;border:1px solid #eee;border-radius:6px;margin:4px 0;font-size:13px;cursor:pointer}
+.idp-ref-row:hover{background:#f4f7ff}
+.idp-ref-row .idp-reason{color:var(--error);font-size:12px;margin-top:2px}
+.idp-ref-row .idp-ref-link{color:var(--accent);font-weight:600}
+.idp-empty{color:var(--muted);font-size:13px;padding:4px 0}
+.idp-schema{font-size:12px;white-space:pre-wrap;background:#f7f7f7;border:1px solid #eee;border-radius:6px;padding:8px;max-height:220px;overflow:auto;color:var(--text)}
+.idp-schema-tree{list-style:none;margin:4px 0;padding-left:16px;border-left:1px dashed var(--border)}
+.idp-schema-tree li{margin:3px 0;font-size:12px}
+.idp-schema-tree code{font-weight:600;color:var(--text)}
+.idp-schema-type{color:var(--accent);font-family:ui-monospace,monospace}
+.idp-req{color:var(--error);font-size:11px;margin-left:6px}
+.idp-schema-desc{color:var(--muted);margin-left:6px}
+.idp-schema-enum{color:#e8590c;font-size:11px;margin-left:6px}
+.idp-errtable{width:100%;border-collapse:collapse;margin:4px 0;font-size:12px}
+.idp-errtable th,.idp-errtable td{border:1px solid var(--border);padding:3px 8px;text-align:left}
+.idp-errtable th{background:#f3f5f8}
+.idp-errtable .unmapped{color:var(--error)}
+.idp-state-chip,.idp-trans-chip{cursor:pointer;color:var(--accent)}
+.idp-state-chip:hover,.idp-trans-chip:hover{text-decoration:underline}
+.sm-node-group.hl .sm-node{stroke:var(--error);stroke-width:3px}
+.sm-edge.hl{stroke:var(--error);stroke-width:3px}
+/* G6 · 两栏布局（纯 grid，无框架，合规红线④） */
+.idp-two-col{display:grid;grid-template-columns:minmax(280px,1fr) minmax(360px,1.4fr);gap:16px;align-items:start}
+.idp-col-left{position:sticky;top:8px;align-self:start}
+.idp-col-right{min-width:0}
+@media (max-width:760px){.idp-two-col{grid-template-columns:1fr}.idp-col-left{position:static}}
+/* G6 · 请求/响应示例折叠块 */
+.idp-example{margin:8px 0}
+.idp-example summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--muted)}
+.idp-example pre{white-space:pre-wrap;background:#f7f7f7;border:1px solid #eee;border-radius:6px;padding:8px;max-height:240px;overflow:auto;color:var(--text);font-size:12px;margin:4px 0 0}
+/* G6 · 代码样例 tab（curl / javascript / python 切换） */
+.idp-tabs{display:flex;gap:6px;margin:6px 0 4px;flex-wrap:wrap}
+.idp-tab{padding:3px 10px;border:1px solid var(--border);background:#fff;border-radius:12px;font-size:12px;cursor:pointer}
+.idp-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.idp-tab-panel{display:none}
+.idp-tab-panel.active{display:block}
+.idp-cs-label{font-size:12px;color:var(--muted);margin:6px 0 2px}
+.idp-code{white-space:pre-wrap;background:#0f172a;color:#e2e8f0;border-radius:6px;padding:8px;overflow:auto;font-size:12px;margin:0 0 8px}
+/* G6 · 完整请求 URL（apifox 式：method + server + path） */
+.idp-req-url{font-family:ui-monospace,monospace;font-size:12px;background:#eef;padding:4px 8px;border-radius:6px;display:inline-block;margin:2px 0}
+.idp-req-url .m{color:var(--error);font-weight:600}
+.idp-req-url .u{color:var(--text)}
+/* G6 · sticky 小导航 */
+.idp-sticky-nav{font-size:12px;margin:6px 0}
+.idp-sticky-nav a{display:block;color:var(--accent);padding:2px 0}

@@ -291,7 +291,7 @@ export function buildProjectManifest(inputs: BuildProjectManifestInputs): Projec
         schemaVersion: '1.1',
         modelVersion: composition.metadata.version,
       },
-      interfaceDetails: { file: 'interface-details.json', schemaVersion: '1.0' },
+      interfaceDetails: { file: 'interface-details.json', schemaVersion: '1.1' },
       protocols: protocols.map((p) => ({
         id: p.id,
         name: p.name,
@@ -1788,6 +1788,10 @@ export async function deriveProjectWeb(
         protocolId: p.id,
         specs: subSpecs.get(p.id) ?? [],
         webData: subWebDataMap.get(p.id)!,
+        // C-3（10 §3-3）：bindings.yaml sha256 快照挂载到每个 entry.binding.bindingsFingerprintAtBuild。
+        // 注：按 P3-10，computeBindingsFingerprint(rootDir) 实际返回 root 级指纹（与 manifestProtocols
+        // 内逐协议挂载的值同源），故此处直接取 root 值即可，避免跨块作用域引用 manifestProtocols。
+        bindingsFingerprint: computeBindingsFingerprint(rootDir),
       }));
     const interfaceDetails = buildInterfaceDetails({
       protocols: ifaceDetailsProtocols,
