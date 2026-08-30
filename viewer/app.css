@@ -490,3 +490,193 @@ h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacin
 /* G6 · sticky 小导航 */
 .idp-sticky-nav{font-size:12px;margin:6px 0}
 .idp-sticky-nav a{display:block;color:var(--accent);padding:2px 0}
+
+/* ═══════════════════════════════════════════════════════════════
+   V4 协议层面板（§11.3 协议模型视图）
+   数据全部查表（data.json 的 dimensions/invariants/modelRelations/storage/interfaces），
+   ①实体-维度卡片区 ②操作×不变量交叉面板 ③时间语义摘要条 ④关系图
+   ═══════════════════════════════════════════════════════════════ */
+.protocol-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafbfc;
+}
+.proto-empty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
+.proto-section { margin-top: 8px; }
+.proto-section-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+
+/* ① 实体-维度卡片区 */
+.proto-entity-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+.proto-entity-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+}
+.proto-entity-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.proto-entity-name { font-weight: 700; font-size: 13px; }
+.proto-entity-count { font-size: 11px; color: var(--muted); }
+.proto-dim-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1.2fr) auto minmax(90px, 1fr) minmax(60px, 0.8fr);
+  gap: 6px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.proto-dim-row:hover { background: #eef2ff; }
+.proto-dim-row.active { background: #dbe7ff; border-color: var(--accent); }
+.proto-dim-row.hl-inv-dim { background: #fff8e6; border-color: #d4a72c; box-shadow: 0 0 0 1px #d4a72c; }
+.proto-dim-name { font-weight: 600; word-break: break-all; }
+.proto-dim-range, .proto-dim-initial { color: var(--muted); font-size: 11px; word-break: break-all; }
+/* kind 着色：declared 蓝 / observed 青（沿用 TAGMAP 配色思路） */
+.proto-kind {
+  font-size: 10px;
+  border-radius: 999px;
+  padding: 1px 8px;
+  justify-self: start;
+  border: 1px solid;
+}
+.proto-kind-declared { color: #2f6fed; border-color: #c3d8fb; background: #f2f6fe; }
+.proto-kind-observed { color: #0e8a83; border-color: #b5e3e0; background: #eefaf9; }
+.proto-kind-undetermined { color: #6b7686; border-color: #d8dde4; background: #f3f5f8; }
+
+/* ② 操作 × 不变量交叉面板 */
+.proto-cross-scroll { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+.proto-cross-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+.proto-cross-table th, .proto-cross-table td { border: 1px solid #e9ecf1; padding: 4px 6px; }
+.proto-op-head {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #f3f5f8;
+  text-align: left;
+  min-width: 260px;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+}
+.proto-inv-col {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f3f5f8;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  min-width: 84px;
+  vertical-align: top;
+}
+.proto-inv-col:hover { background: #e8edf5; }
+.proto-inv-col.active { background: #ffe9a8; }
+.proto-inv-col.hl { background: #ffe9a8; }
+.proto-inv-id { font-weight: 700; display: block; }
+.proto-inv-timing { font-size: 10px; border-radius: 999px; padding: 0 6px; display: inline-block; margin-top: 2px; border: 1px solid; }
+.proto-inv-timing-always { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.proto-inv-timing-eventually_within { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.proto-op-row { background: #fff; }
+.proto-op-row.proto-op-cross { background: #fdf7ff; }
+.proto-op-row.hl-guard { background: #eef6ff; box-shadow: inset 0 0 0 1px var(--accent); }
+.proto-op-row.hl-inv { background: #fff8e6; box-shadow: inset 0 0 0 1px #d4a72c; }
+.proto-op-cell { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.proto-op-role {
+  font-size: 11px;
+  color: #7d4bb4;
+  border: 1px solid #d6c3ee;
+  border-radius: 999px;
+  padding: 0 6px;
+  background: #f8f4fd;
+}
+.proto-op-name { font-weight: 600; }
+.proto-op-guard {
+  color: var(--muted);
+  font-size: 11px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.proto-op-ents { font-size: 11px; color: var(--muted); }
+.proto-cross-tag {
+  font-size: 10px;
+  color: #9a3412;
+  border: 1px solid #f0b99d;
+  border-radius: 999px;
+  padding: 0 7px;
+  background: #fff4ed;
+  font-weight: 600;
+}
+.proto-cell { text-align: center; }
+.proto-cell.hl { background: #fff8e6; }
+.proto-cell-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2f6fed;
+}
+
+/* ③ 时间语义摘要条 */
+.proto-timing-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #fff;
+}
+.proto-timing-chips { display: flex; gap: 6px; }
+.proto-timing-chip { font-size: 11px; border-radius: 999px; padding: 1px 9px; border: 1px solid; font-weight: 600; }
+.proto-timing-chip-always { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.proto-timing-chip-ev { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.proto-bound-list { color: #9a6700; }
+.proto-edge-timing { color: var(--muted); }
+
+/* ④ 关系图（modelRelations） */
+.proto-rel-nodes { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 6px; }
+.proto-rel-nodes-label { font-size: 11px; color: var(--muted); }
+.proto-rel-node {
+  font-size: 11px;
+  border: 1px solid #c3d8fb;
+  border-radius: 999px;
+  padding: 1px 9px;
+  background: #f2f6fe;
+  color: #2f6fed;
+}
+.proto-rel-list { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow: auto; }
+.proto-rel-row {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  background: #fff;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.proto-rel-pair { font-weight: 600; }
+.proto-rel-type { font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px solid; }
+.proto-rel-type-绑定 { color: #2f6fed; border-color: #c3d8fb; background: #f2f6fe; }
+.proto-rel-type-派生 { color: #7d4bb4; border-color: #d6c3ee; background: #f8f4fd; }
+.proto-rel-type-运行依赖 { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.proto-rel-type-组合 { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.proto-rel-type-约束关联 { color: #cf222e; border-color: #f7c5c9; background: #fff1f0; }
+.proto-rel-constraint, .proto-rel-ongone {
+  color: var(--muted);
+  font-size: 11px;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.proto-rel-ongone { color: #9a6700; }
+.protocol-panel .proto-empty { color: #9a6700; }

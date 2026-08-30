@@ -135,6 +135,15 @@ export interface WebDataJson {
    */
   dimensions?: DimensionKindEntry[];
   /**
+   * G7-V4（协议层视图 §11.3 数据源）：不变量投影（DerivableLayer.invariants + timing 关联）。
+   * - 每条目 id/name/expression/subject/timing/bound/remedy/level/description/dimensions；
+   * - timing：关联 derivable.timing 中 target=inv.id 的 deadline 约束 → 'eventually_within'
+   *   （带 bound=boundMs 收敛上界）；无关联 → 'always'（强一致承诺）；
+   * - dimensions：expression 文本中出现的模型维度名（viewer 维度↔不变量联动数据源）；
+   * - 缺省 = 模型无不变量（老模型形态）→ 字段不出现（undefined），零回归。
+   */
+  invariants?: WebInvariantView[];
+  /**
    * V1 关系段投影（model.md「关系」段，parser parseRelations 产物，DerivableLayer.relations）。
    * - 每条 from/to/type/constraint/onGone（RelationDef 原样投影）；
    * - 与既有 relations（W1-a 拓扑机械推导投影）区分：本字段是模型声明的原始关系段；
@@ -166,6 +175,32 @@ export interface WebDataJson {
    * - 缺省 = test-cases.json 无 adversarialCases（老模型形态）→ 字段不出现（undefined），零回归。
    */
   adversarialCases?: AdversarialCase[];
+}
+
+/**
+ * G7-V4（webgen 数据层扩展）：不变量投影视图（协议层视图 §11.3 数据源，viewer 查表零推导）。
+ * 时间语义口径：不变量有 derivable.timing 中 target=inv.id 的 deadline 约束 →
+ * 该不变量依赖观测/补偿收敛（eventually_within，bound=boundMs）；无关联 → 强一致（always）。
+ */
+export interface WebInvariantView {
+  id: string;
+  name: string;
+  /** 不变量表达式（形式化/半形式化文本） */
+  expression: string;
+  /** 作用主体（scopeStateIds，作用状态 ID 列表；空 = 全局不变量） */
+  subject: string[];
+  /** expression 文本中出现的模型维度名（维度 ↔ 不变量联动数据源） */
+  dimensions: string[];
+  /** 时间语义：无 deadline 关联 → always；有关联 → eventually_within */
+  timing: 'always' | 'eventually_within';
+  /** eventually_within 的收敛上界（毫秒；关联 deadline 约束的 boundMs） */
+  bound?: number;
+  /** 补救声明（P2-8：检测方式/处置动作；缺省 = 模型未声明） */
+  remedy?: { action: string; detection?: string };
+  /** 校验层级（state-machine / data；缺省 = 模型未声明） */
+  level?: 'state-machine' | 'data';
+  /** 不变量语义描述（人读） */
+  description?: string;
 }
 
 /**
@@ -1157,6 +1192,49 @@ export function buildImplCheckView(
 // ============================================================================
 
 /**
+ * G7-V4（webgen 数据层扩展）：DerivableLayer.invariants → WebInvariantView[]（协议层视图数据源）。
+ * - 机械投影：id/name/expression/scopeStateIds(subject)/level/description/remedy；
+ * - timing 判定：derivable.timing 中 target=inv.id 的约束 → 'eventually_within'（bound=boundMs）；
+ *   无关联 → 'always'（强一致承诺；对应 §11.3 时间语义摘要条的数据源）；
+ * - dimensions：expression 文本中出现的模型维度名（dimensionNames 来自 specs.json 维度判定）；
+ * - 无不变量（老模型形态）→ undefined（字段缺省，零回归）。
+ */
+export function buildInvariantsView(
+  model: SourceProtocolModel,
+  dimensionNames: string[] | undefined
+): WebInvariantView[] | undefined {
+  const invs = model.derivable.invariants ?? [];
+  if (invs.length === 0) return undefined;
+  const timingByTarget = new Map<string, { boundMs?: number }>();
+  for (const t of model.derivable.timing ?? []) {
+    if (t.target && !timingByTarget.has(t.target)) timingByTarget.set(t.target, t);
+  }
+  const names = dimensionNames ?? [];
+  return invs.map((inv) => {
+    const tm = timingByTarget.get(inv.id);
+    const view: WebInvariantView = {
+      id: inv.id,
+      name: inv.name,
+      expression: inv.expression,
+      subject: inv.scopeStateIds && inv.scopeStateIds.length > 0 ? inv.scopeStateIds.slice() : [],
+      dimensions: names.filter((n) => n && inv.expression.includes(n)),
+      timing: tm ? 'eventually_within' : 'always',
+    };
+    if (tm && tm.boundMs !== undefined) view.bound = tm.boundMs;
+    if (inv.remedy) {
+      view.remedy = { action: inv.remedy.action };
+      const det = inv.remedy.detection;
+      if (det && typeof det === 'object' && 'description' in det && det.description) {
+        view.remedy.detection = String(det.description);
+      }
+    }
+    if (inv.level) view.level = inv.level;
+    if (inv.description) view.description = inv.description;
+    return view;
+  });
+}
+
+/**
  * G7-V3（webgen 数据层扩展）：storage.schema.json → WebStorageView（归一投影）。
  * - 未提供 storage（老模型未运行 derive-storage）→ undefined（字段缺省，零回归）；
  * - 空骨架（dimensionCount=0，如老模型空 dimensions）→ 空 entities 视图（照常投影）。
@@ -1286,6 +1364,8 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
   const bindingView = buildBindingView(bindings, specs, { allProjectErrorCodes });
   // G7-V3（webgen 数据层扩展）：六个新字段的投影（均可选；老模型无数据 → undefined，零回归）
   const dimensions = specsEnvelope.dimensions;
+  // G7-V4（webgen 数据层扩展）：不变量投影（协议层视图 §11.3 数据源；无不变量 → undefined）
+  const invariantsView = buildInvariantsView(model, dimensions?.map((d) => d.dimension));
   const modelRelations = model.derivable.relations;
   const storageView = buildStorageView(inputs.storage);
   const credentials = model.metadata.credentials;
@@ -1362,6 +1442,8 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
     exceptionPaths: exceptionPaths.length > 0 ? exceptionPaths : undefined,
     // G7-V3（webgen 数据层扩展）：六个新字段（可选；老模型无数据 → undefined，JSON 序列化时省略，零回归）
     dimensions: dimensions ?? undefined,
+    // G7-V4（webgen 数据层扩展）：不变量投影（协议层视图 §11.3 数据源；可选字段，老模型缺省）
+    invariants: invariantsView ?? undefined,
     modelRelations: modelRelations ?? undefined,
     storage: storageView ?? undefined,
     credentials: credentials ?? undefined,

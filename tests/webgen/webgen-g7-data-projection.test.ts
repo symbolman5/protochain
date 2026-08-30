@@ -17,6 +17,7 @@ import {
   buildWebData,
   buildStorageView,
   buildComponentsView,
+  buildInvariantsView,
   type WebDataJson,
 } from '../../src/webgen/index.js';
 import { parseProtocolFile } from '../../src/parser/index.js';
@@ -332,6 +333,54 @@ describe('WebDataJson.adversarialCases（G7-S4/S6 对抗性用例投影）', () 
   test('testCases 完全缺失（未生成 test-cases.json）→ 字段缺省', () => {
     const data = buildWebData({ specsEnvelope: makeLegacyEnvelope(), model: makeLegacyModel() });
     expect(data.adversarialCases).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ⑧ invariants（G7-V4 不变量投影，协议层视图 §11.3 数据源）
+// ---------------------------------------------------------------------------
+
+describe('WebDataJson.invariants（G7-V4 不变量投影）', () => {
+  test('anonymous-saas：11 条 id/name/expression/subject/timing/bound/remedy/dimensions 投影', () => {
+    const { specsEnvelope, model, storage, testCases } = loadAnonymousSaaSInputs();
+    const data = buildWebData({ specsEnvelope, model, testCases, storage });
+    expect(data.invariants).toBeDefined();
+    expect(data.invariants!.length).toBe(11);
+    const byId = new Map(data.invariants!.map((i) => [i.id, i]));
+    // INV-1：强一致 → always；subject=作用状态 S2；expression 涉及维度 访问策略/归属状态/处置状态
+    const inv1 = byId.get('INV-1')!;
+    expect(inv1).toMatchObject({
+      name: '放行须已认领且正常',
+      timing: 'always',
+      subject: ['S2'],
+      level: 'state-machine',
+    });
+    expect(inv1.expression).toContain('访问策略');
+    expect(inv1.dimensions).toEqual(expect.arrayContaining(['访问策略', '归属状态', '处置状态']));
+    expect(inv1.remedy).toBeDefined();
+    expect(typeof inv1.remedy!.action).toBe('string');
+    // 最终一致 → eventually_within：TM1（deadline target=INV-3, 30000ms）、TM4（target=INV-6, 60000ms）
+    const inv3 = byId.get('INV-3')!;
+    expect(inv3.timing).toBe('eventually_within');
+    expect(inv3.bound).toBe(30000);
+    const inv6 = byId.get('INV-6')!;
+    expect(inv6.timing).toBe('eventually_within');
+    expect(inv6.bound).toBe(60000);
+    // 时间语义分布：always 4（INV-1/2/7/10）· eventually_within 7（INV-3/4/5/6/8/9/11）
+    const always = data.invariants!.filter((i) => i.timing === 'always').length;
+    const ev = data.invariants!.filter((i) => i.timing === 'eventually_within').length;
+    expect(always).toBe(4);
+    expect(ev).toBe(7);
+  });
+
+  test('老模型（无「不变量」段）→ 字段缺省且 JSON 序列化不出现', () => {
+    const data = buildWebData({ specsEnvelope: makeLegacyEnvelope(), model: makeLegacyModel() });
+    expect(data.invariants).toBeUndefined();
+    expect(JSON.stringify(data)).not.toContain('"invariants"');
+  });
+
+  test('buildInvariantsView：无不变量 → undefined（字段缺省路径）', () => {
+    expect(buildInvariantsView(makeLegacyModel(), ['形态'])).toBeUndefined();
   });
 });
 
