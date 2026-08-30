@@ -1,0 +1,24 @@
+# G7-S7 M2 全量 jest 结果（2026-08-30 · HEAD 9a3dd73 · Linux /work/protochain）
+Test Suites: 6 failed, 126 passed, 132 total
+Tests:       10 failed, 1644 passed, 1654 total
+Time:        11.865 s
+--- 失败套件清单（去重）---
+FAIL tests/integration/e2_1-hskng-integration.test.ts
+FAIL tests/scaffolder/e5-binding-run.test.ts
+FAIL tests/viewer/interface-view-utils.test.ts
+FAIL tests/viewer/n1-guard-c8b.test.ts
+FAIL tests/webgen/feedback-issues.test.ts
+FAIL tests/webgen/feedback-server.test.ts
+--- 判据相关套件状态 ---
+PASS tests/checker/kind-rules.test.ts
+PASS tests/checker/kind-rules-s5.test.ts
+PASS tests/checker/component-mapping.test.ts
+PASS tests/checker/credential.test.ts
+PASS tests/casegen/g7-s4-adversarial.test.ts
+PASS tests/bindgen/dimension-accessors.test.ts
+PASS tests/casegen/credential.test.ts
+PASS tests/parser/credential.test.ts
+PASS tests/parser/parser-extension.test.ts
+PASS tests/storagegen/storagegen.test.ts
+PASS tests/bindgen/credential.test.ts
+PASS tests/model/dimension-kind.test.ts

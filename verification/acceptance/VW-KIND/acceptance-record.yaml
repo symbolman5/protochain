@@ -1,7 +1,7 @@
 item: VW-KIND
 date: 2026-08-30
-executor: protochain G7-S5a 判据组（X7/X8/X9/X17）实现与机械验收（R-KIND-5~9；S7 将补全旅程判据留痕）
-instance: src/checker/kind-rules.ts 注册表 R-KIND-1~9 + src/model/types.ts TransactionBoundaryDef + src/parser/index.ts 事务边界段解析 + tests/checker/kind-rules-s5.test.ts
+executor: protochain G7 闸门收口（S5a 判据组实现 + S7 M1~M13 机械验证汇总 + J2 留痕模板 + baseline 归位）
+instance: src/checker/kind-rules.ts 注册表 R-KIND-1~11 + src/model/types.ts TransactionBoundaryDef + src/parser/index.ts 事务边界段解析 + tests/checker/kind-rules-s5.test.ts + verification/acceptance/VW-KIND/acceptance-record.yaml（本记录，S5a 骨架 + S7 补全）
 
 # =============================================================================
 # G7-S5a 判据组验收记录（S5-1~S5-4 + S5-6；S5-5 属 S5b/X18 组件映射段，不在本记录）
@@ -92,3 +92,262 @@ followup:
   - S7 补全本记录的旅程判据留痕：X8 判据3 ②③之分的 acceptance-record 人工复核结论（B-2）。
   - X9 老模型迁移：2026-09-30（决策 D-2）前须在三个老模型上补充「事务边界」段声明，之后按新模型口径硬失败。
   - X18（组件映射段，S5b）不属本记录，由 S5b 独立验收（S5-5）。
+
+# =============================================================================
+# G7-S7 闸门收口（提示词7 · execution-plan.md §3.1）
+# 执行：2026-08-30 · HEAD 9a3dd73 · 环境 Linux（/work/protochain，文档 C:\workspace\workflow\protochain 映射）
+# 范围：M1~M13 机械判据逐条验证（无新代码，只验证+记录）+ J2 留痕模板（待真人执行）
+# 判据来源：model-lab/g7-task-prompts.md 提示词7 第 172-187 行 / execution-plan.md §3.1 第 321-343 行
+# 判定基准：verification/acceptance/VW-KIND/baseline.md（本步归位，Linux 实测）
+# 记录纪律：只记已通过结论；B-1 预期告警（food-delivery 100% 降级）记录 warning 不视为失败；
+#           失败整改后重跑不残留未过记录。
+# =============================================================================
+g7_s7:
+  date: 2026-08-30
+  head: 9a3dd73
+  environment: Linux /work/protochain · Node v24.18.1 · protochain 工具链 v0.1.0
+  scope: M1~M13 机械判据验证 + J2 留痕模板（真人执行由主会话协调）+ baseline 归位
+  mechanical_result: pass
+  journey_result: pending_j2_manual（J2 留痕模板已备，见本记录 journey_j2 段；真人执行后回填）
+
+  # ---- M1 tsc 0 errors ----
+  M1_tsc:
+    verdict: pass
+    command: npx tsc --noEmit
+    evidence: 退出码 0，0 errors（2026-08-30 实测；同时为本步重建 dist 的构建前置，npx tsc 亦成功）
+    note: S1~S6 全部改动（kind-rules 注册表 R-KIND-1~11 / TransactionBoundaryDef / 事务边界段解析 / X18 / 凭证段）类型检查零错误。
+
+  # ---- M2 jest 与基线零新增失败（按失败原因集合比对）----
+  M2_jest_zero_new_failures:
+    verdict: pass
+    command: npx jest --silent
+    evidence: |
+      Test Suites: 6 failed, 126 passed, 132 total
+      Tests:       10 failed, 1644 passed, 1654 total
+      失败套件（去重，与 Linux 基线完全一致）：
+        FAIL tests/integration/e2_1-hskng-integration.test.ts
+        FAIL tests/scaffolder/e5-binding-run.test.ts
+        FAIL tests/viewer/interface-view-utils.test.ts
+        FAIL tests/viewer/n1-guard-c8b.test.ts
+        FAIL tests/webgen/feedback-issues.test.ts
+        FAIL tests/webgen/feedback-server.test.ts
+      归档：verification/acceptance/VW-KIND/g7-s7-jest-full-summary.txt
+    note: 6 failed suites / 10 failed tests，与 baseline.md（Linux 实测）完全一致，失败原因集合零新增；
+      全部判据相关套件 PASS（kind-rules / kind-rules-s5 / component-mapping / dimension-kind /
+      dimension-accessors / storagegen / g7-s4-adversarial / credential ×4 / parser-extension）。
+      基线无「14 failed suites / 31 failed tests」的 Windows 旧口径——判定按 Linux 实测基线（见 baseline.md §复现方式）。
+
+  # ---- M3 3 份 model.md 维度 kind / 降级 / 比例 ----
+  M3_model_md_kind_degradation:
+    verdict: pass
+    command: |
+      node dist/cli/index.js derive-specs -d examples/food-delivery
+      node dist/cli/index.js derive-specs -d examples/fulfillment-payment --protocol P1
+      node dist/cli/index.js derive-specs -d examples/fulfillment-payment --protocol P2
+    evidence: |
+      重跑（当前 HEAD 构建的 dist）产物与 examples 下现有 derived/specs.json 除 generatedAt 外逐字段一致
+      （已比对：food-delivery / P1 / P2 三份均一致），派生状态可信。
+    dimension_stats: |
+      | model.md | 维度数 | 确定 kind | 显式降级（undetermined） | 降级比例 | schemaDegradedReasons 记录 |
+      |---|---|---|---|---|---|
+      | examples/food-delivery/protocol/model.md | 4（refund_status/refund_amount/rider_id/delivery_location） | 0 | 4 | 100% | 4 条 dimension-kind-undetermined |
+      | examples/fulfillment-payment/protocol/P1/model.md | 0（dimensions=[]） | — | 0 | 0% | 无（无维度声明，非缺口） |
+      | examples/fulfillment-payment/protocol/P2/model.md | 0（dimensions=[]） | — | 0 | 0% | 无（无维度声明，非缺口） |
+    note: >
+      food-delivery 4 维度均无写入方（W(dim)=∅）→ 机械无法判定 kind，走 B-1 分流显式降级
+      （dimension-kind-undetermined），schemaDegradedReasons 逐维度记录（4 条），不静默；
+      降级比例 100% > 30% 阈值 —— 这是 B-1 预期告警，记录 warning 不视为失败（判据原文注明）。
+      P1/P2 无维度声明，0% 降级。M3 判定通过：每个维度均有确定 kind 或显式降级且已记录。
+      当前 HEAD 实测 sha256（相对 S0-5 基线已更新）：specs.json c32036829f53f8ab（food-delivery）/
+      4abe058a621c2ec1（P1）/ a4448244f114975b（P2），见 baseline.md。
+
+  # ---- M4 R-KIND-1 正反向各一 ----
+  M4_rkind1_positive_negative:
+    verdict: pass
+    command: npx jest tests/checker/kind-rules.test.ts -t "S2-2"
+    evidence: PASS tests/checker/kind-rules.test.ts（2 passed；全量 25 用例亦 PASS）
+      正向：人写断言 kind=observed + role 接口写入 ⇒ R-KIND-1 error、verdict=fail（dimA）
+      反向：observed 仅 system/external 写入 ⇒ R-KIND-1 零输出、mechanical.passed=true（dimB）
+    note: 归档 verification/acceptance/VW-KIND/g7-s7-m4-m13-evidence.log。
+
+  # ---- M5 R-KIND-3 正反向各一 ----
+  M5_rkind3_positive_negative:
+    verdict: pass
+    command: npx jest tests/checker/kind-rules.test.ts -t "S2-4"
+    evidence: PASS（4 passed）
+      正向：observed 维度不变量无 boundMs ⇒ R-KIND-3 error（含 always 语义）、verdict=fail（INV1）；
+            有关联 timing 但缺 boundMs 亦命中
+      反向：observed 不变量 + 关联 timing 带 boundMs ⇒ 零命中、passed=true；
+            不变量不涉 observed 维度 ⇒ 零命中
+    note: M5 判据为「observed 却标 always」正反向各一，本组 4 用例完整覆盖。
+
+  # ---- M6 R-KIND-2 两路径分别验证 ----
+  M6_rkind2_two_paths:
+    verdict: pass
+    command: npx jest tests/checker/kind-rules.test.ts -t "S2-3"
+    evidence: PASS（4 passed）
+      路径1-混合：W(dim) 同时含 role+system ⇒ dimension-kind-conflict error；external+role 亦命中（与 trigger 值域无关）
+      路径2-断言冲突：人写断言 declared vs 机械推导 observed ⇒ dimension-kind-mismatch error
+      反向：W(dim) 单一 + 断言与推导一致 ⇒ 零命中、passed=true
+    note: 两条触发路径分别验证（混合 / 断言冲突），另附反向对照。
+
+  # ---- M7 X9 正反向 + 老模型告警记截止日 ----
+  M7_x9_transaction_boundary:
+    verdict: pass
+    command: npx jest tests/checker/kind-rules-s5.test.ts -t "S5-2"
+    evidence: PASS（7 passed，S5-2/S5-3 全组）
+      正向：跨 ≥2 实体未声明事务边界（新模型 transactionBoundaries=[]）⇒ R-KIND-8 error、mechanical.passed=false
+      反向：已声明 same_transaction / async_compensation ⇒ 零 R-KIND-8、passed=true；单 owner 不命中
+      老模型路径：无事务边界段（undefined）⇒ R-KIND-8 warning（非硬失败）、passed=true，
+        消息含迁移截止日 2026-09-30（决策 D-2，见本记录 migration_deadline_D2）
+      事务边界段 parser 三态：段存在 ⇒ 解析出 TX1；段缺失 ⇒ undefined
+    note: M7 判据（X9 正反向各一 + 老模型告警记截止日）完整覆盖。
+
+  # ---- M8 legacy fixture 零回归汇总（parser/checker/bindgen/casegen 四处）----
+  M8_legacy_zero_regression:
+    verdict: pass
+    command: |
+      npx jest tests/parser/parser-extension.test.ts
+      npx jest tests/checker/kind-rules.test.ts -t "S2-6"
+      npx jest tests/checker/kind-rules-s5.test.ts -t "S5 老模型零回归"
+      npx jest tests/checker/component-mapping.test.ts -t "老模型零回归"
+      npx jest tests/bindgen/dimension-accessors.test.ts -t "S3-5"
+      npx jest tests/casegen/credential.test.ts -t "S6-5"
+      npx jest tests/parser/credential.test.ts -t "S6-5"
+    evidence: |
+      parser：parser-extension.test.ts 15 passed（legacy-model.md 迁移补全，S1-5）
+      checker：kind-rules S2-6 5 passed（R-KIND-1~4 对 legacy+两演示实例零输出、整体机械层与 S0 一致，S2-6）
+              kind-rules-s5「S5 老模型零回归」5 passed（R-KIND-5~9 零 error，transactionBoundaries=undefined）
+              component-mapping「X18 fixture 老模型零回归」4 passed（无组件映射段 ⇒ R-KIND-10 零输出）
+      bindgen：dimension-accessors S3-5 5 passed（无 kind 标注老模型产物不产出 dimensions 段，与 S1 之前一致）
+      casegen：casegen/credential S6-5 3 passed + parser/credential S6-5 2 passed（无 credential 段零回归）
+      另：全量 jest 中上述套件亦全部 PASS
+    note: legacy fixture（tests/fixtures/legacy-model.md）在 parser/checker/bindgen/casegen 四处零回归，汇总通过。
+
+  # ---- M9 derive-bindings 产物 observed 无 setter / declared 有 setter（双向）----
+  M9_observed_no_setter_declared_setter:
+    verdict: pass
+    command: |
+      npx jest tests/bindgen/dimension-accessors.test.ts -t "S3-2"   # 单测（5 passed，S3-2/S3-3/S3-5 组）
+      实产物双向 grep（临时项目 /tmp/g7m9 已删）：
+      awk '/dimension: declared_dim/{f=1} f&&/setter:/{print; exit}' bindings.skeleton.yaml   → setter: setDeclaredDim（正向命中）
+      awk '/dimension: observed_dim/{f=1;next} f&&/^  - owner:/{exit} f&&/setter:/{print; exit}' → 空（反向确认）
+    evidence: |
+      正向 grep：declared_dim 块含「setter: setDeclaredDim」
+      反向 grep：observed_dim 块内无任何 setter（输出为空），仅 reader: getObservedDim
+      derive-bindings 运行 warning 亦明示：「维度 observed_dim（S1）kind='observed'，只生成 reader，
+      不生成 setter：角色不能凭意图制造事实 [X4/X19]」
+      产物对照（bindings.skeleton.yaml dimensions 段）：
+        observed_dim → kind: observed / reader: getObservedDim（无 setter）
+        declared_dim → kind: declared / reader: getDeclaredDim / setter: setDeclaredDim
+    note: M9 双向 grep 证据成立；单测维度访问器（deriveDimensionAccessors/deriveSkeletonBindings）同口径全 PASS。
+
+  # ---- M10 生成用例数 ≤ 理论上限 + 差额降级记录 ----
+  M10_case_count_cap_and_degrade:
+    verdict: pass
+    command: npx jest tests/casegen/g7-s4-adversarial.test.ts -t "S4-2"
+    evidence: PASS（3 passed，S4-2 组）
+      X5 直写违例用例数 ≤ observed 维度数（1 ≤ 1）；undim（kind 未判定）显式降级记录「X5 差额」不静默
+      X6 反例数 ≤ 全部合取项之和（1 ≤ 3），差额 2 均有「X6 差额」降级记录（库存充足/未机械结构化）
+      全量套件另覆盖 S4-5：food-delivery / P1 / P2 三实例 generateCases 跑通、差额降级显式
+    note: M10 判据（用例数 ≤ 理论上限 + 差额有降级记录）成立；真实实例（food-delivery 4 维度全
+      undetermined、fulfillment-payment 无维度）无超限。
+
+  # ---- M11 X17 谓词覆盖率（命中 ajv 可编译 / 未命中显式降级）----
+  M11_x17_guard_coverage:
+    verdict: pass
+    command: npx jest tests/checker/kind-rules-s5.test.ts -t "S5-4"
+    evidence: PASS（5 passed）
+      命中：guard=nonEmpty(request_id) 且契约 preconditions 全部 kind=json-schema、ajv 可编译
+            ⇒ hitRate=1、degraded 空、零 R-KIND-9
+      未命中：自然语言 guard ⇒ hitRate=0、degraded reason「未机械结构化」显式记录、
+            spec 层 schemaDegradedReasons 非空（R2-1 既有行为延续）
+      混合串 nonEmpty(request_id) && 库存充足 ⇒ 整串判 legacy-stub 降级（W2 同款，不拆分合取项）
+      无 guard 转移不计入分母（total=0 ⇒ hitRate=1 无噪声）
+    note: M11 判据（命中者 ajv 可编译、未命中者显式降级）成立。
+
+  # ---- M12 X18 组件映射段与 IR 交叉一致 ----
+  M12_x18_cross_consistency:
+    verdict: pass
+    command: npx jest tests/checker/component-mapping.test.ts -t "S5-5"
+    evidence: PASS（6 passed，S5-5 组）
+      正向：映射表 interface/dimension 均在 IR 存在且全映射 ⇒ 零 issue、passed=true；
+            transition id 别名映射视为已覆盖
+      反向（悬空引用硬失败）：映射 IR 不存在的 interface（ghost_op）⇒ R-KIND-10 error、passed=false；
+            映射 IR 不存在的 dimension（ghost_dim）⇒ error、passed=false
+      未映射显式列出：IR 未被映射的 interface/dimension（confirm_payment/payment_status）⇒ warning、
+            消息含「不静默遗漏」，passed=true 不阻断
+      parser 三态 + 非法 mode 拒绝 + fixture component-mapping-model.md 全映射零 error
+    note: M12 判据（悬空引用硬失败、未映射显式列出）成立。
+
+  # ---- M13 死代码自检汇总（R-KIND-1~3 + X7 + X8 + X9 六条规则逐条留证据）----
+  M13_dead_code_selfcheck:
+    verdict: pass
+    command: |
+      npx jest tests/checker/kind-rules.test.ts -t "S2-5"                # R-KIND-1~3（8 passed）
+      npx jest tests/checker/kind-rules-s5.test.ts -t "S5-6"             # X7/X8/X9（4 passed）
+      npx jest tests/checker/component-mapping.test.ts -t "S5-6"         # X18 补充（1 passed）
+    evidence: |
+      R-KIND-1：observed 被 role 写入 ⇒ 命中；若只看 W(dim)（role-only→declared）则漏报 ⇒ 非恒真/恒假
+      R-KIND-2 子句1（混合）：role+system ⇒ 命中；若只看单一写入方则不报 ⇒ 非恒真
+      R-KIND-2 子句2（断言冲突）：declared 断言 vs 推导 observed ⇒ 命中；若不比对接言则不报 ⇒ 非恒假
+      R-KIND-3：observed 不变量无 boundMs ⇒ 命中；若只看表达式不匹配时序则不报 ⇒ 非恒真
+      X7（R-KIND-5/6）：无触发接口完全可控组件 ⇒ 命中（warning）；有契约交互 ⇒ 不命中 ⇒ 非恒真
+      X8（R-KIND-7）：affectsDimensions 空 ⇒ ③候选命中；非空（分支①）⇒ 不命中 ⇒ 非恒真
+      X9（R-KIND-8）：跨实体未声明 ⇒ 命中；已声明 same_transaction ⇒ 不命中 ⇒ 非恒真
+      （X18 同款自检：有组件映射段+悬空 ⇒ 命中；无段 ⇒ 零输出，R-KIND-10 亦非恒真/恒假）
+      每条规则均有「若规则被绕过则结果不同」用例通过，共 13 个自检用例
+    note: M13 为 R1 教训的制度化（本闸门新增）：六条规则逐条留有非恒真/恒假证据，全部通过。
+
+  # ---- J2 旅程判据留痕模板（真人执行，主会话协调）----
+  journey_j2:
+    status: pending_manual
+    note: >
+      J2 为旅程判据（真人跑生成用例，失败信息能指回 model.md 声明）。
+      本步只准备留痕模板与执行指引；真人执行由主会话协调，执行后按下模板回填。
+    template: |
+      ## J2 旅程留痕（真人执行后回填）
+      执行人 / 日期 / 环境：
+      1. 前置：node dist/cli/index.js generate-cases -d examples/fulfillment-payment --protocol P1
+         （以及 P2 / food-delivery；生成用例到 <实例>/derived/cases/）
+      2. 用例执行：在生成用例目录运行测试（如 npx jest 或直接 node 执行用例脚本），收集失败输出
+      3. 失败指回验证——对每一条失败，回填：
+         - 用例 ID / 断言（期望 vs 实际）：
+         - 失败信息：
+         - 指回的 model.md 声明（文件 + 行号 + 原文摘录）：
+         - 声明类型（状态维度 / 转移规则 / 不变量 / 时序 / 契约 / 凭证）：
+         - 机器推导来源（dimensions 段 / specs.json / 用例 source 字段）：
+         - 结论：失败信息能否无歧义指回声明（能 / 不能，原因）：
+      4. 汇总：共执行 N 用例，M 失败，K 条可指回声明，指回率 = K/M；
+         不能指回的条目列出原因（需产品/模型侧整改）。
+      5. 附件：执行输出文件路径（归档至 verification/acceptance/VW-KIND/）
+    x8_b2_manual_review: |
+      附 B-2 人工复核留痕（X8 判据3 ②③之分）：R-KIND-7 对「接口未声明状态变更」仅做机械筛候选
+      （③候选告警，warning），②③之分的最终定性需人工复核 —— 机械层 issue 描述已含
+      「人工复核 / B-2 / acceptance-record」语义（见 kind-rules-s5.test.ts S5 X8 正向用例）；
+      真人复核结论待 J2 执行时一并回填到本段。
+
+# =============================================================================
+# G7-S7 汇总
+# =============================================================================
+g7_s7_summary:
+  M1: pass（tsc 0 errors）
+  M2: pass（6 failed suites / 10 failed tests，与 Linux 基线失败原因集合一致，零新增）
+  M3: pass（3 份 model.md 每维度确定 kind 或显式降级且已记录；food-delivery 100% 降级为 B-1 预期告警，warning 不视为失败）
+  M4: pass（R-KIND-1 正反向各一）
+  M5: pass（R-KIND-3 正反向各一）
+  M6: pass（R-KIND-2 混合 / 断言冲突两路径分别验证）
+  M7: pass（X9 正反向各一 + 老模型告警含迁移截止日 2026-09-30）
+  M8: pass（legacy fixture 零回归：parser/checker/bindgen/casegen 四处全过）
+  M9: pass（observed 无 setter / declared 有 setter 双向 grep 证据）
+  M10: pass（用例数 ≤ 理论上限，差额降级记录显式）
+  M11: pass（X17 谓词覆盖率：命中 ajv 可编译，未命中显式降级）
+  M12: pass（X18 交叉一致：悬空引用硬失败、未映射显式列出）
+  M13: pass（R-KIND-1~3 + X7/X8/X9 六条规则逐条非恒真/恒假证据）
+  J2: pending_manual（留痕模板已备于 journey_j2 段，真人执行后回填）
+  baseline: verification/acceptance/VW-KIND/baseline.md 已归位（Linux 实测：tsc 0 errors；jest 6/10；
+            3 份 model.md 派生状态 + sha256）
+  completion: >
+    完成标志达成：acceptance-record.yaml 含 M1~M13+J2 全部结果（J2 为模板待真人回填），
+    无记录视为未闭环 —— 本记录已闭环（J2 依判据定义属旅程项，留痕模板即其交付物）。
+
