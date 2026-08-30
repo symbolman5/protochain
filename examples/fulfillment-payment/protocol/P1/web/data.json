@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-08-30T14:14:23.490Z",
+  "generatedAt": "2026-08-30T15:36:33.954Z",
   "sourceModelVersion": "1.0.0",
   "protocol": {
     "name": "履约协议",
@@ -992,6 +992,64 @@
     {
       "id": "EX1",
       "name": "履约超时"
+    }
+  ],
+  "dimensions": [],
+  "invariants": [
+    {
+      "id": "INV1",
+      "name": "履约数量一致",
+      "expression": "fulfillment_qty == order_qty",
+      "subject": [
+        "S2",
+        "S3"
+      ],
+      "dimensions": [],
+      "timing": "always",
+      "level": "state-machine",
+      "description": "履约数量必须等于订单数量（跨字段谓词）"
+    },
+    {
+      "id": "INV2",
+      "name": "取消不产生履约费用",
+      "expression": "取消订单后不产生履约费用",
+      "subject": [
+        "S4"
+      ],
+      "dimensions": [],
+      "timing": "always",
+      "level": "state-machine",
+      "description": "退款取消路径不向顾客收取履约费用"
+    }
+  ],
+  "storage": {
+    "dimensionCount": 0,
+    "coveredDimensionCount": 0,
+    "coverageRate": 1,
+    "entities": []
+  },
+  "adversarialCases": [
+    {
+      "id": "X6_T1_c0",
+      "kind": "guard-failure",
+      "source": "转移 T1（action=confirm_order）preconditions 合取项[0]「nonEmpty(order_id)」",
+      "interfaceId": "confirm_order",
+      "expectFailure": true,
+      "negatedConjunct": 0,
+      "conjunctText": "nonEmpty(order_id)",
+      "stateImmutableDimensions": [],
+      "body": "/**\n * X6 guard 失败后状态不变（G7-S4）\n * 数据源（model.md）：转移 T1（action=confirm_order）preconditions 合取项[0]「nonEmpty(order_id)」\n * 断言：① 调用必须失败 ② affectsDimensions 取值与调用前完全一致\n *\n * ===== R5 冻结边界声明（S4-3，缺失即未完成）=====\n * 本用例冻结调度器与定时器：mock 掉 scheduled 任务派发与超时定时器，\n * 防止重算/超时任务在断言窗口内并发改写状态导致随机失败（flaky）。\n * 实现：jest.useFakeTimers() + schedulerMock.disable()（testtool/mock）。\n * =================================================\n */\nimport { describe, it, expect, jest } from '@jest/globals';\nimport { schedulerMock } from '<testtool>/mock';\n\ndescribe('X6 guard 失败后状态不变：confirm_order（T1）', () => {\n  beforeEach(() => {\n    // R5：冻结边界 —— mock 掉调度器与定时器\n    jest.useFakeTimers();\n    schedulerMock.disable();\n  });\n  afterEach(() => {\n    schedulerMock.restore();\n    jest.useRealTimers();\n  });\n\n  it('合取项[0]「nonEmpty(order_id)」置否后调用必须失败且状态不变', () => {\n    // 前置：进入 S0 状态\n    goto('S0');\n    // 快照：affectsDimensions 取值（空集：无维度受影响）\n    const before = snapshot([]);\n    // 置否合取项[0]：构造违反「nonEmpty(order_id)」的输入\n    const payload = \"\";\n    // 调用接口（合取项不满足 → 必须失败）\n    const res = call('confirm_order', payload);\n    // 断言①：调用必须失败\n    expect(res.failed).toBe(true);\n    // 断言②：affectsDimensions 取值与调用前完全一致\n    expect(snapshot([])).toEqual(before);\n  });\n});\n"
+    },
+    {
+      "id": "X6_T3_c0",
+      "kind": "guard-failure",
+      "source": "转移 T3（action=complete_fulfillment）preconditions 合取项[0]「fulfillment_qty == order_qty」",
+      "interfaceId": "complete_fulfillment",
+      "expectFailure": true,
+      "negatedConjunct": 0,
+      "conjunctText": "fulfillment_qty == order_qty",
+      "stateImmutableDimensions": [],
+      "body": "/**\n * X6 guard 失败后状态不变（G7-S4）\n * 数据源（model.md）：转移 T3（action=complete_fulfillment）preconditions 合取项[0]「fulfillment_qty == order_qty」\n * 断言：① 调用必须失败 ② affectsDimensions 取值与调用前完全一致\n *\n * ===== R5 冻结边界声明（S4-3，缺失即未完成）=====\n * 本用例冻结调度器与定时器：mock 掉 scheduled 任务派发与超时定时器，\n * 防止重算/超时任务在断言窗口内并发改写状态导致随机失败（flaky）。\n * 实现：jest.useFakeTimers() + schedulerMock.disable()（testtool/mock）。\n * =================================================\n */\nimport { describe, it, expect, jest } from '@jest/globals';\nimport { schedulerMock } from '<testtool>/mock';\n\ndescribe('X6 guard 失败后状态不变：complete_fulfillment（T3）', () => {\n  beforeEach(() => {\n    // R5：冻结边界 —— mock 掉调度器与定时器\n    jest.useFakeTimers();\n    schedulerMock.disable();\n  });\n  afterEach(() => {\n    schedulerMock.restore();\n    jest.useRealTimers();\n  });\n\n  it('合取项[0]「fulfillment_qty == order_qty」置否后调用必须失败且状态不变', () => {\n    // 前置：进入 S2 状态\n    goto('S2');\n    // 快照：affectsDimensions 取值（空集：无维度受影响）\n    const before = snapshot([]);\n    // 置否合取项[0]：构造违反「fulfillment_qty == order_qty」的输入\n    const payload = {};\n    // 调用接口（合取项不满足 → 必须失败）\n    const res = call('complete_fulfillment', payload);\n    // 断言①：调用必须失败\n    expect(res.failed).toBe(true);\n    // 断言②：affectsDimensions 取值与调用前完全一致\n    expect(snapshot([])).toEqual(before);\n  });\n});\n"
     }
   ]
 }

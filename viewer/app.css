@@ -747,3 +747,108 @@ h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacin
 
 /* 双向跳转：协议层跨面板高亮（独立类名，不与协议层自身联动互踩） */
 .proto-op-row.hl-comp { background: #ffe9a8; box-shadow: inset 0 0 0 1px #d4a72c; }
+
+/* ==========================================================================
+   V6 用例层面板（§11.4 用例视图）
+   ========================================================================== */
+.cases-panel .case-empty { color: #9a6700; font-size: 12px; padding: 6px 2px; }
+.case-section { margin-top: 8px; }
+.case-section-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+
+/* ① 路径用例区 */
+.case-verify-bar { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 6px; }
+.case-verify-chip {
+  font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px solid; font-weight: 600;
+}
+.case-verify-report { color: var(--muted); border-color: #d8dde4; background: #f3f5f8; }
+.case-verify-passed { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.case-verify-failed { color: #cf222e; border-color: #f7c5c9; background: #fff1f0; }
+.case-verify-skipped { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.case-verify-verdict { color: #2f6fed; border-color: #c3d8fb; background: #f2f6fe; }
+.case-dev-chip {
+  font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px dashed #d4a72c;
+  background: #fffdf0; color: #9a6700;
+}
+.case-path-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow: auto; }
+.case-path-row {
+  border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 12px;
+}
+.case-path-row.open { background: #fbfdff; }
+.case-path-head {
+  display: flex; gap: 8px; align-items: center; padding: 5px 8px; cursor: pointer; flex-wrap: wrap;
+}
+.case-path-caret { color: var(--muted); font-size: 10px; width: 10px; }
+.case-path-id { font-weight: 700; }
+.case-path-badge {
+  font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px solid #d8dde4;
+  background: #f3f5f8; color: var(--muted); font-weight: 600;
+}
+.case-path-tids { color: var(--muted); font-size: 11px; word-break: break-all; }
+.case-path-vb { font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px solid; font-weight: 600; }
+.case-path-vb-passed { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.case-path-vb-failed { color: #cf222e; border-color: #f7c5c9; background: #fff1f0; }
+.case-path-vb-skipped { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.case-path-vb-na { color: var(--muted); border-color: #d8dde4; background: #f3f5f8; }
+.case-path-detail { display: none; padding: 0 8px 6px 26px; }
+.case-path-detail.open { display: block; }
+.case-path-desc { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+.case-path-desc-label { color: #9a6700; }
+.case-path-tstep { font-size: 12px; padding: 2px 0; display: flex; gap: 8px; align-items: center; }
+.case-path-tstep-empty { color: var(--muted); }
+.case-tstep-tid {
+  font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px solid #c3d8fb;
+  background: #f2f6fe; color: #2f6fed; font-weight: 600; min-width: 40px; text-align: center;
+}
+.case-tstep-arrow { color: var(--muted); }
+.case-path-deviation {
+  font-size: 11px; color: #cf222e; margin-top: 4px; border-top: 1px dashed #f7c5c9; padding-top: 4px;
+}
+.case-path-dev-kind {
+  border-radius: 999px; padding: 0 6px; border: 1px solid #f7c5c9; background: #fff1f0; margin-right: 6px;
+}
+.case-path-dev-text { color: #8c2f39; }
+
+/* ② 对抗用例区 */
+.case-adv-group { margin-bottom: 8px; }
+.case-adv-group-head {
+  display: flex; gap: 8px; align-items: baseline; font-size: 12px; margin: 4px 0;
+}
+.case-adv-group-label {
+  font-weight: 700; color: #2f6fed; border: 1px solid #c3d8fb; background: #f2f6fe;
+  border-radius: 6px; padding: 1px 8px;
+}
+.case-adv-group-count { font-size: 11px; color: var(--muted); }
+.case-adv-row {
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 12px;
+  background: #fff; margin-bottom: 4px;
+}
+.case-adv-row.hl { background: #fff8e6; border-color: #d4a72c; box-shadow: 0 0 0 1px #d4a72c; }
+.case-adv-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.case-adv-id { font-weight: 700; word-break: break-all; }
+.case-kind-badge { font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px solid; font-weight: 600; }
+.case-kind-observed-write { color: #cf222e; border-color: #f7c5c9; background: #fff1f0; }
+.case-kind-guard-failure { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.case-kind-convergence { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.case-kind-credential-expired { color: #7d4bb4; border-color: #d6c3ee; background: #f8f4fd; }
+.case-kind-credential-revoked { color: #7d4bb4; border-color: #d6c3ee; background: #f8f4fd; }
+.case-kind-credential-lookup { color: #7d4bb4; border-color: #d6c3ee; background: #f8f4fd; }
+.case-adv-expect { font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px solid; }
+.case-adv-expect-fail { color: #cf222e; border-color: #f7c5c9; background: #fff1f0; }
+.case-adv-expect-pass { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.case-adv-source {
+  margin-top: 4px; display: flex; gap: 6px; align-items: baseline; cursor: pointer;
+  border-radius: 4px; padding: 2px 4px;
+}
+.case-adv-source:hover { background: #eef2ff; }
+.case-adv-source-label { color: var(--muted); font-size: 11px; flex-shrink: 0; }
+.case-adv-source-text {
+  color: #2f6fed; word-break: break-all; text-decoration: underline dotted #c3d8fb;
+}
+.case-adv-assert { margin-top: 2px; display: flex; gap: 6px; align-items: baseline; }
+.case-adv-assert-label { color: var(--muted); font-size: 11px; flex-shrink: 0; }
+.case-adv-assert-text { color: #4b5563; word-break: break-all; }
+
+/* source 指回联动：协议层跨面板高亮（独立类名，不与 active/hl-guard/hl-inv/hl-comp 互踩） */
+.proto-op-row.hl-case { background: #eef6ff; box-shadow: inset 0 0 0 1px #2f6fed; }
+.proto-dim-row.hl-case { background: #eef6ff; border-color: #2f6fed; box-shadow: 0 0 0 1px #2f6fed; }
+.proto-inv-col.hl-case { background: #eef6ff; }
