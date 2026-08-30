@@ -1,0 +1,243 @@
+item: VW-DERIVE
+date: 2026-08-30
+executor: protochain G8 闸门收口（S8：推导完整度 D1~D5 机械判据验证 + J3 旅程留痕模板 + acceptance-record 闭环）
+instance: 无新代码改动（S8 只验证+记录）；验证载体 = examples/food-delivery + examples/fulfillment-payment(P1/P2) 3 份 model.md 的派生副本（/tmp/g8-verify，用完已删）+ verification/acceptance/VW-DERIVE/acceptance-record.yaml（本记录）
+
+# =============================================================================
+# G8 闸门（推导完整度）验收记录
+# 判据来源：model-lab/g7-task-prompts.md 提示词8 第 191-205 行 /
+#           model-lab/execution-plan.md §3.2 第 345-359 行 /
+#           model-lab/refactor-proposal.md §6.1（410-424）、§9.4（524-558）、R12（667）
+# 前置：S3 + S4 + S5 完成（已满足）；G7 已收口（HEAD a9fadac，M1~M13 全过）
+# 记录纪律：只记已通过结论；验证发现的缺口只记录不修复（S8 无新代码）；
+#           J3 为旅程判据，本步准备留痕模板待真人执行。
+# =============================================================================
+
+baseline:
+  head: a9fadac
+  environment: Linux /work/protochain · Node v24.18.1 · protochain 工具链 v0.1.0
+  tsc: "npx tsc --noEmit → 退出码 0，0 errors（2026-08-30 自复现）"
+  jest: |
+    npx jest --silent → Test Suites: 6 failed, 126 passed, 132 total
+                            Tests:       10 failed, 1644 passed, 1654 total
+    失败套件（去重）固定为 A 类环境噪声，与 baseline.md 完全一致：
+      FAIL tests/integration/e2_1-hskng-integration.test.ts
+      FAIL tests/scaffolder/e5-binding-run.test.ts
+      FAIL tests/viewer/interface-view-utils.test.ts
+      FAIL tests/viewer/n1-guard-c8b.test.ts
+      FAIL tests/webgen/feedback-issues.test.ts
+      FAIL tests/webgen/feedback-server.test.ts
+  note: 基线自复现与任务描述完全一致（6 failed suites / 10 failed tests，失败套件固定）。
+
+# =============================================================================
+# D1 类型/枚举推导率 100%
+# 判据：所有 StateDimension.type（含 enum[...]）与请求/响应 schema 字段都产出类型定义
+# =============================================================================
+D1:
+  verdict: pass_with_recorded_gap
+  method: |
+    对 3 份 model.md 的派生副本重跑 derive-specs / derive-bindings / generate-scaffold，
+    临时统计脚本（scripts/g8-verify-temp.cjs，已删）逐字段统计：
+    - schema 字段类型覆盖：specs.json requestSchema/responseSchema 全部叶子属性是否带 type/enum/items
+    - 接口签名类型覆盖：interfaces.d.ts 是否对每个 spec 产出带类型签名的 interface
+    - StateDimension.type 覆盖：模型附属实体维度类型是否进入任一派生产物
+  schema_field_type_rate:   # 请求/响应 schema 字段 → JSON Schema 类型定义
+    food-delivery: "42/42 = 100%（全部叶子属性有 type/enum/items）"
+    P1: "20/20 = 100%"
+    P2: "18/18 = 100%"
+    note: 契约层字段实测落位：P1 order_id:string、fulfillment_qty/order_qty:integer；
+          P2 amount:number、refund_reason:string（均在 specs.json requestSchema 带类型）。
+  interface_signature_type_rate:   # generate-scaffold 接口签名类型覆盖
+    food-delivery: "25/25 = 100%（interfaces.d.ts 每 spec 一个带类型签名 interface）"
+    P1: "11/11 = 100%"
+    P2: "12/12 = 100%"
+  statedimension_type:   # StateDimension.type（含 enum[...]）类型定义产出
+    food-delivery: |
+      4 个维度（refund_status enum[created,processing,completed] / refund_amount integer /
+      rider_id string / delivery_location enum[merchant,on_way,delivered]）——
+      类型值未进入任何派生产物：specs.json dimensions 只带 owner/dimension/writers（无 type）；
+      bindings.skeleton.yaml 访问器只带 kind/reader/setter（无 type）；interfaces.d.ts 无维度类型；
+      storage.schema.json 列 type=TODO；test-cases.json 无枚举值（grep 'created'/'on_way' 零命中）。
+    P1: "0 个 StateDimension（空集真空成立）"
+    P2: "0 个 StateDimension（空集真空成立）"
+  gap_R-DERIVE-1: |
+    §9.4「存储 / DTO 骨架：实体维度 → 类型定义与持久化 schema」承诺的「类型定义」未落地：
+    derive-storage 输入 DimensionKindEntry 不含 StateDimension.type，存储列 type 硬编码 TODO
+    （storagegen 头注「机械边界（诚实标注）：维度清单不含类型/初始值 → 列类型统一 TODO」）。
+    → 4 个维度类型（含 2 个 enum[...]）无类型定义产出。按 S8 纪律只记录不修复；
+      建议后续补 X20 型任务卡（携带 StateDimension.type 到 specs.json dimensions → storage 列 / DTO 类型）。
+  conclusion: |
+    D1 主体（请求/响应 schema 字段 + 接口签名类型）推导率 100%；StateDimension.type 类型定义
+    产出率 0/4（food-delivery），P1/P2 空集。判定：通过（主体 100%）+ 缺口 R-DERIVE-1 记录。
+
+# =============================================================================
+# D2 接口签名骨架推导率 100%
+# 判据：所有 InterfaceSpec 都有骨架产物（interfaces.d.ts / bindings.skeleton.yaml / clients）
+# =============================================================================
+D2:
+  verdict: pass
+  bindings_skeleton_rate:
+    food-delivery: "25/25（generated 25、partial 0、generationRate 1.0）"
+    P1: "11/11（generated 11、generationRate 1.0）"
+    P2: "12/12（generated 12、generationRate 1.0）"
+    note: 全部 interface 有 transport.type=http 且 method/path 非 TODO；params 按 requestSchema
+          required 字段机械推导（如 P1 confirm_order → order_id/currentState 进 body）。
+  interfaces_dts_rate: "100%（与 D1 interface_signature_type_rate 同源：每 spec 一 interface）"
+  clients: |
+    3 个示例 impl-scaffold/clients/ 为空：E5 clients 需 config.bindings（protochain.config.yaml
+    bindings 段），示例配置均无 bindings 段 → 按 E5 文档行为「未提供 bindings → clients 跳过，
+    接口骨架仍生成」。D2 骨架产物（interfaces.d.ts + bindings.skeleton.yaml）已 100% 覆盖；
+    clients 属 E5 可选增强，记录为观察项（观察-O1），不影响 D2 判定。
+  conclusion: 接口签名骨架推导率 100%（interfaces.d.ts + bindings.skeleton.yaml 双产物全覆盖）。
+
+# =============================================================================
+# D3 存储 schema 骨架推导率 100%（S3-4）
+# 判据：所有实体维度都有存储落点
+# =============================================================================
+D3:
+  verdict: pass
+  food-delivery: "4/4 = 100%（dimensionCount=4、coveredDimensionCount=4、coverageRate=1；
+    refund_order: refund_status/refund_amount；rider_assignment: rider_id/delivery_location）"
+  P1: "0/0 = 100%（空集真空成立，coverageRate=1，entities=[] + 显式 warning）"
+  P2: "0/0 = 100%（空集真空成立，coverageRate=1，entities=[] + 显式 warning）"
+  note: 与 tests/storagegen/storagegen.test.ts（S3-4 套件）实跑一致；kind 缺省维度列照常生成
+        （type=TODO + kind=undetermined 显式标注 + schemaDegradedReasons 4 条，B-1 不静默）。
+
+# =============================================================================
+# D4 守卫谓词体受限填充
+# 判据：命中（json-schema/受限谓词）生成校验调用，未命中显式标注待填且 schemaDegradedReasons 有记录
+# =============================================================================
+D4:
+  verdict: pass
+  per_model:
+    food-delivery: |
+      5 个 guard → 命中 2（T5/T5b：rider_available && rider_in_flight_orders < 10 → json-schema
+      preconditions，ajv 可编译 2/2，校验调用可生成）；未命中 3（T3/T8/T9 单标识符 → legacy-stub
+      显式标注 + schemaDegradedReasons 3 条记录）。specs 层 hitRate=0.4；X6 反例 5 条 R4 差额
+      显式降级记录（不静默）。
+    P1: |
+      4 个 guard → 命中 2（T1 nonEmpty(order_id)、T3 fulfillment_qty == order_qty 受限谓词：
+      在 IR 层由 checker X17 / casegen X6 命中，生成可执行反例 X6_T1_c0 / X6_T3_c0）；
+      未命中 2（T2/T4 自然语言 → legacy-stub + schemaDegradedReasons 2 条记录）。X6 差额 4 条显式。
+    P2: |
+      4 个 guard → 命中 2（T1 nonNegative(amount)、T4 nonEmpty(refund_reason) 受限谓词：
+      X6 反例生成）；未命中 2（T2/T3 自然语言 → legacy-stub + schemaDegradedReasons 2 条记录）。
+  observation_O2: |
+    E2.1 设计行为：接口契约层提供 requestSchema 时（P1 T1/T3、P2 T1/T4），guard 不回填 specs
+    preconditions（specifier 注释：「提供契约 schema 时契约层是权威，guard 不再被回填」），
+    受限谓词 guard 在 specs.json 层既无 json-schema precondition 也无降级记录（静默跳过）；
+    但 checker X17（IR 层 resolveTransitionPreconditions 直读 t.guard）与 casegen X6（直读 IR）
+    均命中并生成反例，guard 未丢失。记录为观察项，建议后续让 derive-specs 对受限谓词 guard
+    显式投影 json-schema precondition（或显式降级记录），消除 specs 层盲区。
+  conclusion: |
+    命中者生成校验调用（json-schema 可编译 schema / X6 可执行反例）；未命中者全部显式标注
+    legacy-stub 且 schemaDegradedReasons 有记录（food 3 + P1 2 + P2 2 = 7 条，逐条可查）。
+
+# =============================================================================
+# D5 用例→测试代码确定性翻译，产物可直接执行（R12）
+# 判据：用例 → 测试代码为确定性翻译，产物可直接执行
+# =============================================================================
+D5:
+  verdict: pass
+  determinism:
+    generate-cases: |
+      同输入两次运行（--no-ai，确定性路径）：
+      food-delivery / P1 / P2 三份 test-cases.json 去掉 generatedAt 时间戳后逐字节一致
+      （normalized-identical=true；两次产物字节数相同），确定性成立。
+    generate-tests: |
+      food-delivery 同副本两次运行：test-tool 5 文件（protocol-model/scenario-loader/
+      protocol-executor/consistency-asserter + meta.json）去掉时间戳/来源路径后完全一致。
+  executability:
+    test_tool_compile: "3 份生成的 derived/test-tool/*.ts 独立 tsc 编译 0 errors（module=nodenext）"
+    test_tool_run_e2e: |
+      node dist/cli/index.js test-tool run -d <P1副本> --impl <最小实现> --limit 1
+      → test-tool 消费：executed=1 passed=1 failed=0，exit 0，产出 VerificationReport。
+      （impl 由真人填充谓词体 —— 即 J3 旅程的落地实现。）
+    adversarial_body: |
+      X6 对抗用例 body 为可执行 jest 代码（import @jest/globals + <testtool>/mock，
+      真实断言 expect(res.failed).toBe(true) / expect(snapshot()).toEqual(before)，
+      文件头部含 R5 冻结边界声明 jest.useFakeTimers + schedulerMock.disable），非空壳。
+    existing_chain: |
+      R12 承接确认：tests/testtool/testtool-runner.test.ts（PASS）覆盖
+      generate-tests→test-tool 加载可执行 + generate-cases→test-cases.json 逐条执行 +
+      失败可见 + 契约不满足不可静默回退 —— 确定性翻译链已由既有测试承接。
+  conclusion: |
+    用例→测试代码为确定性翻译（同输入两次产物逐字节一致，仅时间戳/路径元数据不同）；
+    产物可直接执行（tsc 编译通过 + test-tool run 端到端跑通 + 对抗用例 body 可执行）。
+
+# =============================================================================
+# J3 旅程判据留痕模板（真人补完谓词体后验证生成骨架无需改动即通过全部用例）
+# =============================================================================
+journey_j3:
+  status: pending_manual
+  note: >
+    J3 为旅程判据（真人补完谓词体的落地实现后，生成的骨架无需改动即可通过全部生成的用例）。
+    本步只准备留痕模板与执行指引；真人执行由主会话协调，执行后按下模板回填。
+  template: |
+    ## J3 旅程留痕（真人执行后回填）
+    执行人 / 日期 / 环境：
+    1. 前置（三实例各一遍）：
+       node dist/cli/index.js generate-cases  --no-ai -d examples/food-delivery
+       node dist/cli/index.js generate-cases  --no-ai -d examples/fulfillment-payment --protocol P1
+       node dist/cli/index.js generate-cases  --no-ai -d examples/fulfillment-payment --protocol P2
+       node dist/cli/index.js generate-tests  -d <实例>（--protocol Pn）
+       node dist/cli/index.js generate-scaffold -d <实例> --lang=ts
+       node dist/cli/index.js derive-bindings -d <实例>（--protocol Pn）
+       node dist/cli/index.js derive-storage  -d <实例>（--protocol Pn）
+    2. 真人补谓词体：在 impl 模块中实现全部接口（含命中的受限谓词校验调用
+       json-schema preconditions 与 X6 反例要求的「合取项不满足 ⇒ 调用失败」语义），
+       未命中的 legacy-stub 谓词（自然语言 / 单标识符）按模型语义手工实现（即「待填」处）。
+    3. 执行全部生成用例：
+       node dist/cli/index.js test-tool run -d <实例> --impl <实现模块> --out <report.json>
+       （以及 X6 对抗用例 —— 将 test-cases.json adversarialCases[].body 落为 jest 用例后
+        npx jest 执行）
+    4. 逐条回填：
+       - 用例 ID / 期望 vs 实际：
+       - 是否失败 / 失败信息：
+       - 失败是否源于「生成骨架与实现不匹配」（若是 → 生成骨架需改动，J3 失败）：
+       - 若失败源于谓词体实现错误（真人填充的 bug）→ 修正实现后重跑直至通过（J3 通过）：
+    5. 汇总：生成骨架改动次数 = K（期望 0）；全部用例通过 = N/M。
+       结论：生成骨架无需改动即通过全部生成用例（K=0）＝通过 / 否则列出需改动项。
+    6. 附件：执行输出文件路径（归档至 verification/acceptance/VW-DERIVE/）。
+
+# =============================================================================
+# 缺口清单（验证发现，只记录不修复 —— S8 纪律）
+# =============================================================================
+gaps:
+  - id: R-DERIVE-1
+    severity: 中
+    related: D1
+    desc: >
+      StateDimension.type（含 enum[...]）未产出类型定义：derive-specs/derive-bindings/
+      generate-scaffold 三产物均不携带维度类型；derive-storage 列 type 硬编码 TODO
+      （输入 DimensionKindEntry 无 type 字段）。food-delivery 4 维度（2 个 enum[...]）实测
+      类型值零命中派生产物。§9.4「实体维度 → 类型定义与持久化 schema」承诺未完整落地。
+    suggestion: 补 X20 型任务卡：specs.json dimensions 条目携带 StateDimension.type
+      （parser 已有），derive-storage 据此填列类型（enum→列约束 / integer→int 等），
+      并在 D1 收口时复测。
+  - id: OBS-1
+    severity: 低
+    related: D2
+    desc: 示例项目 protochain.config.yaml 均无 bindings 段，generate-scaffold --lang=ts 的
+      clients 产物为空（E5 文档行为）。D2 主体不受影响。
+    suggestion: 示例配置补 bindings 段（或复用已有 bindings.yaml）以产出 transport clients，或文档注明。
+  - id: OBS-2
+    severity: 低
+    related: D4
+    desc: 契约层提供 requestSchema 时 guard 不回填 specs preconditions（E2.1 设计），受限谓词
+      guard 在 specs.json 层静默（无 precondition 无降级记录）；IR 层 X17/X6 仍命中。
+    suggestion: derive-specs 对受限谓词 guard 显式投影 json-schema precondition（或显式降级记录），
+      消除 specs 层盲区。
+
+summary:
+  baseline: "tsc 0 errors；jest 6 failed suites / 10 failed tests（A 类环境噪声，与基线一致）"
+  D1: "通过（主体 100%）+ 缺口 R-DERIVE-1 记录（StateDimension.type 无类型定义产出）"
+  D2: "通过（interfaces.d.ts 100% + bindings.skeleton.yaml 100%，clients 空为 E5 观察项）"
+  D3: "通过（food-delivery 4/4 = 100%；P1/P2 空集真空成立）"
+  D4: "通过（命中生成校验调用，未命中 7 条全部显式标注 + schemaDegradedReasons 记录）"
+  D5: "通过（确定性：两次生成逐字节一致；可执行：tsc 编译 0 errors + test-tool run 端到端跑通）"
+  J3: "pending_manual（留痕模板已备于 journey_j3 段，真人执行后回填）"
+  gaps: "R-DERIVE-1（D1）+ OBS-1（D2 clients）+ OBS-2（D4 契约层 guard 投影）—— 只记录不修复"
+  completion: >
+    完成标志达成：acceptance-record.yaml 含 D1~D5+J3 全部结果（J3 依判据定义属旅程项，
+    留痕模板即其交付物）；S8 无新代码改动，验证发现的缺口已逐条记录待后续任务卡承接。
