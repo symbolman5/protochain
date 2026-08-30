@@ -1,0 +1,81 @@
+item: VW-VIEWER
+date: 2026-08-30
+executor: protochain viewer 重做（V1~V7，§11 落地）
+instance: viewer/{protocol,component,cases}-panel.js + webgen 数据层扩展 + examples/anonymous-saas 范式转换建模
+
+# =============================================================================
+# §11 viewer 重做收口记录
+# 依据：model-lab/refactor-proposal.md §11（设计采纳、执行单立方向）
+# 数据源：G7（S1~S6）+ V1（关系段）+ V2（匿名 SaaS 建模）产物
+# =============================================================================
+
+# ---- 提交链（V1~V6，独立提交可回滚）----
+commits:
+  V1: 8fc4b02 关系扩展段（R-KIND-12~15）
+  V2: 4aa8b69 匿名 SaaS 范式转换建模（model.js → model.md）
+  V3: 328837c WebDataJson 数据层扩展（6 字段投影）
+  V4: 3fa039c 协议层视图（实体-维度卡片/交叉面板/摘要条/关系图）
+  V5: 5a217ff 组件层视图（三张映射表/架构拓扑/双向跳转）
+  V6: 78dea7a 用例视图（路径/对抗用例/source 指回联动）
+
+# ---- 机械验证（V7-1）----
+mechanical:
+  tsc:
+    verdict: pass
+    evidence: "npx tsc --noEmit = 0 errors"
+  jest:
+    verdict: pass
+    evidence: |
+      Test Suites: 6 failed, 130 passed, 136 total
+      Tests:       10 failed, 1695 passed, 1705 total
+      失败套件与基线完全一致（e2_1-hskng-integration / e5-binding-run /
+      viewer/interface-view-utils / viewer/n1-guard-c8b / feedback-issues /
+      feedback-server，全 A 类环境噪声），零新增失败。
+  render_tests:
+    verdict: pass
+    evidence: "tests/viewer/{protocol-panel,component-panel,cases-panel}.test.ts
+      + tests/webgen/webgen-g7-data-projection.test.ts 全过（V4-3~5 / V5-3~5 / V6-3~5）"
+
+# ---- 展示数据实测（examples/anonymous-saas/web/data.json）----
+view_data:
+  protocol_layer:
+    dimensions: 17 条（全部 kind 断言：declared/observed，含 writer 集合）
+    invariants: 11 条（timing 推导：4 always / 7 eventually_within，bound 30000~1209600000ms）
+    modelRelations: 12 条（五种关系 from/to/type/constraint/onGone）
+    cross_entity_ops: 12 个（affectsDimensions 跨 ≥2 owner，交叉表显眼标注）
+  component_layer:
+    interface_implementations: 24（control-plane 18 / data-plane 6）
+    dimension_storage: 17（10 张表）
+    component_transfers: 2（control-plane→data-plane 推送策略副本 async / 反向事件 async）
+  cases_layer:
+    adversarialCases: 27（observed-write 7 / convergence 11 / credential 9）
+    paths: 55
+
+# ---- §11.4 旅程判据（真人 30 秒验证，pending 留痕模板）----
+journey:
+  status: pending_manual
+  template: |
+    ## §11.4 旅程留痕（真人执行后回填）
+    执行人 / 日期 / 环境：
+    打开方式：
+      a) 浏览器端 viewer：http://localhost:8080/viewer/index.html
+         → 拖拽 examples/anonymous-saas/web/data.json（增强数据）+ web/ 目录（项目级）
+      b) 静态站点：node dist/cli/index.js derive-web -d examples/anonymous-saas（完整 build 后）
+    验证点（30 秒内能指出）：
+      1. 某条不变量（如 INV-1）由哪个组件的哪个接口守护？
+         → 协议层交叉面板点 INV-1 → 操作行高亮 → 组件层查 interfaceImplementations
+      2. 落在哪个存储？→ 维度→存储表（如 访问策略 → resources 表）
+      3. 经什么通道传给谁？→ 组件→组件传输表 + 架构拓扑（control-plane→data-plane async）
+      4. 点任意维度能看到引用它的全部 guard 与不变量
+         → 协议层实体-维度卡片点维度 → guard 行 + 不变量列高亮
+    结论：能指出 K / 4 项；失败项列出原因。
+
+# ---- 汇总 ----
+summary:
+  V1~V6: 全部完成，独立提交，零新增失败
+  mechanical: pass（tsc 0 / jest 6+10 基线一致 / 渲染交互测试全过）
+  journey: pending_manual（§11.4 真人 30 秒验证留痕模板已备）
+  completion: >
+    完成标志达成：§11 两层视图 + 用例视图落地（viewer/protocol|component|cases-panel.js），
+    数据源全部来自 G7+V1+V2 产物（单一权威源派生），acceptance-record 记录即闭环；
+    J 旅程判据按判据二分属旅程项，留痕模板即其交付物。
