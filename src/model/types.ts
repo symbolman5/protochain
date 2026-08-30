@@ -121,6 +121,13 @@ export interface DerivableLayer {
    * - 非 undefined（含空数组）= 已启用（新模型形态）→ 跨实体未声明事务边界硬失败。
    */
   transactionBoundaries?: TransactionBoundaryDef[];
+  /**
+   * G7-S5b（X18 / P1-10）：组件映射段（可选段「组件映射」解析产物，三张映射表）。
+   * - undefined = 段不存在（老模型形态）→ 组件归属层数据源缺失，checker 跳过 R-KIND-10；
+   * - 非 undefined = 已启用（新模型形态）→ checker 做交叉一致性检查（R-KIND-10）：
+   *   映射表出现的 interface/dimension 必须在 IR 存在；IR 未被映射者显式列出（不静默遗漏）。
+   */
+  componentMapping?: ComponentMappingDef;
 }
 
 /**
@@ -418,6 +425,59 @@ export interface TransactionBoundaryDef {
   interface: string;
   /** 事务边界类型：同一事务 / 异步补偿 */
   boundaryType: 'same_transaction' | 'async_compensation';
+  /** 可选说明（人读） */
+  description?: string;
+}
+
+/**
+ * G7-S5b（X18 / P1-10）：组件映射段 —— 三张映射表（组件归属层数据源）。
+ * 只补数据源，不是完整组件建模语言（refactor-proposal.md P1-10 注意）。
+ * 三张表：
+ * - interfaceImplementations：接口 → 实现组件（哪个 service/module 承载哪个 interface）→ 服务划分、部署单元；
+ * - dimensionStorage：实体维度 → 存储（维度落到哪张表 / 哪个字段）→ 存储 schema、对账范围；
+ * - componentTransfers：组件 → 组件传输（谁调谁、什么通道、同步/异步）→ 传输结构、依赖拓扑。
+ */
+export interface ComponentMappingDef {
+  /** 接口 → 实现组件 */
+  interfaceImplementations?: InterfaceImplementationMapping[];
+  /** 实体维度 → 存储 */
+  dimensionStorage?: DimensionStorageMapping[];
+  /** 组件 → 组件传输 */
+  componentTransfers?: ComponentTransferMapping[];
+}
+
+/** 接口 → 实现组件：哪个 service/module 承载哪个 interface */
+export interface InterfaceImplementationMapping {
+  /** 接口 ID：与契约层 contracts[].interface 或转移 action/id 对齐（IR 引用，checker 校验存在性） */
+  interface: string;
+  /** 承载组件（service/module） */
+  component: string;
+  /** 可选说明（人读） */
+  description?: string;
+}
+
+/** 实体维度 → 存储：维度落到哪张表 / 哪个字段 */
+export interface DimensionStorageMapping {
+  /** 维度名：states[].dimensions[].name 或 subsidiaryEntities[].stateSpace.dimensions[].name（IR 引用，checker 校验存在性） */
+  dimension: string;
+  /** 落到的存储表 */
+  table: string;
+  /** 落到的字段（可选；缺省 = 维度与字段同名） */
+  field?: string;
+  /** 可选说明（人读） */
+  description?: string;
+}
+
+/** 组件 → 组件传输：谁调谁、什么通道、同步/异步 */
+export interface ComponentTransferMapping {
+  /** 调用方组件 */
+  from: string;
+  /** 被调方组件 */
+  to: string;
+  /** 传输通道（如 http / grpc / event / nsq） */
+  channel: string;
+  /** 同步 / 异步 */
+  mode: 'sync' | 'async';
   /** 可选说明（人读） */
   description?: string;
 }

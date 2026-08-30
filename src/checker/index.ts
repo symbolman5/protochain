@@ -109,8 +109,11 @@ export function checkCompleteness(
   //   - R-KIND-7（X8）：未声明状态变更（affectsDimensions 为空）⇒ ③候选 → 告警 + 留痕
   //   - R-KIND-8（X9）：跨 ≥2 实体未声明事务边界 → 新模型硬失败 / 老模型告警（截止 2026-09-30）
   //   - R-KIND-9（X17）：guard 可执行化覆盖率统计 + 未命中显式降级 → 告警
-  //   R-KIND-1~3 与 R-KIND-8（新模型口径）为 error 级（机械 passed=false）；
-  //   R-KIND-4~7、R-KIND-8（老模型口径）、R-KIND-9 为 warning（不阻断）。
+  //   - R-KIND-10（X18）：组件映射段交叉一致 —— 映射表出现的 interface/dimension
+  //     必须在 IR 存在（悬空引用 → 硬失败）；IR 未被映射者显式列出（不静默遗漏）→ 告警
+  //   R-KIND-1~3 与 R-KIND-8（新模型口径）、R-KIND-10（引用悬空侧）为 error 级
+  //   （机械 passed=false）；R-KIND-4~7、R-KIND-8（老模型口径）、R-KIND-9、
+  //   R-KIND-10（未映射列出侧）为 warning（不阻断）。
   // ----------------------------------------------------------------------
   checkKindRules(model, referenceIssues);
 
@@ -1669,7 +1672,11 @@ export {
   ruleRKind7NoStateChangeCandidate,
   ruleRKind8CrossEntityNeedsTransactionBoundary,
   ruleRKind9GuardExecutableCoverage,
+  ruleRKind10ComponentMappingConsistency,
   computeGuardCoverage,
   buildDimensionOwnerMap,
+  collectInterfaceUniverse,
+  collectDimensionUniverse,
+  flattenComponentMapping,
   TRANSACTION_BOUNDARY_MIGRATION_DEADLINE,
 } from './kind-rules.js';

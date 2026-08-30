@@ -47,6 +47,10 @@ import type {
   SubsidiaryEntityDef,
   GuardTranslationDef,
   TransactionBoundaryDef,
+  ComponentMappingDef,
+  InterfaceImplementationMapping,
+  DimensionStorageMapping,
+  ComponentTransferMapping,
   AttributeEffect,
   ErrorResponseDef,
   RelationAssertion,
@@ -400,6 +404,7 @@ function parseDerivableLayer(
   const subsidiaryEntities = parseSubsidiaryEntities(sections);
   const guardTranslations = parseGuardTranslations(sections);
   const transactionBoundaries = parseTransactionBoundaries(sections);
+  const componentMapping = parseComponentMapping(sections);
 
   // 推断初始状态与终态
   const initialStateId = states.find((s) => s.type === 'initial')?.id;
@@ -427,6 +432,7 @@ function parseDerivableLayer(
       guardTranslations.length > 0 ? guardTranslations : undefined,
     transactionBoundaries:
       transactionBoundaries !== undefined ? transactionBoundaries : undefined,
+    componentMapping: componentMapping !== undefined ? componentMapping : undefined,
   };
 
   // 契约层（可选，仅校验用）
@@ -963,6 +969,84 @@ function parseTransactionBoundaries(sections: Section[]): TransactionBoundaryDef
       description: optionalString(r, 'description'),
     };
   });
+}
+
+/**
+ * G7-S5b（X18 / P1-10）：组件映射段 —— YAML 对象，含三张映射表
+ * （interfaceImplementations 接口→组件 / dimensionStorage 维度→存储 /
+ * componentTransfers 组件→组件传输）。薄到三张映射表，不发明复杂 DSL
+ * （refactor-proposal.md P1-10）。
+ *
+ * 三态（与 parseTransactionBoundaries 同款，X18 沿用 S5a 模式）：
+ * - 段不存在 → undefined（老模型形态：组件归属层数据源缺失，checker 跳过 R-KIND-10）；
+ * - 段存在 → ComponentMappingDef（新模型形态：checker 做交叉一致性检查 R-KIND-10）。
+ */
+function parseComponentMapping(sections: Section[]): ComponentMappingDef | undefined {
+  const detection = detectExtensionSection(sections, ['组件映射', 'componentmapping'], '组件映射');
+  if (!detection.enabled) return undefined;
+  const yaml = detection.yaml;
+  if (yaml === null || yaml === undefined) {
+    return { interfaceImplementations: [], dimensionStorage: [], componentTransfers: [] };
+  }
+  const r = asRecord(yaml, '组件映射');
+
+  // 表1：接口 → 实现组件（哪个 service/module 承载哪个 interface）
+  const interfaceImplementations = asRecordArray(
+    r.interfaceImplementations,
+    '组件映射.interfaceImplementations'
+  ).map((item, idx) => {
+    const path = `组件映射.interfaceImplementations[${idx}]`;
+    const mapping: InterfaceImplementationMapping = {
+      interface: requireString(item, 'interface', path),
+      component: requireString(item, 'component', path),
+    };
+    const description = optionalString(item, 'description');
+    if (description !== undefined) mapping.description = description;
+    return mapping;
+  });
+
+  // 表2：实体维度 → 存储（维度落到哪张表 / 哪个字段）
+  const dimensionStorage = asRecordArray(
+    r.dimensionStorage,
+    '组件映射.dimensionStorage'
+  ).map((item, idx) => {
+    const path = `组件映射.dimensionStorage[${idx}]`;
+    const mapping: DimensionStorageMapping = {
+      dimension: requireString(item, 'dimension', path),
+      table: requireString(item, 'table', path),
+    };
+    const field = optionalString(item, 'field');
+    if (field !== undefined) mapping.field = field;
+    const description = optionalString(item, 'description');
+    if (description !== undefined) mapping.description = description;
+    return mapping;
+  });
+
+  // 表3：组件 → 组件传输（谁调谁、什么通道、同步/异步）
+  const componentTransfers = asRecordArray(
+    r.componentTransfers,
+    '组件映射.componentTransfers'
+  ).map((item, idx) => {
+    const path = `组件映射.componentTransfers[${idx}]`;
+    const mode = requireString(item, 'mode', path);
+    if (mode !== 'sync' && mode !== 'async') {
+      throw new ParseError(
+        `组件映射.componentTransfers[${idx}].mode 必须是 sync 或 async，实际为 ${mode}`,
+        '组件映射'
+      );
+    }
+    const mapping: ComponentTransferMapping = {
+      from: requireString(item, 'from', path),
+      to: requireString(item, 'to', path),
+      channel: requireString(item, 'channel', path),
+      mode,
+    };
+    const description = optionalString(item, 'description');
+    if (description !== undefined) mapping.description = description;
+    return mapping;
+  });
+
+  return { interfaceImplementations, dimensionStorage, componentTransfers };
 }
 
 /**

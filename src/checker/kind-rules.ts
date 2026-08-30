@@ -43,6 +43,7 @@ import type {
   StateDimension,
   SchemaExpression,
   CheckIssue,
+  ComponentMappingDef,
 } from '../model/types.js';
 import type { DimensionKind, DimensionKindSource } from '../model/dimension-kind.js';
 import { tryParseGuardSchema } from '../specifier/schema-builder.js';
@@ -61,7 +62,8 @@ export type KindRuleId =
   | 'R-KIND-6'
   | 'R-KIND-7'
   | 'R-KIND-8'
-  | 'R-KIND-9';
+  | 'R-KIND-9'
+  | 'R-KIND-10';
 
 export interface KindRuleContext {
   /** 当前模型 */
@@ -722,6 +724,163 @@ export const ruleRKind9GuardExecutableCoverage: KindRule = {
 };
 
 // ---------------------------------------------------------------------------
+// R-KIND-10（X18 / P1-10）：组件映射段交叉一致性
+// ---------------------------------------------------------------------------
+//
+// 触发条件：模型已启用组件映射段（derivable.componentMapping !== undefined，新模型形态）。
+// 老模型（段不存在 → undefined）→ 整段零输出（老模型零回归）。
+//
+// 两个方向（机械验收 S5-5）：
+// - A（error，硬失败）：映射表出现的 interface / dimension 必须在 IR 中存在。
+//   - interfaceImplementations[].interface ∈ 接口命名空间（transitions[].action ∪ transitions[].id ∪ contracts[].interface）；
+//   - dimensionStorage[].dimension ∈ 维度命名空间（states[].dimensions[].name ∪
+//     subsidiaryEntities[].stateSpace.dimensions[].name）。
+//   引用悬空 = 服务划分 / 存储 schema 推导建立在不存在对象上，与 checkCrossReferences
+//   引用闭合口径一致（error 级）。
+// - B（warning，不阻断）：IR 中未被映射者显式列出（不静默遗漏，进入报告输出）。
+//   段已启用但仍有接口 / 维度未进映射表 → 一条汇总 warning 逐一列出。
+
+/** 收集 IR 接口命名空间：transitions[].action ∪ transitions[].id ∪ contracts[].interface */
+export function collectInterfaceUniverse(model: SourceProtocolModel): Set<string> {
+  const names = new Set<string>();
+  for (const t of model.derivable.transitions ?? []) {
+    if (t.id) names.add(t.id);
+    if (t.action) names.add(t.action);
+  }
+  for (const c of model.contractInput?.contracts ?? []) {
+    if (c.interface) names.add(c.interface);
+  }
+  return names;
+}
+
+/** 收集 IR 维度命名空间：states[].dimensions[].name ∪ subsidiaryEntities[].stateSpace.dimensions[].name */
+export function collectDimensionUniverse(model: SourceProtocolModel): Set<string> {
+  const names = new Set<string>();
+  for (const s of model.derivable.states ?? []) {
+    for (const d of s.dimensions ?? []) {
+      if (d.name) names.add(d.name);
+    }
+  }
+  for (const ent of model.derivable.subsidiaryEntities ?? []) {
+    for (const d of ent.stateSpace.dimensions ?? []) {
+      if (d.name) names.add(d.name);
+    }
+  }
+  return names;
+}
+
+/** 组件映射的平铺条目视图（便于 rule 内部遍历三张表） */
+export interface ComponentMappingView {
+  mapping: ComponentMappingDef;
+  interfaceRows: Array<{ interface: string; component: string }>;
+  dimensionRows: Array<{ dimension: string; table: string }>;
+  transferRows: Array<{ from: string; to: string; channel: string; mode: string }>;
+}
+
+export function flattenComponentMapping(mapping: ComponentMappingDef): ComponentMappingView {
+  return {
+    mapping,
+    interfaceRows: (mapping.interfaceImplementations ?? []).map((m) => ({
+      interface: m.interface,
+      component: m.component,
+    })),
+    dimensionRows: (mapping.dimensionStorage ?? []).map((m) => ({
+      dimension: m.dimension,
+      table: m.table,
+    })),
+    transferRows: (mapping.componentTransfers ?? []).map((m) => ({
+      from: m.from,
+      to: m.to,
+      channel: m.channel,
+      mode: m.mode,
+    })),
+  };
+}
+
+export const ruleRKind10ComponentMappingConsistency: KindRule = {
+  ruleId: 'R-KIND-10',
+  description:
+    '组件映射段交叉一致：映射表出现的 interface/dimension 必须在 IR 存在（error）；IR 未被映射者显式列出不静默（warning）（X18，P1-10）',
+  check(ctx: KindRuleContext): CheckIssue[] {
+    const issues: CheckIssue[] = [];
+    const mapping = ctx.model.derivable.componentMapping;
+    // 老模型形态（组件映射段不存在 → undefined）：零输出（老模型零回归）
+    if (mapping === undefined) return issues;
+
+    const view = flattenComponentMapping(mapping);
+    const interfaceUniverse = collectInterfaceUniverse(ctx.model);
+    const dimensionUniverse = collectDimensionUniverse(ctx.model);
+
+    // ── A：映射表出现的 interface / dimension 必须在 IR 存在（引用闭合，error）──
+    for (let i = 0; i < view.interfaceRows.length; i++) {
+      const row = view.interfaceRows[i];
+      if (!interfaceUniverse.has(row.interface)) {
+        issues.push(
+          kindError(
+            `组件映射表 interfaceImplementations[${i}] 引用的接口 "${row.interface}" 在 IR 中不存在` +
+              `（接口命名空间 = 转移 action/id ∪ 契约 contracts[].interface）；` +
+              `服务划分推导不能建立在悬空接口上（X18，P1-10）[R-KIND-10/X18]`,
+            row.interface,
+            `derivable.componentMapping.interfaceImplementations[${i}].interface`
+          )
+        );
+      }
+    }
+    for (let i = 0; i < view.dimensionRows.length; i++) {
+      const row = view.dimensionRows[i];
+      if (!dimensionUniverse.has(row.dimension)) {
+        issues.push(
+          kindError(
+            `组件映射表 dimensionStorage[${i}] 引用的维度 "${row.dimension}" 在 IR 中不存在` +
+              `（维度命名空间 = 状态/附属实体声明的 dimensions[].name）；` +
+              `存储 schema 推导不能建立在悬空维度上（X18，P1-10）[R-KIND-10/X18]`,
+            row.dimension,
+            `derivable.componentMapping.dimensionStorage[${i}].dimension`
+          )
+        );
+      }
+    }
+
+    // ── B：IR 中未被映射者显式列出（不静默遗漏，进入报告输出，warning）──
+    // 口径（与 R-KIND-8「已声明」同宽）：同一接口的 action/id 别名任一被映射即视为已覆盖
+    // （如映射 place_order，则其对应 transition 的 id T1 不重复报未映射）。
+    const mappedInterfaces = new Set(view.interfaceRows.map((r) => r.interface));
+    const coveredInterfaces = new Set(mappedInterfaces);
+    for (const t of ctx.model.derivable.transitions ?? []) {
+      if (mappedInterfaces.has(t.action) || mappedInterfaces.has(t.id)) {
+        if (t.action) coveredInterfaces.add(t.action);
+        if (t.id) coveredInterfaces.add(t.id);
+      }
+    }
+    const mappedDimensions = new Set(view.dimensionRows.map((r) => r.dimension));
+    const unmappedInterfaces = Array.from(interfaceUniverse)
+      .filter((n) => !coveredInterfaces.has(n))
+      .sort();
+    const unmappedDimensions = Array.from(dimensionUniverse)
+      .filter((n) => !mappedDimensions.has(n))
+      .sort();
+    if (unmappedInterfaces.length > 0 || unmappedDimensions.length > 0) {
+      const parts: string[] = [];
+      if (unmappedInterfaces.length > 0) {
+        parts.push(`未映射接口：${unmappedInterfaces.join(', ')}`);
+      }
+      if (unmappedDimensions.length > 0) {
+        parts.push(`未映射维度：${unmappedDimensions.join(', ')}`);
+      }
+      issues.push(
+        kindWarning(
+          `组件映射段已启用但 IR 仍有对象未进映射表（不静默遗漏，请审视是否补齐）：${parts.join('；')}` +
+            `（X18，P1-10：组件映射是 viewer 组件视图与代码推导的数据源，缺失者推导不出服务划分/存储 schema）[R-KIND-10/X18]`,
+          'derivable.componentMapping'
+        )
+      );
+    }
+
+    return issues;
+  },
+};
+
+// ---------------------------------------------------------------------------
 // 规则注册表（src/checker/index.ts 按此顺序调用）
 // ---------------------------------------------------------------------------
 
@@ -735,6 +894,7 @@ export const KIND_RULES: KindRule[] = [
   ruleRKind7NoStateChangeCandidate,
   ruleRKind8CrossEntityNeedsTransactionBoundary,
   ruleRKind9GuardExecutableCoverage,
+  ruleRKind10ComponentMappingConsistency,
 ];
 
 export const KIND_RULE_IDS: KindRuleId[] = KIND_RULES.map((r) => r.ruleId);
