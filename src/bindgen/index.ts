@@ -38,6 +38,11 @@ import {
   envelopeMigrate,
   isSpecsEnvelope,
 } from '../specifier/envelope.js';
+import type {
+  DimensionKind,
+  DimensionKindSource,
+  DimensionKindEntry,
+} from '../model/dimension-kind.js';
 
 // ============================================================================
 // 类型定义
@@ -111,7 +116,39 @@ export type SkeletonBindings = BindingConfig & {
   stats: SkeletonStats;
   /** 警告（生成过程中非致命问题） */
   warnings: string[];
+  /**
+   * X4/X19（G7/S3，P0-1）：维度访问器骨架 —— observed 维度不生成 setter 只生成 reader，
+   * 从类型层面落实「角色不能凭意图制造事实」。仅在 specs.json 带出非空 dimensions 时产出
+   * （无 kind 标注的老模型不产出，降级路径不改行为，S3-5）。
+   */
+  dimensions?: DimensionAccessorEntry[];
 };
+
+/**
+ * 单维度访问器条目（写进 bindings.skeleton.yaml 的 dimensions 段）。
+ *
+ * 生成规则（机械，逐维度）：
+ * - kind='declared' → reader + setter 都生成（角色可凭意图写入）；
+ * - kind='observed' → 只生成 reader，不生成 setter（角色不能凭意图制造事实）；
+ * - kind 缺省（W(dim)=∅，dimension-kind-undetermined）→ 只生成 reader，
+ *   序列化 kind='undetermined' 显式标注 + 记降级 warning（B-1 分流，不得静默）。
+ */
+export interface DimensionAccessorEntry {
+  /** 维度所属上下文标识（状态 ID 或附属实体 ID） */
+  owner: string;
+  /** 维度名 */
+  dimension: string;
+  /** kind：declared / observed / undetermined（kind 缺省时序列化为 undetermined，显式降级） */
+  kind: DimensionKind | 'undetermined';
+  /** 来源：derived / asserted；kind=undetermined 时缺省 */
+  kindSource?: DimensionKindSource;
+  /** W(dim)：写入该维度的 triggerType 集合（去重排序，specs.json 原样搬运） */
+  writers: string[];
+  /** reader 方法名（恒生成，如 getRefundStatus） */
+  reader: string;
+  /** setter 方法名（仅 kind='declared' 生成，如 setRefundStatus；observed/undetermined 缺省） */
+  setter?: string;
+}
 
 /** derive-bindings 执行结果 */
 export interface DeriveBindingsResult {
@@ -297,6 +334,74 @@ export function deriveStateMap(
 }
 
 // ============================================================================
+// 维度访问器推导（X4/X19，G7/S3，P0-1）
+// ============================================================================
+
+/** snake_case / kebab-case 维度名 → 访问器后缀（PascalCase）；非 ASCII 兜底保首字母大写 */
+function toAccessorSuffix(name: string): string {
+  if (!name) return 'Dimension';
+  const parts = name.split(/[_\-\s]+/).filter((p) => p.length > 0);
+  if (parts.length > 1) {
+    return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+  }
+  const cleaned = name.replace(/[^A-Za-z0-9]/g, '');
+  const base = cleaned.length > 0 ? cleaned : name;
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+/**
+ * 从 specs.json 的维度清单（DimensionKindEntry[]，S1 产物）推导访问器骨架。
+ *
+ * 规则（X4/X19）：observed 维度（含 computed 同口径；本方案无 computed，仅 observed）
+ * 不生成 setter 只生成 reader；declared 维度 reader + setter 都生成；
+ * kind 缺省（dimension-kind-undetermined）→ 只生成 reader + 显式降级 warning（B-1 分流）。
+ *
+ * 纯函数：不写文件；返回条目 + 降级 warning（并入 skeleton.warnings）。
+ */
+export function deriveDimensionAccessors(
+  dimensions: DimensionKindEntry[],
+  schemaDegradedReasons?: string[]
+): { entries: DimensionAccessorEntry[]; warnings: string[] } {
+  const warnings: string[] = [];
+
+  // 把 specs.json 已记录的降级原因并入骨架警告（显式，不得静默）
+  if (schemaDegradedReasons && schemaDegradedReasons.length > 0) {
+    warnings.push(...schemaDegradedReasons);
+  }
+
+  const entries: DimensionAccessorEntry[] = [];
+  for (const d of dimensions) {
+    const suffix = toAccessorSuffix(d.dimension);
+    const reader = `get${suffix}`;
+    const base: DimensionAccessorEntry = {
+      owner: d.owner,
+      dimension: d.dimension,
+      kind: d.kind ?? 'undetermined',
+      writers: d.writers ?? [],
+      reader,
+    };
+    if (d.kindSource) base.kindSource = d.kindSource;
+
+    if (d.kind === 'declared') {
+      // 正向对照（S3-3）：declared 维度仍正常生成 setter（角色可凭意图写入）
+      base.setter = `set${suffix}`;
+    } else if (d.kind === 'observed') {
+      // S3-2：observed 维度不生成 setter，只生成 reader
+      warnings.push(
+        `维度 ${d.dimension}（${d.owner}）kind='observed'，只生成 reader（${reader}），不生成 setter：角色不能凭意图制造事实 [X4/X19]`
+      );
+    } else {
+      // kind 缺省（dimension-kind-undetermined）：显式降级，只生成 reader
+      warnings.push(
+        `维度 ${d.dimension}（${d.owner}）kind 缺省（dimension-kind-undetermined），显式降级（B-1 分流）：按只读处理，只生成 reader（${reader}），不生成 setter，待人工确认 kind 后修正`
+      );
+    }
+    entries.push(base);
+  }
+  return { entries, warnings };
+}
+
+// ============================================================================
 // interface 推导
 // ============================================================================
 
@@ -350,6 +455,10 @@ export function selectDefaultRoleId(model: SourceProtocolModel): string {
  * 输出：SkeletonBindings
  *
  * 不做文件 I/O；纯函数；文件 I/O 在 deriveBindings()（CLI 入口）层做。
+ *
+ * dimensionCtx（可选）：specs.json 的维度清单 + 降级记录（S1 产物）。
+ * - 非空 dimensions → 产出 dimensions 访问器段（X4/X19）；
+ * - 缺省 / 空 → 不产出（老模型降级路径不改行为，S3-5）。
  */
 export function deriveSkeletonBindings(
   model: SourceProtocolModel,
@@ -358,6 +467,10 @@ export function deriveSkeletonBindings(
     sourceEnvelope: boolean;
     sourceMigrated: boolean;
     sourceMigrationWarnings: string[];
+  },
+  dimensionCtx?: {
+    dimensions?: DimensionKindEntry[];
+    schemaDegradedReasons?: string[];
   }
 ): SkeletonBindings {
   const warnings: string[] = [];
@@ -370,6 +483,18 @@ export function deriveSkeletonBindings(
   // E11：从 specs.errorResponses 派生 errorMap 骨架（与 stateMap 同构）
   const { errorMap, warnings: errorMapWarnings } = deriveErrorMap(specs);
   warnings.push(...errorMapWarnings);
+
+  // X4/X19：维度访问器骨架（observed 无 setter；declared 有 setter；undetermined 显式降级）
+  let dimensions: DimensionAccessorEntry[] | undefined;
+  const dims = dimensionCtx?.dimensions;
+  if (dims && dims.length > 0) {
+    const { entries, warnings: dimWarnings } = deriveDimensionAccessors(
+      dims,
+      dimensionCtx?.schemaDegradedReasons
+    );
+    dimensions = entries;
+    warnings.push(...dimWarnings);
+  }
 
   const defaultRoleId = selectDefaultRoleId(model);
   const interfaces: InterfaceBinding[] = [];
@@ -422,6 +547,7 @@ export function deriveSkeletonBindings(
     interfaces,
     stateMap,
     errorMap: Object.keys(errorMap).length > 0 ? errorMap : undefined,
+    dimensions,
     stats,
     warnings,
   };
@@ -459,6 +585,9 @@ export async function deriveBindings(
     sourceMigrated: boolean;
     sourceMigrationWarnings: string[];
   };
+  // X4/X19：specs.json 带出的维度清单 + 降级记录（S1 产物；老格式/裸数组无此字段）
+  let envelopeDimensions: DimensionKindEntry[] | undefined;
+  let envelopeSchemaDegradedReasons: string[] | undefined;
 
   if (isSpecsEnvelope(rawSpecs)) {
     specs = rawSpecs.specs;
@@ -467,6 +596,8 @@ export async function deriveBindings(
       sourceMigrated: rawSpecs.migrated === true,
       sourceMigrationWarnings: rawSpecs.migrationWarnings ?? [],
     };
+    envelopeDimensions = rawSpecs.dimensions;
+    envelopeSchemaDegradedReasons = rawSpecs.schemaDegradedReasons;
   } else if (Array.isArray(rawSpecs)) {
     // 老格式裸数组 → 自动 envelopeMigrate
     const r = envelopeMigrate(rawSpecs, 'unknown');
@@ -482,6 +613,8 @@ export async function deriveBindings(
       sourceMigrated: r.migrated,
       sourceMigrationWarnings: r.warnings,
     };
+    envelopeDimensions = r.envelope.dimensions;
+    envelopeSchemaDegradedReasons = r.envelope.schemaDegradedReasons;
   } else {
     // 不可识别形态（理论上 loadSpecsEnvelope 已抛错；CLI 路径独立再兜底）
     const r = envelopeMigrate(rawSpecs, 'unknown');
@@ -494,7 +627,10 @@ export async function deriveBindings(
   const model = parseModel(rootDir);
 
   // 3. 推导骨架
-  const skeleton = deriveSkeletonBindings(model, specs, envelopeMeta);
+  const skeleton = deriveSkeletonBindings(model, specs, envelopeMeta, {
+    dimensions: envelopeDimensions,
+    schemaDegradedReasons: envelopeSchemaDegradedReasons,
+  });
 
   // 4. 写出骨架（除非已存在 + 未传 force）
   if (existsSync(outputPath) && !options.force) {
@@ -545,6 +681,8 @@ function stringifySkeleton(skeleton: SkeletonBindings): string {
     interfaces: skeleton.interfaces,
     stateMap: skeleton.stateMap,
     errorMap: skeleton.errorMap,
+    // X4/X19：仅 specs.json 带出非空 dimensions 时产出（老模型降级路径不改行为）
+    dimensions: skeleton.dimensions,
     stats: skeleton.stats,
     warnings: skeleton.warnings,
   };

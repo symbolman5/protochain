@@ -95,6 +95,7 @@ import {
   mergeBindings,
 } from '../binder/index.js';
 import { deriveBindings, isSkeletonBindings, SKELETON_MARKER, type SkeletonBindings } from '../bindgen/index.js';
+import { deriveStorage } from '../storagegen/index.js';
 import { deriveWeb, WEB_DATA_SCHEMA_VERSION } from '../webgen/index.js';
 import { startServe } from '../webgen/serve.js';
 import { deriveProjectWeb } from '../webgen/composition.js';
@@ -2012,6 +2013,52 @@ program
       }
       // 验收口径：生成率 ≥ 80%
       process.exit(s.stats.generationRate >= 0.8 ? 0 : 1);
+    } catch (err) {
+      console.error(
+        `错误：${err instanceof Error ? err.message : err}`
+      );
+      process.exit(2);
+    }
+  });
+
+// ==========================================================================
+// derive-storage（G7/S3：实体维度 → 存储 schema 骨架，纯机械）
+// ==========================================================================
+
+program
+  .command('derive-storage')
+  .description('G7/S3：从 specs.json 维度清单 (S1 产物) 机械推导存储 schema 骨架（实体维度 → 持久化 schema，覆盖率 100%）')
+  .option('-d, --dir <目录>', '项目根目录', process.cwd())
+  .option('--specs <路径>', 'specs.json 路径（默认 <dir>/derived/specs.json）')
+  .option('-o, --output <路径>', 'schema 输出路径（默认 <dir>/derived/storage.schema.json）')
+  .option('-f, --force', '覆盖已存在 schema')
+  .action(async (opts) => {
+    const ctx = resolveCtx(opts);
+    const rootDir = ctx.protocolRoot;
+    try {
+      const result = await deriveStorage({
+        rootDir,
+        // 相对路径参数统一相对 rootDir 解析（与 derive-bindings 的 E3-I2 修复同口径）
+        specsPath: opts.specs ? resolveRelative(opts.specs, rootDir) : undefined,
+        outputPath: opts.output ? resolveRelative(opts.output, rootDir) : undefined,
+        force: opts.force,
+      });
+
+      const s = result.schema;
+      console.log('=== derive-storage 存储 schema 骨架报告 ===');
+      console.log(`  源 model.md version: ${s.sourceModelVersion}`);
+      console.log(`  实体维度总数: ${s.dimensionCount}（已覆盖 ${s.coveredDimensionCount}）`);
+      console.log(`  覆盖率: ${(s.coverageRate * 100).toFixed(1)}%（对应 G8 D3）`);
+      console.log(`  实体数: ${s.entities.length}`);
+      for (const e of s.entities) {
+        console.log(`    - ${e.entity}（维度 × ${e.dimensionCount}）：${e.columns.map((c) => c.dimension).join(', ')}`);
+      }
+      console.log(`\n  schema 产物: ${result.schemaPath}`);
+      if (s.warnings.length > 0) {
+        console.log('\n警告：');
+        for (const w of s.warnings) console.log(`  - ${w}`);
+      }
+      process.exit(0);
     } catch (err) {
       console.error(
         `错误：${err instanceof Error ? err.message : err}`
