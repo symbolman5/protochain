@@ -18,6 +18,7 @@
  */
 
 import type { InterfaceSpec } from '../model/types.js';
+import type { DimensionKindEntry } from '../model/dimension-kind.js';
 import { classifySchemaKind } from './schema-builder.js';
 
 /** specs.json 顶层 envelope 的 schemaVersion */
@@ -36,6 +37,13 @@ export interface SpecsEnvelope {
   migrated?: boolean;
   /** 迁移过程产生的人工可读提示（如「接口 IF_SYS_T1 的 precondition 字段无 JSON Schema 降级为 description-only」） */
   migrationWarnings?: string[];
+  /**
+   * X1（P0-1）：维度 kind 判定结果（buildDimensionKinds 机械推导 + parser 人写断言合并）。
+   * 每个维度有 kind 或有降级记录（见 schemaDegradedReasons）。
+   */
+  dimensions?: DimensionKindEntry[];
+  /** X1：维度 kind 推导的显式降级记录（空集维度 → dimension-kind-undetermined） */
+  schemaDegradedReasons?: string[];
   /** 解析致命错误（仅不可识别形态时填，caller 据此决定阻断/降级） */
   parseError?: string;
 }

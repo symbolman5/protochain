@@ -207,6 +207,13 @@ export interface StateDimension {
   initial: string | number | boolean;
   /** 声明该维度在何条件下有意义（与不变量联动） */
   validWhen?: string;
+  /**
+   * X1（P0-1）：维度 kind——declared=角色意图可写；observed=仅事实（system/external）可写。
+   * 缺省 = 未标注，由 buildDimensionKinds 机械推导或走降级（dimension-kind-undetermined）。
+   */
+  kind?: 'declared' | 'observed';
+  /** kind 来源：derived=机械推导（W(dim) 写入方集合）；asserted=人写断言（model.md 显式声明） */
+  kindSource?: 'derived' | 'asserted';
 }
 
 export interface TransitionDef {

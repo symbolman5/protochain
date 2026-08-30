@@ -1003,12 +1003,26 @@ function parseDimensions(yaml: unknown, fieldPath: string): StateDimension[] {
     if (initial === undefined || initial === null) {
       throw new ParseError(`${fieldPath}[${idx}].initial 必填`);
     }
-    return {
+    const dim: StateDimension = {
       name: requireString(r, 'name', `${fieldPath}[${idx}]`),
       type: requireString(r, 'type', `${fieldPath}[${idx}]`),
       initial,
       validWhen: optionalString(r, 'validWhen'),
     };
+    // X1（P0-1）：可选 kind 断言段——人写断言 → kindSource='asserted'；
+    // 缺省 → 不填（老模型零回归），kind 由 buildDimensionKinds 机械推导或走降级。
+    const kindRaw = optionalString(r, 'kind');
+    if (kindRaw !== undefined) {
+      if (kindRaw === 'declared' || kindRaw === 'observed') {
+        dim.kind = kindRaw;
+        dim.kindSource = 'asserted';
+      } else {
+        throw new ParseError(
+          `${fieldPath}[${idx}].kind 必须是 declared / observed，实际为 ${kindRaw}（X1：人写 kind 断言仅支持两值）`
+        );
+      }
+    }
+    return dim;
   });
 }
 

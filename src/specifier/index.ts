@@ -34,6 +34,7 @@ import {
   isIdentifierPredicate,
   invariantToSchemaExpression,
 } from './schema-builder.js';
+import { buildDimensionKinds } from '../model/dimension-kind.js';
 import { translatePredicate } from './predicates.js';
 import {
   envelopeMigrate,
@@ -164,12 +165,20 @@ export function specify(
     }
   }
 
+  // X1（P0-1）：维度 kind 机械推导（+ parser 人写断言合并）。混合写入方 → 硬失败抛错
+  // （dimension-kind-conflict，模型矛盾，不产出 kind）；空集 → 显式降级记录
+  // （dimension-kind-undetermined，走 B-1 分流）。specs.json 据此带出维度 kind。
+  const dimKinds = buildDimensionKinds(model.derivable);
+
   return {
     schemaVersion: SPECS_ENVELOPE_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     sourceModelVersion: model.metadata.version,
     specs,
     migrationWarnings: migrationWarnings.length > 0 ? migrationWarnings : undefined,
+    dimensions: dimKinds.entries,
+    schemaDegradedReasons:
+      dimKinds.schemaDegradedReasons.length > 0 ? dimKinds.schemaDegradedReasons : undefined,
   };
 }
 

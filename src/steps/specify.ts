@@ -124,6 +124,11 @@ function formatSpecSummary(
   const descriptionOnlyCount = specs.filter((s) => s.schemaKind === 'description-only').length;
   const degradedCount = specs.filter((s: InterfaceSpec) => s.degradedAssist).length;
 
+  // X1（P0-1）：维度 kind 统计（每个维度有 kind 或降级记录；降级比例超 30% 告警，B-1）
+  const dims = envelope.dimensions ?? [];
+  const dimWithoutKind = dims.filter((d) => d.kind === undefined).length;
+  const dimRatio = dims.length > 0 ? (dimWithoutKind / dims.length) * 100 : 0;
+
   const lines: string[] = [
     `规格推导：✓ 通过`,
     `  schemaVersion: ${SPECS_ENVELOPE_SCHEMA_VERSION}`,
@@ -132,6 +137,16 @@ function formatSpecSummary(
     `  schema 分类: structured=${structuredCount} legacy-stub=${legacyStubCount} description-only=${descriptionOnlyCount}`,
     `  JSON Schema 自检（ajv）：${validation.passed ? '✓ 全部通过' : '✗ 失败'}（${validation.perSpec.length} 个 schema）`,
   ];
+  if (dims.length > 0) {
+    lines.push(
+      `  维度 kind: ${dims.length - dimWithoutKind}/${dims.length} 有 kind，${dimWithoutKind} 个降级（${dimRatio.toFixed(1)}%，阈值 30%）`
+    );
+    if (dimRatio > 30) {
+      lines.push(
+        `  [warning] 维度 kind 降级比例 ${dimRatio.toFixed(1)}% 超过 30% 阈值（B-1）：${(envelope.schemaDegradedReasons ?? []).join('；')}`
+      );
+    }
+  }
   if (degradedCount > 0) {
     lines.push(`  退化模式 AI 辅助标注: ${degradedCount} 个`);
   }
