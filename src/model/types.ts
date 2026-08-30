@@ -115,6 +115,12 @@ export interface DerivableLayer {
   subsidiaryEntities?: SubsidiaryEntityDef[];
   /** 守卫翻译声明（协议侧权威源）：把自然语言守卫映射为可注入骨架的 TLA+ 片段 */
   guardTranslations?: GuardTranslationDef[];
+  /**
+   * G7-S5a（X9 / P1-5 判据11）：事务边界声明段（可选段「事务边界」解析产物）。
+   * - undefined = 模型未启用该机制（老模型形态）→ 跨实体未声明事务边界走告警（迁移截止日 2026-09-30）；
+   * - 非 undefined（含空数组）= 已启用（新模型形态）→ 跨实体未声明事务边界硬失败。
+   */
+  transactionBoundaries?: TransactionBoundaryDef[];
 }
 
 /**
@@ -393,6 +399,27 @@ export interface SubsidiaryEntityDef {
   cascadeRules: string[];
   stateSpace: { dimensions: StateDimension[] };
   invariants: string[];
+}
+
+/**
+ * G7-S5a（X9 / P1-5 判据11）：事务边界声明 —— model.md 新增可选段「事务边界」。
+ *
+ * 语义：一条接口的 affectsDimensions 跨 ≥2 个实体（object/facet）时，其原子性/
+ * 时间语义必须显式声明事务边界，否则无法判定多实体操作的一致性模型：
+ * - same_transaction：同库事务内原子提交（相关 InvariantDef 可标 always）；
+ * - async_compensation：跨实体异步补偿（相关不变量必须 eventually_within + boundMs，
+ *   且必须存在对应 CompensationContract）。
+ * 未声明 ⇒ 新模型硬失败；老模型（无事务边界段的模型）告警至迁移截止日 2026-09-30（决策 D-2）。
+ */
+export interface TransactionBoundaryDef {
+  /** 声明 ID（如 TX1），协议内唯一 */
+  id: string;
+  /** 覆盖的接口名：与转移 action（或转移 id）对齐 */
+  interface: string;
+  /** 事务边界类型：同一事务 / 异步补偿 */
+  boundaryType: 'same_transaction' | 'async_compensation';
+  /** 可选说明（人读） */
+  description?: string;
 }
 
 /**

@@ -475,10 +475,16 @@ describe('S2-6 老模型零回归（新规则不得对老模型报硬失败，�
     ['examples/fulfillment-payment/P2（演示实例2）', fulfillP2],
   ];
 
+  // 仅限定 S2 交付的 R-KIND-1~4（G7-S5a 新增的 R-KIND-5~9 属 S5 交付，其老模型
+  // 行为由 tests/checker/kind-rules-s5.test.ts 的 S5 老模型零回归用例覆盖：
+  // R-KIND-5/6/8/9 对老模型零输出，R-KIND-7 仅 warning 不阻断 mechanical.passed）。
+  const kindIssuesS2 = (report: ReturnType<typeof checkCompleteness>) =>
+    report.mechanical.referenceIssues.filter((i) => /\[R-KIND-[1-4]\//.test(i.message));
+
   for (const [label, model] of cases) {
     test(`${label}：R-KIND-1~4 零输出（与 S0 一致）`, () => {
       const report = checkCompleteness(model);
-      const issues = kindIssues(report);
+      const issues = kindIssuesS2(report);
       expect(issues).toHaveLength(0);
       // 新规则不得破坏机械层通过状态（无 error 级 R-KIND issue → passed 语义不变）
       expect(issues.filter((i) => i.severity === 'error')).toHaveLength(0);
@@ -497,9 +503,19 @@ describe('S2-6 老模型零回归（新规则不得对老模型报硬失败，�
 // ============================================================================
 
 describe('规则注册表（R-KIND 组，沿用 mcheck/rules.ts 组织方式）', () => {
-  test('注册表含 R-KIND-1~4 且 ID 唯一', () => {
+  test('注册表含 R-KIND-1~9 且 ID 唯一', () => {
     const ids = KIND_RULES.map((r) => r.ruleId);
-    expect(ids).toEqual(['R-KIND-1', 'R-KIND-2', 'R-KIND-3', 'R-KIND-4']);
+    expect(ids).toEqual([
+      'R-KIND-1',
+      'R-KIND-2',
+      'R-KIND-3',
+      'R-KIND-4',
+      'R-KIND-5',
+      'R-KIND-6',
+      'R-KIND-7',
+      'R-KIND-8',
+      'R-KIND-9',
+    ]);
     expect(new Set(ids).size).toBe(ids.length);
   });
 

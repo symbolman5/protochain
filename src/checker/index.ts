@@ -98,13 +98,19 @@ export function checkCompleteness(
   checkTypingCrossValidation(model, referenceIssues, fieldIssues, structuralIssues);
 
   // ----------------------------------------------------------------------
-  // 5f. R-KIND-1~4 维度 kind 机械检查规则组（X2 / M10 / X3 / P1-3 判据10）
+  // 5f. R-KIND-1~9 维度 kind 机械检查规则组（X2 / M10 / X3 / P1-3 判据10 / X7 / X8 / X9 / X17）
   //   规则注册表见 src/checker/kind-rules.ts（沿用 mcheck/rules.ts 组织方式）：
   //   - R-KIND-1（X2）：observed 维度（含人写断言）不得有 role 接口写入 → 硬失败
   //   - R-KIND-2（M10）：W(dim) 混合 / 断言与推导冲突 → 硬失败
   //   - R-KIND-3（X3）：不变量涉及 observed 维度却标 always/缺 boundMs → 硬失败
-  //   - R-KIND-4（X7）：角色无任何接口以它触发 → 告警
-  //   R-KIND-1~3 为 error 级（机械 passed=false）；R-KIND-4 为 warning（不阻断）。
+  //   - R-KIND-4（X7 分支①）：角色无任何接口以它触发 → 告警
+  //   - R-KIND-5（X7 分支②）：无触发接口的完全可控组件 → 建议降级实体 → 告警
+  //   - R-KIND-6（X7 分支③）：非本系统组件且无程序化交互 → 建议移出模型 → 告警
+  //   - R-KIND-7（X8）：未声明状态变更（affectsDimensions 为空）⇒ ③候选 → 告警 + 留痕
+  //   - R-KIND-8（X9）：跨 ≥2 实体未声明事务边界 → 新模型硬失败 / 老模型告警（截止 2026-09-30）
+  //   - R-KIND-9（X17）：guard 可执行化覆盖率统计 + 未命中显式降级 → 告警
+  //   R-KIND-1~3 与 R-KIND-8（新模型口径）为 error 级（机械 passed=false）；
+  //   R-KIND-4~7、R-KIND-8（老模型口径）、R-KIND-9 为 warning（不阻断）。
   // ----------------------------------------------------------------------
   checkKindRules(model, referenceIssues);
 
@@ -1658,4 +1664,12 @@ export {
   ruleRKind2MixedWritersAndAssertionConflict,
   ruleRKind3ObservedInvariantNeedsBoundMs,
   ruleRKind4RoleWithoutTriggerInterface,
+  ruleRKind5ControllableComponentSuggestEntity,
+  ruleRKind6NonSystemComponentSuggestRemove,
+  ruleRKind7NoStateChangeCandidate,
+  ruleRKind8CrossEntityNeedsTransactionBoundary,
+  ruleRKind9GuardExecutableCoverage,
+  computeGuardCoverage,
+  buildDimensionOwnerMap,
+  TRANSACTION_BOUNDARY_MIGRATION_DEADLINE,
 } from './kind-rules.js';

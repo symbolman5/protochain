@@ -1,0 +1,94 @@
+item: VW-KIND
+date: 2026-08-30
+executor: protochain G7-S5a 判据组（X7/X8/X9/X17）实现与机械验收（R-KIND-5~9；S7 将补全旅程判据留痕）
+instance: src/checker/kind-rules.ts 注册表 R-KIND-1~9 + src/model/types.ts TransactionBoundaryDef + src/parser/index.ts 事务边界段解析 + tests/checker/kind-rules-s5.test.ts
+
+# =============================================================================
+# G7-S5a 判据组验收记录（S5-1~S5-4 + S5-6；S5-5 属 S5b/X18 组件映射段，不在本记录）
+# 判据来源：model-lab/g7-task-prompts.md 提示词5 / execution-plan.md §S5 /
+#           refactor-proposal.md P1-3（X7 三分）/ P1-4（X8 三分支）/ P1-5（X9 事务边界）/
+#           P1-9（X17 guard 可执行化）/ §1 决策 D-2（迁移截止日 2026-09-30）
+# 记录纪律：只记已通过结论；失败整改后重跑不残留未过记录；本记录为 S5a 初始骨架，
+#           旅程/人工复核项（X8 ②③之分 B-2 留痕）由 S7 补全
+# =============================================================================
+
+# ---- 决策 D-2（refactor-proposal.md §1）：X9 老模型迁移截止日 ----
+migration_deadline_D2:
+  deadline: "2026-09-30"
+  note: >
+    老模型（tests/fixtures/legacy-model.md 与 examples/food-delivery、fulfillment-payment，
+    即未启用「事务边界」段的模型形态）在 affectsDimensions 跨 ≥2 实体且未声明事务边界时
+    走告警（R-KIND-8/X9，severity=warning），并记录迁移截止日 2026-09-30；
+    该日期后应按新模型口径（硬失败）整改。新模型（已声明「事务边界」段）未声明者即硬失败。
+
+command: |
+  # ===== S5-1 工具链类型检查 + 零新增失败 =====
+  npx tsc --noEmit
+  #   → 0 errors（含 R-KIND-5~9 / TransactionBoundaryDef / 事务边界段解析）
+  npx jest
+  #   → 6 failed suites / 10 failed tests，失败套件固定为 A 类环境噪声
+  #     （e2_1-hskng-integration / e5-binding-run / viewer/interface-view-utils /
+  #      viewer/n1-guard-c8b / webgen/feedback-issues / webgen/feedback-server），
+  #     与 S0 基线失败原因集合一致，零新增失败（M2 判定按失败原因集合比对）
+
+  # ===== S5-2 X9 正反向各一 =====
+  npx jest tests/checker/kind-rules-s5.test.ts -t "S5-2/S5-3"
+  #   → 正向：跨 ≥2 实体未声明事务边界 ⇒ R-KIND-8 error（硬失败）
+  #     反向：已声明 same_transaction / async_compensation ⇒ 通过
+
+  # ===== S5-3 X9 老模型路径 =====
+  #   → 无「事务边界」段（老模型形态）⇒ R-KIND-8 warning（非硬失败），
+  #     消息含迁移截止日 2026-09-30（决策 D-2），见本记录 migration_deadline_D2
+
+  # ===== S5-4 X17 覆盖率 =====
+  npx jest tests/checker/kind-rules-s5.test.ts -t "S5-4"
+  #   → 命中：preconditions 全部 kind='json-schema' 且 ajv 可编译 ⇒ hitRate=1、无 R-KIND-9 告警
+  #     未命中：自然语言/legacy-stub ⇒ 显式降级（R-KIND-9 warning + degraded reason），
+  #     spec 层 schemaDegradedReasons 有记录（specifier 既有 R2-1 行为）
+
+  # ===== S5-6 死代码自检 =====
+  npx jest tests/checker/kind-rules-s5.test.ts -t "S5-6"
+  #   → X7/X8/X9 各一条「若规则被绕过则结果不同」用例（防恒真/恒假），全部通过
+
+result: mechanical_pass
+mechanical_result: pass
+journey_result: pending_s7
+
+deliverables:
+  code:
+    - src/model/types.ts                              （TransactionBoundaryDef + DerivableLayer.transactionBoundaries，X9 事务边界声明机制）
+    - src/parser/index.ts                             （「事务边界」段解析：三态 undefined=老模型 / [] / 声明列表）
+    - src/checker/kind-rules.ts                       （R-KIND-5~9：X7 分支②③ / X8 候选筛出 / X9 事务边界 / X17 guard 覆盖率）
+    - src/checker/index.ts                            （checkKindRules 注册表遍历不变，导出扩展）
+  tests:
+    - tests/checker/kind-rules-s5.test.ts             （S5-2~S5-4+S5-6 + X7 去重 + S5 老模型零回归 + 事务边界 parser）
+    - tests/checker/kind-rules.test.ts                （S2-6 老模型零回归断言范围限定 R-KIND-1~4；注册表断言扩至 R-KIND-1~9）
+  evidence:
+    - verification/acceptance/VW-KIND/acceptance-record.yaml （本记录，S5a 初始骨架；S7 补全旅程/人工复核留痕）
+
+acceptance_checklist:
+  # ---- S5-1 零新增失败（M2 按失败原因集合比对）----
+  S5-1_tsc_jest:
+    pass: true
+    note: "tsc --noEmit 0 errors；jest 6 failed suites / 10 failed tests，失败套件与 S0 基线完全一致（A 类环境噪声），零新增失败"
+  # ---- S5-2 X9 正反向各一 ----
+  S5-2_x9_positive_negative:
+    pass: true
+    note: "正向：transactionBoundaries=[]（新模型）+ 跨 dimA(S1)/dimB(S2) 未声明 ⇒ R-KIND-8 error、mechanical.passed=false；反向：声明 same_transaction / async_compensation ⇒ 零 R-KIND-8、passed=true"
+  # ---- S5-3 X9 老模型路径 ----
+  S5-3_x9_legacy_path:
+    pass: true
+    note: "无事务边界段（undefined，老模型形态）+ 跨实体 ⇒ R-KIND-8 warning（非硬失败）、passed=true，消息含迁移截止日 2026-09-30 与决策 D-2；acceptance-record 已记 D-2（本记录 migration_deadline_D2，S7 补全）"
+  # ---- S5-4 X17 覆盖率 ----
+  S5-4_x17_guard_coverage:
+    pass: true
+    note: "命中：guard=nonEmpty(request_id) ⇒ hitRate=1、degraded 空、零 R-KIND-9；未命中：自然语言 guard ⇒ hitRate=0、degraded reason 显式记录、spec 层 schemaDegradedReasons 非空；契约层 preconditions（json-schema）优先命中"
+  # ---- S5-6 死代码自检 ----
+  S5-6_dead_code_selfcheck:
+    pass: true
+    note: "X7（R-KIND-5/6）正反各证、X8（R-KIND-7）affectsDimensions 空⇒命中/非空⇒不命中、X9（R-KIND-8）未声明⇒命中/已声明⇒不命中；防恒真/恒假用例全部通过"
+
+followup:
+  - S7 补全本记录的旅程判据留痕：X8 判据3 ②③之分的 acceptance-record 人工复核结论（B-2）。
+  - X9 老模型迁移：2026-09-30（决策 D-2）前须在三个老模型上补充「事务边界」段声明，之后按新模型口径硬失败。
+  - X18（组件映射段，S5b）不属本记录，由 S5b 独立验收（S5-5）。

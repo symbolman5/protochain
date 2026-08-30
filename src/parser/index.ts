@@ -46,6 +46,7 @@ import type {
   NegativeAssuranceDef,
   SubsidiaryEntityDef,
   GuardTranslationDef,
+  TransactionBoundaryDef,
   AttributeEffect,
   ErrorResponseDef,
   RelationAssertion,
@@ -66,6 +67,7 @@ import {
   type Table,
 } from './markdown-ast.js';
 import {
+  detectExtensionSection,
   detectExtensionSectionList,
   detectExtensionSectionObject,
 } from './extension-sections.js';
@@ -397,6 +399,7 @@ function parseDerivableLayer(
   const negativeAssurances = parseNegativeAssurances(sections, metadata);
   const subsidiaryEntities = parseSubsidiaryEntities(sections);
   const guardTranslations = parseGuardTranslations(sections);
+  const transactionBoundaries = parseTransactionBoundaries(sections);
 
   // 推断初始状态与终态
   const initialStateId = states.find((s) => s.type === 'initial')?.id;
@@ -422,6 +425,8 @@ function parseDerivableLayer(
       subsidiaryEntities.length > 0 ? subsidiaryEntities : undefined,
     guardTranslations:
       guardTranslations.length > 0 ? guardTranslations : undefined,
+    transactionBoundaries:
+      transactionBoundaries !== undefined ? transactionBoundaries : undefined,
   };
 
   // 契约层（可选，仅校验用）
@@ -924,6 +929,40 @@ function parseSubsidiaryEntities(sections: Section[]): SubsidiaryEntityDef[] {
       };
     }
   );
+}
+
+/**
+ * G7-S5a（X9 / P1-5 判据11）：事务边界声明段 —— YAML 数组，每项声明一条接口的
+ * 多实体操作事务边界（same_transaction / async_compensation）。
+ *
+ * 三态（与 detectExtensionSectionList 不同，必须区分「未声明」与「声明为空」）：
+ * - 段不存在 → undefined（老模型形态：跨实体未声明走告警 + 迁移截止日 2026-09-30）；
+ * - 段存在 → TransactionBoundaryDef[]（新模型形态：跨实体未声明者硬失败）。
+ */
+function parseTransactionBoundaries(sections: Section[]): TransactionBoundaryDef[] | undefined {
+  const detection = detectExtensionSection(sections, ['事务边界', 'transactionboundary'], '事务边界');
+  if (!detection.enabled) return undefined;
+  const yaml = detection.yaml;
+  if (yaml === null || yaml === undefined) return [];
+  if (!Array.isArray(yaml)) {
+    throw new ParseError('扩展段"事务边界"的 YAML 内容必须是数组', '事务边界');
+  }
+  return yaml.map((item, idx) => {
+    const r = asRecord(item, `事务边界[${idx}]`);
+    const boundaryType = r.boundaryType;
+    if (boundaryType !== 'same_transaction' && boundaryType !== 'async_compensation') {
+      throw new ParseError(
+        `事务边界[${idx}].boundaryType 必须是 same_transaction 或 async_compensation，实际为 ${String(boundaryType)}`,
+        '事务边界'
+      );
+    }
+    return {
+      id: requireString(r, 'id', '事务边界'),
+      interface: requireString(r, 'interface', '事务边界'),
+      boundaryType,
+      description: optionalString(r, 'description'),
+    };
+  });
 }
 
 /**
