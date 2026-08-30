@@ -1,0 +1,16 @@
+name: 匿名发布+认领的公网资源 SaaS
+ai:
+  provider: deepseek
+  apiKey: sk-xxxx
+  model: deepseek-v4-flash
+  baseUrl: https://api.deepseek.com
+formalTool: tla
+tlc:
+  javaPath: /path/to/jre
+  tla2toolsJar: /path/to/tla2tools.jar
+  timeoutMs: 120000
+
+paths:
+  protocol: protocol/
+  derived: derived/
+  scaffold: impl-scaffold/
