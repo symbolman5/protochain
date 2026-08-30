@@ -105,13 +105,18 @@ describe('TD3 ① 演示实例 manifest 与 08 §4.3 示例逐字段一致（真
     });
     expect(manifest.bundles.interfaceDetails).toEqual({
       file: 'interface-details.json',
-      schemaVersion: '1.0',
+      // G5（TI 系列）把 interface-details 升到 1.1，本字段随之从 '1.0' 更新为 '1.1'。
+      // 注意：manifest 自身的 schemaVersion 仍是 1.0，这里记录的是 interface-details.json 的版本。
+      schemaVersion: '1.1',
     });
   });
 
   test('bundles.protocols 两条目全字段与示例一致', () => {
     expect(manifest.bundles.protocols.length).toBe(2);
     const p1 = manifest.bundles.protocols[0];
+    // G6 T5 给演示实例补了 bindings.yaml，故 bindingsFingerprint 不再是 null。
+    // 不硬编码 sha256：指纹是变更检测值，bindings.yaml 一改就会变，硬编码会让测试脆断。
+    // 改判「格式 + P1/P2 同源」——后者正是 P3-10 记录的语义：指纹由 root 级填充、多协议共享。
     expect(p1).toEqual({
       id: 'P1',
       name: '履约协议',
@@ -120,7 +125,7 @@ describe('TD3 ① 演示实例 manifest 与 08 §4.3 示例逐字段一致（真
       dataFile: 'p1.data.json',
       dataSchemaVersion: '1.0',
       dataSourceModelVersion: '1.0.0',
-      bindingsFingerprint: null,
+      bindingsFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
       interfaceCount: 11,
     });
     const p2 = manifest.bundles.protocols[1];
@@ -132,9 +137,11 @@ describe('TD3 ① 演示实例 manifest 与 08 §4.3 示例逐字段一致（真
       dataFile: 'p2.data.json',
       dataSchemaVersion: '1.0',
       dataSourceModelVersion: '1.0.0',
-      bindingsFingerprint: null,
+      bindingsFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
       interfaceCount: 12,
     });
+    // 两个协议共享同一 root 指纹（composition.ts 全仓唯一调用点，见 P3-10 语义边界）
+    expect(p2.bindingsFingerprint).toBe(p1.bindingsFingerprint);
   });
 
   test('bundles.diff 条目全字段与示例一致（payment-v1-v2）', () => {
@@ -159,9 +166,22 @@ describe('TD3 ① 演示实例 manifest 与 08 §4.3 示例逐字段一致（真
   });
 });
 
-describe('TD3 ② bindingsFingerprint 为实例真实值 null（无 bindings.yaml）', () => {
-  test('computeBindingsFingerprint(DEMO) → null', () => {
-    expect(computeBindingsFingerprint(DEMO)).toBeNull();
+// G6 T5 给演示实例补了 bindings.yaml，故 DEMO 不再是「无 bindings.yaml」的样本。
+// 两个分支都要覆盖：有 bindings.yaml → sha256；无 → null。后者改用临时空目录构造。
+describe('TD3 ② bindingsFingerprint 两个分支（有 / 无 bindings.yaml）', () => {
+  test('有 bindings.yaml（DEMO 现状）→ 返回 sha256 指纹', () => {
+    const fp = computeBindingsFingerprint(DEMO);
+    expect(fp).toMatch(/^[0-9a-f]{64}$/);
+    // 可复现：同一内容两次调用结果一致
+    expect(computeBindingsFingerprint(DEMO)).toBe(fp);
+  });
+
+  test('无 bindings.yaml → null（空目录样本）', () => {
+    const { mkdtempSync } = require('node:fs') as typeof import('node:fs');
+    const { tmpdir } = require('node:os') as typeof import('node:os');
+    const { join: pathJoin } = require('node:path') as typeof import('node:path');
+    const emptyDir = mkdtempSync(pathJoin(tmpdir(), 't4-fp-empty-'));
+    expect(computeBindingsFingerprint(emptyDir)).toBeNull();
   });
 
   test('构造临时 bindings.yaml → 返回 sha256 指纹（变更检测语义）', () => {

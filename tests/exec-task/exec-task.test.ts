@@ -21,6 +21,10 @@ import { executeTask, type ExecTaskInput } from '../../src/exec-task/index.js';
 import type { AIRole } from '../../src/ai/router.js';
 import type { AIAdapter, AIPrompt, AIResponse } from '../../src/model/types.js';
 
+// 本文件的 AI 路径用例会真实调用 tsc 做机械预检（generate-tests 的修正 loop 每轮 spawn
+// 一个 node 跑 tsc），jest 默认 5000ms 不够、会随机 timeout。设为 60s。
+jest.setTimeout(60000);
+
 // ---------------------------------------------------------------------------
 // 最小协议模型（3 状态：S0 初始 / S1 运行中 / S2 终态）
 // ---------------------------------------------------------------------------

@@ -49,7 +49,10 @@ function resolveNodeModulesDir(): string {
 }
 
 const NODE_MODULES = resolveNodeModulesDir();
-const TSC_BIN = join(NODE_MODULES, '.bin', 'tsc');
+// Windows 下 node_modules/.bin/tsc 是 bash shim、.bin/tsc.cmd 是批处理，
+// 两者都无法被 execFile 直接 spawn（前者 ENOENT、后者 EINVAL），结果就是预检
+// 静默退化为「仅结构预检」，AI 修正循环永不触发。统一改为「node + tsc.js」绕开 shim。
+const TSC_JS = join(NODE_MODULES, 'typescript', 'lib', 'tsc.js');
 
 export interface MechanicalPreflightResult {
   passed: boolean;
@@ -141,7 +144,7 @@ export async function preflightTypeScript(
     }
 
     try {
-      await execFileP(TSC_BIN, ['-p', dir], { timeout: options.timeoutMs ?? 30000 });
+      await execFileP(process.execPath, [TSC_JS, '-p', dir], { timeout: options.timeoutMs ?? 30000 });
       return { passed: true };
     } catch (err) {
       if (isErrnoENOENT(err)) {

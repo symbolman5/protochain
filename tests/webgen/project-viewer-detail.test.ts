@@ -101,8 +101,12 @@ describe('TD9 ① P1/IF_SYS_T4 五段渲染与 §5.3 示例逐字段一致', () 
     expect(t).toContain('S4');
     expect(t).toContain('INV2'); // coveredInvariants
     expect(t).toContain('取消不产生履约费用');
-    // ③ binding：未读取到 bindings.yaml
-    expect(t).toContain('未读取到 bindings.yaml');
+    // ③ binding：G6 T5 后演示实例已有 bindings.yaml，binding 段应渲染出真实 URL，
+    //    不再是「未读取到 bindings.yaml」的降级文案（该分支改用无 bindings 的 fixture 覆盖）。
+    expect(t).toContain('https://api.platform.example.com/v1/orders/refund-cancel');
+    expect(t).toContain('platform'); // roleId
+    expect(t).toContain('POST');
+    expect(t).not.toContain('未读取到 bindings.yaml');
     // ④ diffImpact：未受影响
     expect(t).toContain('否');
     // ⑤ crossRefs 4 条

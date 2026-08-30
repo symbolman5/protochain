@@ -17,6 +17,11 @@ import type { AIAdapter, AIPrompt, AIResponse, TestToolCode } from '../../src/mo
 
 const FIXTURES = join(process.cwd(), 'tests/fixtures');
 
+// 本文件的 AI loop 用例会真实调用 tsc 做机械预检（每次迭代 spawn 一个 node 跑 tsc，
+// 单轮约 2~4s，3 轮上限 + 并发worker争抢 CPU 时更久）。jest 默认 5000ms 不够，
+// 不设会随机 timeout —— 设为 60s，与「预检真实执行」的代价相匹配。
+jest.setTimeout(60000);
+
 class ScriptedAdapter implements AIAdapter {
   name = 'mock';
   calls: AIPrompt[] = [];
