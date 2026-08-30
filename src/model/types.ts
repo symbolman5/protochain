@@ -166,6 +166,14 @@ export interface DerivableLayer {
    *   映射表出现的 interface/dimension 必须在 IR 存在；IR 未被映射者显式列出（不静默遗漏）。
    */
   componentMapping?: ComponentMappingDef;
+  /**
+   * V1：关系段（可选段「关系」解析产物，language.md §2 五种关系）。
+   * - undefined = 段不存在（老模型形态）→ checker 跳过 R-KIND-12~15（老模型零回归）；
+   * - 非 undefined（含空数组）= 已启用（新模型形态）→ checker 做完整性/引用/DAG 检查：
+   *   R-KIND-12 onGone 非空、R-KIND-13 type 枚举、R-KIND-14 端点存在、
+   *   R-KIND-15 依赖图无环（绑定/派生/组合/运行依赖）。
+   */
+  relations?: RelationDef[];
 }
 
 /**
@@ -518,6 +526,40 @@ export interface ComponentTransferMapping {
   mode: 'sync' | 'async';
   /** 可选说明（人读） */
   description?: string;
+}
+
+// ============================================================================
+// V1 关系段（model.md 新增可选段「关系」，language.md §2 五种关系）
+// ============================================================================
+
+/**
+ * 关系类型（language.md §2 五种关系，模型语言层枚举）：
+ * - 绑定 / 引用：生命周期独立 → 引用完整性 · 绑定唯一性 · 目标消失时的处置；
+ * - 派生（生成）：三问（可声明/生命周期同步/身份需追溯）→ 基数 · 实例身份；
+ * - 组合 / 整体-部分：生命周期完全同步、身份无需独立追溯 →「不该分开」警报；
+ * - 运行依赖：只在运行实例之间 → 依赖图无环 · 被依赖方失效时的补偿；
+ * - 约束关联：共享一条不变量、不互相指向 → 不可拆性判定（不构成依赖边）。
+ */
+export type RelationType = '绑定' | '派生' | '组合' | '运行依赖' | '约束关联';
+
+/**
+ * 单条关系声明（对应 language.md 表4 一行：从 · 到 · 类型 · 约束 · 目标消失或失效时）。
+ * - onGone（目标消失或失效时的处置）语言层硬要求不许空，checker R-KIND-12 校验；
+ * - type 枚举合法性 checker R-KIND-13 校验（parser 不拦，保持薄结构解析）；
+ * - from/to 端点存在性（状态/实体/维度命名空间）checker R-KIND-14 校验；
+ * - 绑定/派生/组合/运行依赖构成依赖图须无环，checker R-KIND-15 校验（约束关联不参与构图）。
+ */
+export interface RelationDef {
+  /** 关系源端点（实体/维度/状态 ID，IR 引用） */
+  from: string;
+  /** 关系目标端点（实体/维度/状态 ID，IR 引用） */
+  to: string;
+  /** 关系类型（五种枚举之一） */
+  type: RelationType;
+  /** 约束（人读，可选） */
+  constraint?: string;
+  /** 目标消失或失效时的处置（表4 硬要求不许空，checker 校验） */
+  onGone?: string;
 }
 
 /**

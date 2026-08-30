@@ -64,7 +64,11 @@ export type KindRuleId =
   | 'R-KIND-8'
   | 'R-KIND-9'
   | 'R-KIND-10'
-  | 'R-KIND-11';
+  | 'R-KIND-11'
+  | 'R-KIND-12'
+  | 'R-KIND-13'
+  | 'R-KIND-14'
+  | 'R-KIND-15';
 
 export interface KindRuleContext {
   /** 当前模型 */
@@ -987,6 +991,192 @@ export const ruleRKind11CredentialIntegrity: KindRule = {
 };
 
 // ---------------------------------------------------------------------------
+// R-KIND-12~15（V1）：关系段（language.md §2 五种关系）完整性检查组
+// ---------------------------------------------------------------------------
+//
+// 触发条件：模型已启用「关系」段（derivable.relations !== undefined，新模型形态）。
+// 老模型（段不存在 → undefined）→ 整组零输出（老模型零回归，V1-4）。
+//
+// 四条机械规则（language.md §2 判据 + 表4 填写规则）：
+// - R-KIND-12（error）：onGone 不许空（表4 硬要求：空了就等于默认「不会出问题」）；
+// - R-KIND-13（error）：type 枚举合法（绑定/派生/组合/运行依赖/约束关联，五种白名单）；
+// - R-KIND-14（error）：from/to 端点必须在 IR 存在（状态 ID ∪ 附属实体 ID ∪ 维度名，
+//   悬空引用硬失败，X18 交叉一致口径）；
+// - R-KIND-15（error）：绑定/派生/组合/运行依赖构成依赖图须无环（判据8：依赖图无环；
+//   约束关联「不互相指向」不构成依赖边，不参与构图）。
+
+/** 关系类型白名单（language.md §2 五种关系，模型语言层枚举） */
+export const RELATION_TYPES = ['绑定', '派生', '组合', '运行依赖', '约束关联'] as const;
+
+/** 参与依赖图构图的关系类型（判据8：约束关联不互相指向，不构成依赖边） */
+export const RELATION_DEPENDENCY_TYPES: ReadonlySet<string> = new Set([
+  '绑定',
+  '派生',
+  '组合',
+  '运行依赖',
+]);
+
+/**
+ * 关系端点命名空间：状态 ID ∪ 附属实体 ID ∪ 维度名
+ * （states[].id / subsidiaryEntities[].id / states[].dimensions[].name /
+ *  subsidiaryEntities[].stateSpace.dimensions[].name）。
+ */
+export function collectRelationEndpointUniverse(model: SourceProtocolModel): Set<string> {
+  const names = new Set<string>();
+  for (const s of model.derivable.states ?? []) {
+    if (s.id) names.add(s.id);
+    for (const d of s.dimensions ?? []) {
+      if (d.name) names.add(d.name);
+    }
+  }
+  for (const ent of model.derivable.subsidiaryEntities ?? []) {
+    if (ent.id) names.add(ent.id);
+    for (const d of ent.stateSpace.dimensions ?? []) {
+      if (d.name) names.add(d.name);
+    }
+  }
+  return names;
+}
+
+export const ruleRKind12RelationOnGoneRequired: KindRule = {
+  ruleId: 'R-KIND-12',
+  description:
+    '关系段 onGone（目标消失或失效时的处置）不许空：空了就等于默认「不会出问题」（language.md §2 表4 硬要求）',
+  check(ctx: KindRuleContext): CheckIssue[] {
+    const issues: CheckIssue[] = [];
+    const relations = ctx.model.derivable.relations;
+    // 老模型形态（关系段不存在 → undefined）：零输出（老模型零回归，V1-4）
+    if (relations === undefined) return issues;
+    relations.forEach((rel, idx) => {
+      if (typeof rel.onGone !== 'string' || rel.onGone.trim() === '') {
+        issues.push(
+          kindError(
+            `关系[${idx}]（${rel.from} → ${rel.to}，type=${rel.type}）未声明 onGone：` +
+              `「目标消失或失效时」不许空，空了就等于默认「不会出问题」（language.md §2 表4 硬要求）[R-KIND-12/V1]`,
+            `${rel.from}→${rel.to}`,
+            `derivable.relations[${idx}].onGone`
+          )
+        );
+      }
+    });
+    return issues;
+  },
+};
+
+export const ruleRKind13RelationTypeEnum: KindRule = {
+  ruleId: 'R-KIND-13',
+  description:
+    '关系段 type 必须是五种合法枚举：绑定 / 派生 / 组合 / 运行依赖 / 约束关联（language.md §2 五种关系白名单）',
+  check(ctx: KindRuleContext): CheckIssue[] {
+    const issues: CheckIssue[] = [];
+    const relations = ctx.model.derivable.relations;
+    // 老模型形态（关系段不存在 → undefined）：零输出（老模型零回归，V1-4）
+    if (relations === undefined) return issues;
+    relations.forEach((rel, idx) => {
+      if (!(RELATION_TYPES as readonly string[]).includes(rel.type)) {
+        issues.push(
+          kindError(
+            `关系[${idx}]（${rel.from} → ${rel.to}）的 type="${String(rel.type)}" 非法：` +
+              `仅支持 绑定 / 派生 / 组合 / 运行依赖 / 约束关联（language.md §2 五种关系；无映射即无判据，拒绝静默）[R-KIND-13/V1]`,
+            `${rel.from}→${rel.to}`,
+            `derivable.relations[${idx}].type`
+          )
+        );
+      }
+    });
+    return issues;
+  },
+};
+
+export const ruleRKind14RelationEndpointExists: KindRule = {
+  ruleId: 'R-KIND-14',
+  description:
+    '关系段 from/to 端点必须在 IR 存在（状态 ID ∪ 附属实体 ID ∪ 维度名；悬空引用硬失败，X18 交叉一致口径）',
+  check(ctx: KindRuleContext): CheckIssue[] {
+    const issues: CheckIssue[] = [];
+    const relations = ctx.model.derivable.relations;
+    // 老模型形态（关系段不存在 → undefined）：零输出（老模型零回归，V1-4）
+    if (relations === undefined) return issues;
+    const universe = collectRelationEndpointUniverse(ctx.model);
+    relations.forEach((rel, idx) => {
+      for (const field of ['from', 'to'] as const) {
+        const value = rel[field];
+        if (!universe.has(value)) {
+          issues.push(
+            kindError(
+              `关系[${idx}]（${rel.from} → ${rel.to}，type=${rel.type}）的 ${field}="${value}" 在 IR 中不存在` +
+                `（端点命名空间 = 状态 ID ∪ 附属实体 ID ∪ 维度名）；` +
+                `关系图不能建立在悬空端点上（X18 交叉一致口径）[R-KIND-14/V1]`,
+              value,
+              `derivable.relations[${idx}].${field}`
+            )
+          );
+        }
+      }
+    });
+    return issues;
+  },
+};
+
+export const ruleRKind15RelationDagAcyclic: KindRule = {
+  ruleId: 'R-KIND-15',
+  description:
+    '绑定/派生/组合/运行依赖构成依赖图须无环（判据8：依赖图无环）；约束关联不互相指向、不参与构图（language.md §2）',
+  check(ctx: KindRuleContext): CheckIssue[] {
+    const issues: CheckIssue[] = [];
+    const relations = ctx.model.derivable.relations;
+    // 老模型形态（关系段不存在 → undefined）：零输出（老模型零回归，V1-4）
+    if (relations === undefined) return issues;
+
+    // 构图：仅参与类型连边（from → to 依赖方向）；约束关联跳过
+    const adj = new Map<string, string[]>();
+    for (const rel of relations) {
+      if (!RELATION_DEPENDENCY_TYPES.has(rel.type)) continue;
+      const list = adj.get(rel.from) ?? [];
+      list.push(rel.to);
+      adj.set(rel.from, list);
+    }
+    if (adj.size === 0) return issues;
+
+    // DFS 三色标记（0=未访问 1=访问中 2=已完成）检测有向环
+    const color = new Map<string, number>();
+    const stack: string[] = [];
+    const cycleNodes = new Set<string>();
+    const visit = (node: string): boolean => {
+      color.set(node, 1);
+      stack.push(node);
+      for (const next of adj.get(node) ?? []) {
+        const c = color.get(next) ?? 0;
+        if (c === 1) {
+          // 回边 → 环：栈中从 next 到栈顶的节点构成环
+          const start = stack.indexOf(next);
+          for (let i = start; i < stack.length; i++) cycleNodes.add(stack[i]);
+          return true;
+        }
+        if (c === 0 && visit(next)) return true;
+      }
+      stack.pop();
+      color.set(node, 2);
+      return false;
+    };
+    for (const node of adj.keys()) {
+      if ((color.get(node) ?? 0) === 0) visit(node);
+    }
+    if (cycleNodes.size > 0) {
+      issues.push(
+        kindError(
+          `关系依赖图存在环（参与类型：绑定/派生/组合/运行依赖）：${Array.from(cycleNodes).join(' → ')}；` +
+            `判据8 要求依赖图无环（language.md §2 运行依赖行），否则被依赖方失效时的补偿无法收敛 [R-KIND-15/V1]`,
+          Array.from(cycleNodes).join('→'),
+          'derivable.relations'
+        )
+      );
+    }
+    return issues;
+  },
+};
+
+// ---------------------------------------------------------------------------
 // 规则注册表（src/checker/index.ts 按此顺序调用）
 // ---------------------------------------------------------------------------
 
@@ -1002,6 +1192,10 @@ export const KIND_RULES: KindRule[] = [
   ruleRKind9GuardExecutableCoverage,
   ruleRKind10ComponentMappingConsistency,
   ruleRKind11CredentialIntegrity,
+  ruleRKind12RelationOnGoneRequired,
+  ruleRKind13RelationTypeEnum,
+  ruleRKind14RelationEndpointExists,
+  ruleRKind15RelationDagAcyclic,
 ];
 
 export const KIND_RULE_IDS: KindRuleId[] = KIND_RULES.map((r) => r.ruleId);

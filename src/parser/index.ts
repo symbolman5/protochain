@@ -49,6 +49,8 @@ import type {
   GuardTranslationDef,
   TransactionBoundaryDef,
   ComponentMappingDef,
+  RelationDef,
+  RelationType,
   InterfaceImplementationMapping,
   DimensionStorageMapping,
   ComponentTransferMapping,
@@ -442,6 +444,7 @@ function parseDerivableLayer(
   const guardTranslations = parseGuardTranslations(sections);
   const transactionBoundaries = parseTransactionBoundaries(sections);
   const componentMapping = parseComponentMapping(sections);
+  const relations = parseRelations(sections);
 
   // 推断初始状态与终态
   const initialStateId = states.find((s) => s.type === 'initial')?.id;
@@ -470,6 +473,7 @@ function parseDerivableLayer(
     transactionBoundaries:
       transactionBoundaries !== undefined ? transactionBoundaries : undefined,
     componentMapping: componentMapping !== undefined ? componentMapping : undefined,
+    relations: relations !== undefined ? relations : undefined,
   };
 
   // 契约层（可选，仅校验用）
@@ -1084,6 +1088,72 @@ function parseComponentMapping(sections: Section[]): ComponentMappingDef | undef
   });
 
   return { interfaceImplementations, dimensionStorage, componentTransfers };
+}
+
+/**
+ * V1：关系段（language.md §2 五种关系）—— YAML 数组，每项声明一条实体间关系。
+ * 五项字段：from / to / type / constraint / onGone（对 application 表4 一行）。
+ *
+ * 标题匹配注意：必须排除「关系断言」段（W1-b，relation-assertions）——该段标题含
+ * 「关系」子串但语义完全不同（断言 vs 关系事实源），误匹配会把两种声明混在一起。
+ *
+ * 三态（与 parseTransactionBoundaries 同款，G7 既有模式）：
+ * - 段不存在 → undefined（老模型形态：checker 跳过 R-KIND-12~15，老模型零回归）；
+ * - 段存在 → RelationDef[]（新模型形态：checker 做完整性/引用/DAG 检查）。
+ *
+ * parser 只做结构与必填字段解析（from/to/type 必填；constraint/onGone 选填）；
+ * onGone 非空 / type 枚举 / 端点存在 / 依赖图无环 的语义校验由 checker R-KIND-12~15
+ * 负责（与 parseComponentMapping 的 mode 枚举先例不同：V1 验收要求 checker 正反向
+ * 各一可经 parse 路径直接命中，parser 保持薄）。
+ */
+function parseRelations(sections: Section[]): RelationDef[] | undefined {
+  const section = findRelationsSection(sections);
+  if (!section) return undefined;
+  const codeBlock = findFirstCodeBlock(section.children, 'yaml');
+  if (!codeBlock || !codeBlock.value) {
+    throw new ParseError(
+      `扩展段"关系"声明存在（标题：${section.headingRaw}），但其下缺少 YAML 代码块（段落声明存在但内容缺失）`,
+      '关系'
+    );
+  }
+  let yaml: unknown;
+  try {
+    yaml = parseYaml(codeBlock.value);
+  } catch (err) {
+    throw new ParseError(
+      `扩展段"关系"的 YAML 代码块解析失败：${err instanceof Error ? err.message : String(err)}`,
+      '关系'
+    );
+  }
+  if (yaml === null || yaml === undefined) return [];
+  if (!Array.isArray(yaml)) {
+    throw new ParseError('扩展段"关系"的 YAML 内容必须是数组', '关系');
+  }
+  return yaml.map((item, idx) => {
+    const r = asRecord(item, `关系[${idx}]`);
+    return {
+      from: requireString(r, 'from', `关系[${idx}]`),
+      to: requireString(r, 'to', `关系[${idx}]`),
+      type: requireString(r, 'type', `关系[${idx}]`) as RelationType,
+      constraint: optionalString(r, 'constraint'),
+      onGone: optionalString(r, 'onGone'),
+    };
+  });
+}
+
+/**
+ * 定位「关系」段：标题（小写去空白）含「关系」或「relations」的 section。
+ * 排除含「断言」的标题（W1-b「关系断言」段）与含「关系」的可读层段（无 YAML 时
+ * 由 parseRelations 统一抛 ParseError；可读层「核心概念」等不含「关系」不误伤）。
+ */
+function findRelationsSection(sections: Section[]): Section | null {
+  for (const section of sections) {
+    if (section.heading.includes('断言')) continue;
+    if (section.heading.includes('关系') || section.heading.includes('relations')) {
+      return section;
+    }
+  }
+  return null;
 }
 
 /**

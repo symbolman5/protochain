@@ -111,9 +111,12 @@ export function checkCompleteness(
   //   - R-KIND-9（X17）：guard 可执行化覆盖率统计 + 未命中显式降级 → 告警
   //   - R-KIND-10（X18）：组件映射段交叉一致 —— 映射表出现的 interface/dimension
   //     必须在 IR 存在（悬空引用 → 硬失败）；IR 未被映射者显式列出（不静默遗漏）→ 告警
-  //   R-KIND-1~3 与 R-KIND-8（新模型口径）、R-KIND-10（引用悬空侧）为 error 级
-  //   （机械 passed=false）；R-KIND-4~7、R-KIND-8（老模型口径）、R-KIND-9、
-  //   R-KIND-10（未映射列出侧）为 warning（不阻断）。
+  //   - R-KIND-11（X13）：凭证声明完整性 —— 七列 / selfContained 枚举 / name 唯一 / 角色引用闭合
+  //   - R-KIND-12~15（V1）：关系段（language.md §2 五种关系）—— onGone 非空 / type 枚举 /
+  //     端点存在（状态 ID ∪ 附属实体 ID ∪ 维度名）/ 依赖图无环（绑定/派生/组合/运行依赖）
+  //   R-KIND-1~3 与 R-KIND-8（新模型口径）、R-KIND-10（引用悬空侧）、R-KIND-11、
+  //   R-KIND-12~15 为 error 级（机械 passed=false）；R-KIND-4~7、R-KIND-8（老模型口径）、
+  //   R-KIND-9、R-KIND-10（未映射列出侧）为 warning（不阻断）。
   // ----------------------------------------------------------------------
   checkKindRules(model, referenceIssues);
 
@@ -1674,10 +1677,17 @@ export {
   ruleRKind9GuardExecutableCoverage,
   ruleRKind10ComponentMappingConsistency,
   ruleRKind11CredentialIntegrity,
+  ruleRKind12RelationOnGoneRequired,
+  ruleRKind13RelationTypeEnum,
+  ruleRKind14RelationEndpointExists,
+  ruleRKind15RelationDagAcyclic,
   computeGuardCoverage,
   buildDimensionOwnerMap,
   collectInterfaceUniverse,
   collectDimensionUniverse,
+  collectRelationEndpointUniverse,
   flattenComponentMapping,
   TRANSACTION_BOUNDARY_MIGRATION_DEADLINE,
+  RELATION_TYPES,
+  RELATION_DEPENDENCY_TYPES,
 } from './kind-rules.js';
