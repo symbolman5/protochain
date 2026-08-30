@@ -503,7 +503,7 @@ describe('S2-6 老模型零回归（新规则不得对老模型报硬失败，�
 // ============================================================================
 
 describe('规则注册表（R-KIND 组，沿用 mcheck/rules.ts 组织方式）', () => {
-  test('注册表含 R-KIND-1~10 且 ID 唯一', () => {
+  test('注册表含 R-KIND-1~11 且 ID 唯一', () => {
     const ids = KIND_RULES.map((r) => r.ruleId);
     expect(ids).toEqual([
       'R-KIND-1',
@@ -516,6 +516,7 @@ describe('规则注册表（R-KIND 组，沿用 mcheck/rules.ts 组织方式）'
       'R-KIND-8',
       'R-KIND-9',
       'R-KIND-10',
+      'R-KIND-11',
     ]);
     expect(new Set(ids).size).toBe(ids.length);
   });

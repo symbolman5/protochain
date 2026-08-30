@@ -33,6 +33,7 @@ import type {
   SourceProtocolModel,
   ErrorMapEntry,
   ErrorResponseDef,
+  CredentialDeclaration,
 } from '../model/types.js';
 import {
   envelopeMigrate,
@@ -122,6 +123,12 @@ export type SkeletonBindings = BindingConfig & {
    * （无 kind 标注的老模型不产出，降级路径不改行为，S3-5）。
    */
   dimensions?: DimensionAccessorEntry[];
+  /**
+   * G7-S6（X14 / P2-6）：凭证绑定策略骨架 —— 按自包含性派生可否离线校验
+   * （offlineVerifiable / lookupFailurePolicy）。仅在 model.md 声明 credential: 段时产出
+   * （无凭证段的老模型不产出，降级路径不改行为，S6-5）。
+   */
+  credentials?: CredentialBindingEntry[];
 };
 
 /**
@@ -155,6 +162,29 @@ export interface DeriveBindingsResult {
   skeleton: SkeletonBindings;
   skeletonPath: string;
   reportPath: string;
+}
+
+/**
+ * G7-S6（X14 / P2-6）：单条凭证的绑定策略条目（写进 bindings.skeleton.yaml 的
+ * credentials 段）。按自包含性机械派生：
+ * - local-verify → offlineVerifiable=true（组件可独立部署、离线决策），
+ *   回查失败时 lookupFailurePolicy='fail-open'（仍验证通过，S6-2）；
+ * - needs-lookup → offlineVerifiable=false（需在线回查，强一致），
+ *   回查失败时 lookupFailurePolicy='fail-closed'（拒绝而非放行，S6-3）。
+ */
+export interface CredentialBindingEntry {
+  /** 凭证名（model.md credential: 段声明的 name） */
+  name: string;
+  /** 自包含性（原样搬运声明） */
+  selfContained: 'local-verify' | 'needs-lookup';
+  /** 可否离线校验：local-verify → true；needs-lookup → false（X14 派生） */
+  offlineVerifiable: boolean;
+  /** 回查失败时的默认行为（X14 派生）：local-verify → fail-open；needs-lookup → fail-closed */
+  lookupFailurePolicy: 'fail-open' | 'fail-closed';
+  /** 有效期 / 撤销语义 / 前提（原样搬运，供实现侧对照；工具链不解释语义） */
+  ttl?: string;
+  revoke?: string;
+  premise?: string;
 }
 
 // ============================================================================
@@ -402,6 +432,40 @@ export function deriveDimensionAccessors(
 }
 
 // ============================================================================
+// 凭证绑定策略派生（X14 / P2-6：按自包含性决定可否离线校验）
+// ============================================================================
+
+/**
+ * 从 model.md credential: 段派生凭证绑定策略（纯函数，不写文件）。
+ *
+ * 机械规则（X14）：
+ * - local-verify → offlineVerifiable=true（组件可独立部署、离线决策，一致性要求放宽）；
+ *   lookupFailurePolicy='fail-open'（回查失败时仍验证通过，S6-2）；
+ * - needs-lookup → offlineVerifiable=false（需在线回查，强一致）；
+ *   lookupFailurePolicy='fail-closed'（回查失败时必须拒绝而非放行，S6-3）。
+ *
+ * 无凭证段（credentials 为 undefined / 空）→ 返回 undefined（老模型零回归，S6-5：
+ * 骨架不产出 credentials 段，降级路径不改行为）。
+ */
+export function deriveCredentialBindings(
+  credentials: CredentialDeclaration[] | undefined
+): CredentialBindingEntry[] | undefined {
+  if (!credentials || credentials.length === 0) return undefined;
+  return credentials.map((c) => {
+    const offlineVerifiable = c.selfContained === 'local-verify';
+    return {
+      name: c.name,
+      selfContained: c.selfContained,
+      offlineVerifiable,
+      lookupFailurePolicy: offlineVerifiable ? 'fail-open' : 'fail-closed',
+      ttl: c.ttl,
+      revoke: c.revoke,
+      premise: c.premise,
+    };
+  });
+}
+
+// ============================================================================
 // interface 推导
 // ============================================================================
 
@@ -496,6 +560,9 @@ export function deriveSkeletonBindings(
     warnings.push(...dimWarnings);
   }
 
+  // X14：凭证绑定策略骨架（按自包含性派生可否离线校验；无凭证段 → 不产出，S6-5）
+  const credentials = deriveCredentialBindings(model.metadata.credentials);
+
   const defaultRoleId = selectDefaultRoleId(model);
   const interfaces: InterfaceBinding[] = [];
   let systemCount = 0;
@@ -548,6 +615,7 @@ export function deriveSkeletonBindings(
     stateMap,
     errorMap: Object.keys(errorMap).length > 0 ? errorMap : undefined,
     dimensions,
+    credentials,
     stats,
     warnings,
   };
@@ -683,6 +751,8 @@ function stringifySkeleton(skeleton: SkeletonBindings): string {
     errorMap: skeleton.errorMap,
     // X4/X19：仅 specs.json 带出非空 dimensions 时产出（老模型降级路径不改行为）
     dimensions: skeleton.dimensions,
+    // X14：仅 model.md 声明 credential: 段时产出（老模型降级路径不改行为，S6-5）
+    credentials: skeleton.credentials,
     stats: skeleton.stats,
     warnings: skeleton.warnings,
   };

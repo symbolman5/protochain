@@ -34,6 +34,7 @@ import type {
   TimingDef,
   ExceptionPathDef,
   RoleDeclaration,
+  CredentialDeclaration,
   ChangeDeclaration,
   ConceptDef,
   ContractLayerInput,
@@ -157,10 +158,11 @@ function parseMetadata(frontMatter: string | null): MetadataLayer {
   const version = requireString(raw, 'version', '元数据层');
   const purpose = requireString(raw, 'purpose', '元数据层');
   const roles = parseRoles(raw.roles);
+  const credentials = parseCredentials(raw.credentials);
   const changeDeclarations = parseChangeDeclarations(raw.changeDeclarations);
   const liveness = parseLivenessMode(raw.liveness);
 
-  return { name, version, purpose, roles, changeDeclarations, liveness };
+  return { name, version, purpose, roles, credentials, changeDeclarations, liveness };
 }
 
 function parseLivenessMode(v: unknown): LivenessMode | undefined {
@@ -195,6 +197,41 @@ function parseRoleType(v: unknown): 'consensus' | 'participant' {
   if (v === undefined || v === null) return 'participant';
   if (v === 'consensus' || v === 'participant') return v;
   throw new ParseError(`roleType 必须是 consensus 或 participant，实际为 ${v}`);
+}
+
+/**
+ * G7-S6（P2-6）：凭证声明段解析（frontmatter 的 credential: YAML 键，与 roles: 段同构）。
+ * - 未声明（老模型形态）→ undefined（零回归，S6-5）；
+ * - 声明了 → CredentialDeclaration[]，七列（issuer/holder/redeemer/selfContained/ttl/revoke/premise）
+ *   全部必填，selfContained 枚举白名单（local-verify | needs-lookup），非法值抛 ParseError（拒绝静默）。
+ */
+function parseCredentials(raw: unknown): CredentialDeclaration[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new ParseError('元数据层 credentials 必须是数组');
+  }
+  return raw.map((item, idx) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new ParseError(`credentials[${idx}] 必须是对象`);
+    }
+    const r = item as Record<string, unknown>;
+    const selfContained = requireString(r, 'selfContained', `credentials[${idx}]`);
+    if (selfContained !== 'local-verify' && selfContained !== 'needs-lookup') {
+      throw new ParseError(
+        `credentials[${idx}].selfContained 必须是 local-verify 或 needs-lookup，实际为 ${selfContained}`
+      );
+    }
+    return {
+      name: requireString(r, 'name', `credentials[${idx}]`),
+      issuer: requireString(r, 'issuer', `credentials[${idx}]`),
+      holder: requireString(r, 'holder', `credentials[${idx}]`),
+      redeemer: requireString(r, 'redeemer', `credentials[${idx}]`),
+      selfContained,
+      ttl: requireString(r, 'ttl', `credentials[${idx}]`),
+      revoke: requireString(r, 'revoke', `credentials[${idx}]`),
+      premise: requireString(r, 'premise', `credentials[${idx}]`),
+    };
+  });
 }
 
 function parseChangeDeclarations(raw: unknown): ChangeDeclaration[] | undefined {

@@ -63,7 +63,8 @@ export type KindRuleId =
   | 'R-KIND-7'
   | 'R-KIND-8'
   | 'R-KIND-9'
-  | 'R-KIND-10';
+  | 'R-KIND-10'
+  | 'R-KIND-11';
 
 export interface KindRuleContext {
   /** 当前模型 */
@@ -881,6 +882,111 @@ export const ruleRKind10ComponentMappingConsistency: KindRule = {
 };
 
 // ---------------------------------------------------------------------------
+// R-KIND-11（X13 / P2-6）：凭证声明完整性（credential: 段）
+// ---------------------------------------------------------------------------
+//
+// 触发条件：模型 frontmatter 已声明 credential: 段（metadata.credentials !== undefined，
+// 新模型形态）。老模型（无凭证段 → undefined）→ 整段零输出（老模型零回归，S6-5）。
+//
+// 校验（机械，X13 检查器）：
+// - A（error，硬失败）：七列完整性——name / issuer / holder / redeemer / selfContained /
+//   ttl / revoke / premise 任一缺失或为空串 → error（parser 层已拦缺失，此处 IR 级防御
+//   手工构造的模型，与 checkFieldIntegrity 同口径）；
+// - B（error，硬失败）：selfContained 枚举合法性（local-verify | needs-lookup）——
+//   非枚举值 → error（拒绝静默）；
+// - C（error，硬失败）：name 唯一性——同一凭证名重复声明 → error（凭证名是协议内标识，
+//   与角色 ID / 状态 ID 唯一性同口径）；
+// - D（error，硬失败）：issuer / holder / redeemer 引用闭合——三方必须引用 metadata.roles
+//   中已声明的角色 ID（与 checkCrossReferences 的契约 party 引用口径一致）；
+//   凭证建立在未声明角色上 = 模型内部引用悬空。
+export const ruleRKind11CredentialIntegrity: KindRule = {
+  ruleId: 'R-KIND-11',
+  description:
+    '凭证声明完整性：七列完整性 / selfContained 枚举 / name 唯一性 / issuer·holder·redeemer 角色引用闭合（X13，P2-6）',
+  check(ctx: KindRuleContext): CheckIssue[] {
+    const issues: CheckIssue[] = [];
+    const credentials = ctx.model.metadata.credentials;
+    // 老模型形态（无 credential: 段 → undefined）：零输出（老模型零回归，S6-5）
+    if (credentials === undefined) return issues;
+
+    const roleIds = new Set(ctx.model.metadata.roles.map((r) => r.id));
+
+    // ── C：name 唯一性（先扫重，避免逐条重复报）──
+    const seen = new Map<string, number>();
+    credentials.forEach((c, i) => {
+      if (c.name && !seen.has(c.name)) seen.set(c.name, i);
+    });
+
+    credentials.forEach((c, idx) => {
+      const path = `metadata.credentials[${idx}]`;
+
+      // ── A：七列完整性（含 name 标识）──
+      const required: Array<[keyof typeof c, string]> = [
+        ['name', 'name'],
+        ['issuer', 'issuer'],
+        ['holder', 'holder'],
+        ['redeemer', 'redeemer'],
+        ['selfContained', 'selfContained'],
+        ['ttl', 'ttl'],
+        ['revoke', 'revoke'],
+        ['premise', 'premise'],
+      ];
+      for (const [key, label] of required) {
+        const v = c[key];
+        if (typeof v !== 'string' || v.trim() === '') {
+          issues.push(
+            kindError(
+              `凭证 ${c.name || `[${idx}]`} 缺少必填字段 "${label}" 或字段非空字符串（七列完整性，X13，P2-6）[R-KIND-11/X13]`,
+              c.name || `[${idx}]`,
+              `${path}.${label}`
+            )
+          );
+        }
+      }
+
+      // ── B：selfContained 枚举合法性（IR 级防御；parser 已拦非法值）──
+      if (c.selfContained !== 'local-verify' && c.selfContained !== 'needs-lookup') {
+        issues.push(
+          kindError(
+            `凭证 ${c.name || `[${idx}]`} 的 selfContained 必须是 local-verify 或 needs-lookup，实际为 ${String(c.selfContained)}（枚举白名单，X13，P2-6）[R-KIND-11/X13]`,
+            c.name || `[${idx}]`,
+            `${path}.selfContained`
+          )
+        );
+      }
+
+      // ── C：name 重复（仅首次出现处报一次）──
+      if (c.name && seen.get(c.name) !== idx) {
+        issues.push(
+          kindError(
+            `凭证名 "${c.name}" 重复声明（同一凭证名只能声明一次，与角色/状态 ID 唯一性同口径，X13，P2-6）[R-KIND-11/X13]`,
+            c.name,
+            `${path}.name`
+          )
+        );
+      }
+
+      // ── D：issuer / holder / redeemer 角色引用闭合 ──
+      for (const party of ['issuer', 'holder', 'redeemer'] as const) {
+        const ref = c[party];
+        if (typeof ref !== 'string' || ref.trim() === '') continue; // 缺失已由 A 报
+        if (!roleIds.has(ref)) {
+          issues.push(
+            kindError(
+              `凭证 ${c.name || `[${idx}]`} 的 ${party}="${ref}" 未在 metadata.roles 中声明（凭证三方必须引用已声明角色，引用闭合，X13，P2-6）[R-KIND-11/X13]`,
+              c.name || `[${idx}]`,
+              `${path}.${party}`
+            )
+          );
+        }
+      }
+    });
+
+    return issues;
+  },
+};
+
+// ---------------------------------------------------------------------------
 // 规则注册表（src/checker/index.ts 按此顺序调用）
 // ---------------------------------------------------------------------------
 
@@ -895,6 +1001,7 @@ export const KIND_RULES: KindRule[] = [
   ruleRKind8CrossEntityNeedsTransactionBoundary,
   ruleRKind9GuardExecutableCoverage,
   ruleRKind10ComponentMappingConsistency,
+  ruleRKind11CredentialIntegrity,
 ];
 
 export const KIND_RULE_IDS: KindRuleId[] = KIND_RULES.map((r) => r.ruleId);

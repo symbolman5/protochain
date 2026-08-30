@@ -1673,6 +1673,7 @@ export {
   ruleRKind8CrossEntityNeedsTransactionBoundary,
   ruleRKind9GuardExecutableCoverage,
   ruleRKind10ComponentMappingConsistency,
+  ruleRKind11CredentialIntegrity,
   computeGuardCoverage,
   buildDimensionOwnerMap,
   collectInterfaceUniverse,

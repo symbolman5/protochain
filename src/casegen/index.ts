@@ -31,6 +31,7 @@ import type {
   JSONSchema,
   SchemaExpression,
   TransitionDef,
+  CredentialDeclaration,
 } from '../model/types.js';
 import { parseAIJson } from '../ai/adapter.js';
 import {
@@ -1063,10 +1064,17 @@ function emptyCoverage(criterion: 'state' | 'transition' | 'path'): CoverageRepo
 //   mock 掉调度器/定时器，防止 scheduled 重算/超时任务并发改状态导致 flaky）
 // - X12 收敛断言：remedy.detection → 制造违约 ⇒ 等待 ≤ boundMs ⇒ 断言收敛
 //
+// G7-S6（X15 / P2-6）凭证用例（execution-plan.md §S6）：
+// - X15 credential-expired：凭证过期 → 必须失效（S6-4）；
+// - X15 credential-revoked：凭证已撤销 → 必须失效（S6-4）；
+// - X15 credential-lookup：回查失败 —— local-verify → 仍验证通过（S6-2，fail-open）；
+//   needs-lookup → 拒绝而非放行（S6-3，fail-closed）。
+//
 // 降级口径（R4 / P2-8）：
 // - 用例数 < 理论上限（observed 违例 ≤ observed 维度数；guard 反例 ≤ 全部合取项之和）
 //   的差额必须显式降级记录（degradedReasons），不得静默；
-// - remedy 声明了但 detection 缺省 → 显式降级记录（不生成 X12 用例，不静默）。
+// - remedy 声明了但 detection 缺省 → 显式降级记录（不生成 X12 用例，不静默）；
+// - 无 credential: 段（老模型）→ 0 用例且不降级（凭证机制未启用，非缺口，S6-5 零回归）。
 
 export interface AdversarialGenerationResult {
   cases: AdversarialCase[];
@@ -1084,6 +1092,7 @@ export function generateAdversarialCases(
   generateObservedWriteCases(model, cases, degradedReasons); // X5
   generateGuardFailureCases(model, cases, degradedReasons); // X6
   generateConvergenceCases(ir, cases, degradedReasons); // X12
+  generateCredentialCases(model, cases, degradedReasons); // X15（G7-S6）
 
   return { cases, degradedReasons };
 }
@@ -1467,5 +1476,167 @@ function buildX12Body(
 /** 用例 ID 中的非法字符净化（维度名/实体名可能含空格或特殊字符） */
 function sanitizeId(s: string): string {
   return s.replace(/[^A-Za-z0-9_]/g, '_');
+}
+
+// ----------------------------------------------------------------------------
+// X15 · 凭证用例（G7-S6 / P2-6）：过期 / 撤销 / 回查失败
+// ----------------------------------------------------------------------------
+//
+// 数据源：model.metadata.credentials（model.md frontmatter 的 credential: 段，与 roles: 同构）。
+// 每条凭证生成三条确定性用例（S6-4 过期/撤销各一条；S6-2/3 回查失败一条）：
+// - credential-expired：凭证过期 → 必须失效（expectFailure=true，S6-4）；
+// - credential-revoked：凭证已撤销 → 必须失效（expectFailure=true，S6-4）；
+// - credential-lookup：回查失败 →
+//   local-verify → expectedCredentialBehavior='verify'（仍验证通过，S6-2 正向，fail-open）；
+//   needs-lookup → expectedCredentialBehavior='reject'（拒绝而非放行，S6-3 正向，fail-closed）。
+//
+// 降级口径：无 credential: 段（老模型，credentials=undefined）→ 0 用例且不降级
+// （凭证机制未启用，非缺口；S6-5 老模型零回归）。
+
+/**
+ * X15 生成入口：凭证过期 / 撤销 / 回查失败三类用例。
+ * 确定性、纯函数；无凭证段 → 零输出（老模型零回归）。
+ */
+function generateCredentialCases(
+  model: SourceProtocolModel,
+  cases: AdversarialCase[],
+  degradedReasons: string[]
+): void {
+  const credentials: CredentialDeclaration[] | undefined = model.metadata.credentials;
+  if (!credentials || credentials.length === 0) return;
+
+  for (const c of credentials) {
+    const base = {
+      credential: c.name,
+      selfContained: c.selfContained,
+    } as const;
+
+    // S6-4①：过期必须失效
+    cases.push({
+      id: `X15_${sanitizeId(c.name)}_expired`,
+      kind: 'credential-expired',
+      source: `credential: 段凭证 ${c.name}（ttl=${c.ttl}）`,
+      interfaceId: c.name,
+      expectFailure: true,
+      expectedCredentialBehavior: 'reject',
+      ...base,
+      body: buildCredentialExpiredBody(c),
+    });
+
+    // S6-4②：已撤销必须失效
+    cases.push({
+      id: `X15_${sanitizeId(c.name)}_revoked`,
+      kind: 'credential-revoked',
+      source: `credential: 段凭证 ${c.name}（revoke=${c.revoke}）`,
+      interfaceId: c.name,
+      expectFailure: true,
+      expectedCredentialBehavior: 'reject',
+      ...base,
+      body: buildCredentialRevokedBody(c),
+    });
+
+    // S6-2/S6-3：回查失败 —— 按自包含性决定断言方向
+    const localVerify = c.selfContained === 'local-verify';
+    cases.push({
+      id: `X15_${sanitizeId(c.name)}_lookup`,
+      kind: 'credential-lookup',
+      source: `credential: 段凭证 ${c.name}（selfContained=${c.selfContained}）`,
+      interfaceId: c.name,
+      expectFailure: localVerify ? false : true,
+      expectedCredentialBehavior: localVerify ? 'verify' : 'reject',
+      ...base,
+      body: buildCredentialLookupBody(c, localVerify),
+    });
+  }
+}
+
+/** X15 过期用例正文：断言过期凭证必须失效（S6-4） */
+function buildCredentialExpiredBody(c: CredentialDeclaration): string {
+  return [
+    `/**`,
+    ` * X15 凭证过期必须失效（G7-S6 / P2-6）`,
+    ` * 数据源（model.md）：credential: 段凭证 ${c.name}（ttl=${c.ttl}）`,
+    ` * 断言：凭证已过期时验证必须失败（过期 ⇒ 失效，S6-4）`,
+    ` */`,
+    `import { describe, it, expect } from '@jest/globals';`,
+    ``,
+    `describe('X15 凭证过期必须失效：${c.name}', () => {`,
+    `  it('凭证 ${c.name} 已过期（ttl=${c.ttl}）时验证必须失败', () => {`,
+    `    // 制造过期：把凭证时间推进到 ttl 有效期之后`,
+    `    makeCredentialExpired('${c.name}');`,
+    `    // 验证凭证：过期 ⇒ 必须失效`,
+    `    const res = verifyCredential('${c.name}');`,
+    `    expect(res.valid).toBe(false);`,
+    `  });`,
+    `});`,
+    ``,
+  ].join('\n');
+}
+
+/** X15 撤销用例正文：断言已撤销凭证必须失效（S6-4） */
+function buildCredentialRevokedBody(c: CredentialDeclaration): string {
+  return [
+    `/**`,
+    ` * X15 凭证已撤销必须失效（G7-S6 / P2-6）`,
+    ` * 数据源（model.md）：credential: 段凭证 ${c.name}（revoke=${c.revoke}）`,
+    ` * 断言：凭证已撤销时验证必须失败（撤销 ⇒ 失效，S6-4）`,
+    ` */`,
+    `import { describe, it, expect } from '@jest/globals';`,
+    ``,
+    `describe('X15 凭证已撤销必须失效：${c.name}', () => {`,
+    `  it('凭证 ${c.name} 已撤销（revoke=${c.revoke}）时验证必须失败', () => {`,
+    `    // 制造撤销：按撤销语义 ${c.revoke} 撤销凭证`,
+    `    makeCredentialRevoked('${c.name}');`,
+    `    // 验证凭证：已撤销 ⇒ 必须失效`,
+    `    const res = verifyCredential('${c.name}');`,
+    `    expect(res.valid).toBe(false);`,
+    `  });`,
+    `});`,
+    ``,
+  ].join('\n');
+}
+
+/**
+ * X15 回查失败用例正文：
+ * - local-verify：回查失败仍验证通过（S6-2，fail-open——断言 res.valid === true）；
+ * - needs-lookup：回查失败拒绝而非放行（S6-3，fail-closed——断言 res.valid === false）。
+ */
+function buildCredentialLookupBody(c: CredentialDeclaration, localVerify: boolean): string {
+  const expectation = localVerify
+    ? [
+        `    // local-verify：凭证可本地验证，回查失败不阻断——仍验证通过（S6-2，fail-open）`,
+        `    const res = verifyCredential('${c.name}');`,
+        `    expect(res.valid).toBe(true);`,
+      ]
+    : [
+        `    // needs-lookup：凭证需在线回查，回查失败必须拒绝而非放行（S6-3，fail-closed）`,
+        `    const res = verifyCredential('${c.name}');`,
+        `    expect(res.valid).toBe(false);`,
+      ];
+  return [
+    `/**`,
+    ` * X15 凭证回查失败（G7-S6 / P2-6）`,
+    ` * 数据源（model.md）：credential: 段凭证 ${c.name}（selfContained=${c.selfContained}）`,
+    ` * 断言：${
+      localVerify
+        ? '回查失败时仍验证通过（local-verify，S6-2，fail-open）'
+        : '回查失败时拒绝而非放行（needs-lookup，S6-3，fail-closed）'
+    }`,
+    ` */`,
+    `import { describe, it, expect } from '@jest/globals';`,
+    ``,
+    `describe('X15 凭证回查失败：${c.name}（${c.selfContained}）', () => {`,
+    `  it('${
+      localVerify
+        ? '回查失败时验证仍通过（local-verify，fail-open）'
+        : '回查失败时拒绝而非放行（needs-lookup，fail-closed）'
+    }', () => {`,
+    `    // 制造回查失败：lookup 端点不可达 / 超时 / 5xx`,
+    `    simulateLookupFailure('${c.name}');`,
+    ...expectation,
+    `  });`,
+    `});`,
+    ``,
+  ].join('\n');
 }
 

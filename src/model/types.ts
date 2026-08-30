@@ -26,6 +26,12 @@ export interface MetadataLayer {
   purpose: string;
   /** 参与角色列表（role id → 角色名） */
   roles: RoleDeclaration[];
+  /**
+   * G7-S6（P2-6）：凭证声明列表（可选段 credential: YAML，与 roles: 段同构）。
+   * - undefined = 模型未启用凭证机制（老模型形态，零回归）；
+   * - 非 undefined = 已声明凭证（checker 按 R-KIND-11 校验七列完整性 / 枚举 / 角色引用）。
+   */
+  credentials?: CredentialDeclaration[];
   /** 使用方对变更类型的显式声明（优先级最高） */
   changeDeclarations?: ChangeDeclaration[];
   /** 待使用方确认的项（由 versioner 维护） */
@@ -46,6 +52,38 @@ export interface RoleDeclaration {
   roleType: 'consensus' | 'participant';   // 共识方 / 参与方
   /** 匿名参与方标注（如公网访问者） */
   anonymous?: boolean;
+}
+
+/**
+ * G7-S6（P2-6）：凭证自包含性枚举。
+ * - local-verify：凭证可本地验证（离线决策），回查失败时仍验证通过（fail-open）；
+ * - needs-lookup：凭证需在线回查（强一致），回查失败时必须拒绝而非放行（fail-closed）。
+ */
+export type CredentialSelfContained = 'local-verify' | 'needs-lookup';
+
+/**
+ * G7-S6（P2-6）：凭证声明（model.md frontmatter 的 credential: YAML 段，与 roles: 段同构）。
+ * 七列直接映射 model-lab 表 5：签发者 issuer / 持有者 holder / 兑现者 redeemer /
+ * 自包含性 selfContained / 有效期 ttl / 撤销语义 revoke / 前提 premise；name 为凭证标识。
+ * 段为可选（老模型无 credential: 段 → metadata.credentials = undefined，零回归）。
+ */
+export interface CredentialDeclaration {
+  /** 凭证名（标识，协议内唯一） */
+  name: string;
+  /** 签发者 */
+  issuer: string;
+  /** 持有者 */
+  holder: string;
+  /** 兑现者 */
+  redeemer: string;
+  /** 自包含性：local-verify（可本地验证）/ needs-lookup（需在线回查） */
+  selfContained: CredentialSelfContained;
+  /** 有效期 */
+  ttl: string;
+  /** 撤销语义 */
+  revoke: string;
+  /** 前提 */
+  premise: string;
 }
 
 export interface ChangeDeclaration {
@@ -1204,8 +1242,18 @@ export interface TestCaseSet {
   degradedReasons?: string[];
 }
 
-/** G7-S4 对抗性用例种类 */
-export type AdversarialCaseKind = 'observed-write' | 'guard-failure' | 'convergence';
+/**
+ * G7-S4/S6 对抗性用例种类：
+ * - observed-write（X5）/ guard-failure（X6）/ convergence（X12）——S4；
+ * - credential-expired / credential-revoked / credential-lookup（X15）——S6（凭证用例）。
+ */
+export type AdversarialCaseKind =
+  | 'observed-write'
+  | 'guard-failure'
+  | 'convergence'
+  | 'credential-expired'
+  | 'credential-revoked'
+  | 'credential-lookup';
 
 /**
  * G7-S4：单条对抗性用例（X5 / X6 / X12）。
@@ -1233,6 +1281,22 @@ export interface AdversarialCase {
   boundMs?: number;
   /** X12：收敛断言（remedy.detection 原文） */
   detection?: string;
+  /**
+   * X15（S6）：凭证用例定位 —— 凭证名（credential: 段声明的 name）。
+   */
+  credential?: string;
+  /**
+   * X15（S6）：凭证自包含性（credential: 段声明的 selfContained）。
+   * - local-verify：回查失败时仍验证通过（S6-2，fail-open）；
+   * - needs-lookup：回查失败时拒绝而非放行（S6-3，fail-closed）。
+   */
+  selfContained?: 'local-verify' | 'needs-lookup';
+  /**
+   * X15（S6）：凭证用例预期行为。
+   * - verify：凭证验证必须通过（正向；local-verify 回查失败 / 有效凭证）；
+   * - reject：凭证必须被拒绝（needs-lookup 回查失败 / 过期 / 已撤销）。
+   */
+  expectedCredentialBehavior?: 'verify' | 'reject';
   /** 用例文件正文（可执行测试脚本；X6 头部含 R5 冻结边界声明） */
   body: string;
 }

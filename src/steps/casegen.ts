@@ -88,12 +88,12 @@ function formatCaseSummary(testCases: TestCaseSet): string {
     lines.push(`  路径覆盖: ${c.pathCoverage.covered}/${c.pathCoverage.total}`);
   }
 
-  // G7-S4：对抗性用例（X5/X6/X12）与差额降级记录
+  // G7-S4/S6：对抗性用例（X5/X6/X12 + X15 凭证）与差额降级记录
   const adversarial = testCases.adversarialCases ?? [];
   if (adversarial.length > 0) {
     const byKind = (k: string) => adversarial.filter((a) => a.kind === k).length;
     lines.push(
-      `  对抗用例: ${adversarial.length} 条（X5 observed 直写违例 ${byKind('observed-write')} / X6 guard 失败后状态不变 ${byKind('guard-failure')} / X12 收敛断言 ${byKind('convergence')}）`
+      `  对抗用例: ${adversarial.length} 条（X5 observed 直写违例 ${byKind('observed-write')} / X6 guard 失败后状态不变 ${byKind('guard-failure')} / X12 收敛断言 ${byKind('convergence')} / X15 凭证 ${byKind('credential-expired') + byKind('credential-revoked') + byKind('credential-lookup')}）`
     );
   }
   const degraded = testCases.degradedReasons ?? [];
