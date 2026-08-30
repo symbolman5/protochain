@@ -53,7 +53,13 @@ import type {
   ErrorResponseDef,
   BindingConfig,
   ErrorMapEntry,
+  RelationDef,
+  CredentialDeclaration,
+  AdversarialCase,
+  ComponentMappingDef,
 } from '../model/types.js';
+import type { DimensionKindEntry } from '../model/dimension-kind.js';
+import type { StorageSchema } from '../storagegen/index.js';
 import {
   envelopeMigrate,
   isSpecsEnvelope,
@@ -121,6 +127,90 @@ export interface WebDataJson {
     id: string;
     name: string;
     errorCode?: string;
+  }>;
+  /**
+   * G7-V3（webgen 数据层扩展）：维度 kind 判定投影（S1 产物，specs.json 顶层 dimensions）。
+   * - 每条目 owner/dimension/kind/kindSource/writers（DimensionKindEntry 原样投影）；
+   * - 缺省 = specs.json 无 dimensions 段（老模型形态）→ 字段不出现（undefined），零回归。
+   */
+  dimensions?: DimensionKindEntry[];
+  /**
+   * V1 关系段投影（model.md「关系」段，parser parseRelations 产物，DerivableLayer.relations）。
+   * - 每条 from/to/type/constraint/onGone（RelationDef 原样投影）；
+   * - 与既有 relations（W1-a 拓扑机械推导投影）区分：本字段是模型声明的原始关系段；
+   * - 缺省 = 模型无「关系」段（老模型形态）→ 字段不出现（undefined），零回归。
+   */
+  modelRelations?: RelationDef[];
+  /**
+   * G7-V3（webgen 数据层扩展）：存储 schema 投影（S3 derive-storage 产物 storage.schema.json）。
+   * - 顶层计数 + 按 owner 分组的维度落点（dimensions[].{name,type,kind} 归一投影）；
+   * - 缺省 = 未运行 derive-storage（老模型形态）→ 字段不出现（undefined），零回归。
+   */
+  storage?: WebStorageView;
+  /**
+   * G7-S6（P2-6）：凭证声明投影（model.md frontmatter credential: 段，parser 解析产物）。
+   * - name/issuer/holder/redeemer/selfContained/ttl/revoke/premise 七列（CredentialDeclaration 原样投影）；
+   * - 缺省 = 模型未启用凭证机制（老模型形态）→ 字段不出现（undefined），零回归。
+   */
+  credentials?: CredentialDeclaration[];
+  /**
+   * S5b X18（G7）：组件映射投影（model.md「组件映射」段，DerivableLayer.componentMapping 三张表）。
+   * - interfaceImplementations[].{interface,component} / dimensionStorage[].{dimension,table,field}
+   *   / componentTransfers[].{from,to,channel,mode}；
+   * - 缺省 = 模型无「组件映射」段（老模型形态）→ 字段不出现（undefined），零回归。
+   */
+  components?: WebComponentMappingView;
+  /**
+   * G7-S4/S6（X5/X6/X12/X15）：对抗性用例投影（derived/test-cases.json adversarialCases[]）。
+   * - id/kind/source/interfaceId/body + expected* 断言字段（AdversarialCase 原样投影）；
+   * - 缺省 = test-cases.json 无 adversarialCases（老模型形态）→ 字段不出现（undefined），零回归。
+   */
+  adversarialCases?: AdversarialCase[];
+}
+
+/**
+ * G7-V3（webgen 数据层扩展）：存储 schema 投影视图（storage.schema.json 的 viewer 友好归一投影）。
+ * 归一口径：storage.schema.json 的 entities[].columns[].{dimension,column,kind,type} →
+ * dimensions[].{name,type,kind}（机械骨架列名恒等于维度名，column 冗余省略）。
+ */
+export interface WebStorageView {
+  /** 实体维度总数 */
+  dimensionCount: number;
+  /** 有存储落点的维度数（= dimensionCount，每维度必有一列） */
+  coveredDimensionCount: number;
+  /** 覆盖率（coveredDimensionCount / dimensionCount；dimensionCount=0 → 1） */
+  coverageRate: number;
+  /** 按 owner（状态 ID / 附属实体 ID）分组的实体存储落点 */
+  entities: Array<{
+    /** 实体标识（维度 owner） */
+    entity: string;
+    /** 该实体维度数 */
+    dimensionCount: number;
+    /** 维度落点清单（name=维度名 / type=存储类型 / kind=declared|observed|undetermined） */
+    dimensions: Array<{
+      name: string;
+      type: string;
+      kind: string;
+    }>;
+  }>;
+}
+
+/**
+ * S5b X18（G7）：组件映射投影视图（DerivableLayer.componentMapping 三张映射表）。
+ * 只投影 viewer 面板需要的结构化字段；description 为可选说明（人读）。
+ */
+export interface WebComponentMappingView {
+  /** 接口 → 实现组件（哪个 service/module 承载哪个 interface） */
+  interfaceImplementations: Array<{ interface: string; component: string; description?: string }>;
+  /** 实体维度 → 存储（维度落到哪张表 / 哪个字段） */
+  dimensionStorage: Array<{ dimension: string; table: string; field?: string; description?: string }>;
+  /** 组件 → 组件传输（谁调谁、什么通道、同步/异步） */
+  componentTransfers: Array<{
+    from: string;
+    to: string;
+    channel: string;
+    mode: 'sync' | 'async';
+    description?: string;
   }>;
 }
 
@@ -1066,6 +1156,70 @@ export function buildImplCheckView(
 // 主构造器
 // ============================================================================
 
+/**
+ * G7-V3（webgen 数据层扩展）：storage.schema.json → WebStorageView（归一投影）。
+ * - 未提供 storage（老模型未运行 derive-storage）→ undefined（字段缺省，零回归）；
+ * - 空骨架（dimensionCount=0，如老模型空 dimensions）→ 空 entities 视图（照常投影）。
+ */
+export function buildStorageView(storage: StorageSchema | undefined): WebStorageView | undefined {
+  if (!storage) return undefined;
+  return {
+    dimensionCount: storage.dimensionCount,
+    coveredDimensionCount: storage.coveredDimensionCount,
+    coverageRate: storage.coverageRate,
+    entities: storage.entities.map((e) => ({
+      entity: e.entity,
+      dimensionCount: e.dimensionCount,
+      dimensions: e.columns.map((c) => ({
+        name: c.dimension,
+        type: c.type,
+        kind: c.kind,
+      })),
+    })),
+  };
+}
+
+/**
+ * S5b X18（G7）：DerivableLayer.componentMapping → WebComponentMappingView（三张表投影）。
+ * - 无「组件映射」段（老模型形态）→ undefined（字段缺省，零回归）；
+ * - 段存在 → 三张表照常投影（parser 保证三表恒存在，可为空数组）。
+ */
+export function buildComponentsView(
+  mapping: ComponentMappingDef | undefined
+): WebComponentMappingView | undefined {
+  if (!mapping) return undefined;
+  return {
+    interfaceImplementations: (mapping.interfaceImplementations ?? []).map((m) => {
+      const o: { interface: string; component: string; description?: string } = {
+        interface: m.interface,
+        component: m.component,
+      };
+      if (m.description) o.description = m.description;
+      return o;
+    }),
+    dimensionStorage: (mapping.dimensionStorage ?? []).map((m) => {
+      const o: { dimension: string; table: string; field?: string; description?: string } = {
+        dimension: m.dimension,
+        table: m.table,
+      };
+      if (m.field) o.field = m.field;
+      if (m.description) o.description = m.description;
+      return o;
+    }),
+    componentTransfers: (mapping.componentTransfers ?? []).map((m) => {
+      const o: {
+        from: string;
+        to: string;
+        channel: string;
+        mode: 'sync' | 'async';
+        description?: string;
+      } = { from: m.from, to: m.to, channel: m.channel, mode: m.mode };
+      if (m.description) o.description = m.description;
+      return o;
+    }),
+  };
+}
+
 export interface DeriveWebInputs {
   /** envelope 形态 specs.json（必有） */
   specsEnvelope: SpecsEnvelope;
@@ -1087,6 +1241,11 @@ export interface DeriveWebInputs {
    * 未提供 → binding 视图标记 hasBindings=false。
    */
   bindings?: BindingConfig;
+  /**
+   * G7-V3（webgen 数据层扩展）：storage.schema.json（S3 derive-storage 产物，可选）。
+   * 未提供（老模型未运行 derive-storage）→ storage 视图缺省（undefined），零回归。
+   */
+  storage?: StorageSchema;
   /**
    * B6.3：多协议项目全量错误码（各子协议 specs.errorResponses 的并集）。
    * 传递后 buildBindingView 把「其他子协议声明的码」归类为跨协议共享（预期保留），
@@ -1125,6 +1284,13 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
   const diffViewProjection = buildDiffViewProjection(diff, specs, testCases);
   const implCheckView = buildImplCheckView(implCheck);
   const bindingView = buildBindingView(bindings, specs, { allProjectErrorCodes });
+  // G7-V3（webgen 数据层扩展）：六个新字段的投影（均可选；老模型无数据 → undefined，零回归）
+  const dimensions = specsEnvelope.dimensions;
+  const modelRelations = model.derivable.relations;
+  const storageView = buildStorageView(inputs.storage);
+  const credentials = model.metadata.credentials;
+  const componentsView = buildComponentsView(model.derivable.componentMapping);
+  const adversarialCases = testCases?.adversarialCases;
   const exceptionPaths = (model.derivable.exceptions ?? []).map((e) => {
     const out: { id: string; name: string; errorCode?: string } = {
       id: e.id,
@@ -1194,6 +1360,13 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
     redactionNotice: REDACTION_NOTICE_LINES,
     binding: bindingView.hasBindings ? bindingView : undefined,
     exceptionPaths: exceptionPaths.length > 0 ? exceptionPaths : undefined,
+    // G7-V3（webgen 数据层扩展）：六个新字段（可选；老模型无数据 → undefined，JSON 序列化时省略，零回归）
+    dimensions: dimensions ?? undefined,
+    modelRelations: modelRelations ?? undefined,
+    storage: storageView ?? undefined,
+    credentials: credentials ?? undefined,
+    components: componentsView ?? undefined,
+    adversarialCases: adversarialCases ?? undefined,
   };
 }
 
@@ -2019,11 +2192,15 @@ export async function deriveWeb(
   const icR = readOptionalJsonWithStatus<ImplCheckReport>(join(rootDir, 'derived/impl-check/impl-check-report.json'));
   const dfR = readOptionalJsonWithStatus<ModelDiff>(join(rootDir, 'derived/diff/model-diff.json'));
   const imR = readOptionalJsonWithStatus<ImpactAnalysis>(join(rootDir, 'derived/impact-analysis.json'));
+  // G7-V3（webgen 数据层扩展）：storage.schema.json（S3 derive-storage 产物，可选）。
+  // 缺省（老模型未运行 derive-storage）→ storage 视图缺省，字段不出现（零回归）。
+  const storageR = readOptionalJsonWithStatus<StorageSchema>(join(rootDir, 'derived/storage.schema.json'));
   const testCases = tcR.value;
   const verification = vfR.value;
   const implCheck = icR.value;
   const diff = dfR.value;
   const impact = imR.value;
+  const storage = storageR.value;
   for (const [name, r] of [
     ['derived/test-cases.json', tcR] as const,
     ['derived/verification/verification-report.json', vfR] as const,
@@ -2061,6 +2238,7 @@ export async function deriveWeb(
     diff,
     impact,
     bindings: bindingsConfig,
+    storage,
   });
 
   // 5. 防御性：redact sensitive fields（即使上游不慎写入）

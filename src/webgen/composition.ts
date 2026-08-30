@@ -69,6 +69,7 @@ import type {
   ModelDiff,
   ImpactAnalysis,
 } from '../model/types.js';
+import type { StorageSchema } from '../storagegen/index.js';
 import {
   redactSensitiveFields,
   writeJson,
@@ -1746,6 +1747,8 @@ export async function deriveProjectWeb(
           implCheck: readOptionalJson<ImplCheckReport>(join(subRoot, 'derived/impl-check/impl-check-report.json')),
           diff: readOptionalJson<ModelDiff>(join(subRoot, 'derived/diff/model-diff.json')),
           impact: readOptionalJson<ImpactAnalysis>(join(subRoot, 'derived/impact-analysis.json')),
+          // G7-V3（webgen 数据层扩展）：storage.schema.json（S3 产物，可选；老模型缺省 → storage 视图缺省）
+          storage: readOptionalJson<StorageSchema>(join(subRoot, 'derived/storage.schema.json')),
           bindings: bindingView?.hasBindings
             ? (redactSensitiveFields(bindingsRaw ?? {}) as BindingConfig)
             : undefined,
