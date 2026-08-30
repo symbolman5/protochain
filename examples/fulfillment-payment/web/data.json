@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "1.1",
+  "generatedAt": "2026-08-30T14:14:33.125Z",
+  "composition": {
+    "systemName": "履约-支付组合系统",
+    "version": "0.1.0",
+    "changeType": "protocol_tweak",
+    "sourcePath": "/work/protochain/examples/fulfillment-payment/protocol/composition.md",
+    "parsedAt": "2026-08-30T14:14:33.122Z"
+  },
+  "protocols": [
+    {
+      "id": "P1",
+      "name": "履约协议",
+      "version": "1.0.0",
+      "modelPath": "protocol/P1/model.md",
+      "interfaceCount": 11,
+      "systemInterfaceCount": 4,
+      "observationInterfaceCount": 7,
+      "specsAvailable": true,
+      "schemaSummary": "structured=9 / legacy-stub=2 / description-only=0",
+      "interfaceIds": [
+        "IF_SYS_T1",
+        "IF_SYS_T2",
+        "IF_SYS_T3",
+        "IF_SYS_T4",
+        "IF_OBS_STATE_S0",
+        "IF_OBS_STATE_S1",
+        "IF_OBS_STATE_S2",
+        "IF_OBS_STATE_S3",
+        "IF_OBS_STATE_S4",
+        "IF_OBS_INV_INV1",
+        "IF_OBS_INV_INV2"
+      ],
+      "firstInterfaceId": "IF_SYS_T1"
+    },
+    {
+      "id": "P2",
+      "name": "支付协议",
+      "version": "1.0.0",
+      "modelPath": "protocol/P2/model.md",
+      "interfaceCount": 12,
+      "systemInterfaceCount": 4,
+      "observationInterfaceCount": 8,
+      "specsAvailable": true,
+      "schemaSummary": "structured=10 / legacy-stub=2 / description-only=0",
+      "interfaceIds": [
+        "IF_SYS_T1",
+        "IF_SYS_T2",
+        "IF_SYS_T3",
+        "IF_SYS_T4",
+        "IF_OBS_STATE_S0",
+        "IF_OBS_STATE_S1",
+        "IF_OBS_STATE_S2",
+        "IF_OBS_STATE_S3",
+        "IF_OBS_STATE_S4",
+        "IF_OBS_INV_INV1",
+        "IF_OBS_INV_INV2",
+        "IF_OBS_INV_INV3"
+      ],
+      "firstInterfaceId": "IF_SYS_T1"
+    }
+  ],
+  "dependencyGraph": {
+    "mermaid": "graph LR\n  P1[履约协议]\n  P2[支付协议]\n  P2 --> P1",
+    "edges": [
+      {
+        "from": "P2",
+        "to": "P1",
+        "dependencyType": "state",
+        "description": "退款完成是履约取消的前提（履约协议退款转移 guard 引用 P2 退款状态）"
+      }
+    ]
+  },
+  "crossRefs": [
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T4",
+      "sourceField": "precondition",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "退款已批准 且 P2.S_refunded",
+      "target": "S_refunded"
+    },
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T4",
+      "sourceField": "preconditions[0].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "…点，自然语言未机械提取：退款已批准 且 P2.S_refunded",
+      "target": "S_refunded"
+    },
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T4",
+      "sourceField": "inputs[1].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+      "target": "S_refunded"
+    },
+    {
+      "fromProtocol": "P1",
+      "fromApi": "IF_SYS_T4",
+      "sourceField": "inputs[2].description",
+      "kind": "guard",
+      "toProtocol": "P2",
+      "context": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+      "target": "S_refunded"
+    }
+  ],
+  "invariantSpans": [
+    {
+      "id": "CI1",
+      "name": "退款与履约取消一致",
+      "protocols": [
+        "P1",
+        "P2"
+      ],
+      "declaredBy": "platform",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    },
+    {
+      "id": "CI2",
+      "name": "退款金额不超订单金额",
+      "protocols": [
+        "P1",
+        "P2"
+      ],
+      "declaredBy": "platform",
+      "complexity": "simple_boolean",
+      "linkedApis": []
+    }
+  ],
+  "sharedMatrix": {
+    "sharedObjects": [],
+    "crossObservations": []
+  },
+  "warnings": []
+}

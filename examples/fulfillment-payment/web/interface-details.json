@@ -1,0 +1,3068 @@
+{
+  "schemaVersion": "1.1",
+  "kind": "interface-details",
+  "generatedAt": "2026-08-30T14:14:33.212Z",
+  "protocolVersions": {
+    "P1": "1.0.0",
+    "P2": "1.0.0"
+  },
+  "entries": {
+    "P1": {
+      "IF_SYS_T1": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_SYS_T1",
+          "name": "confirm_order",
+          "kind": "system",
+          "sourceId": "confirm_order",
+          "actionType": "state_transition",
+          "triggerRoleId": "customer",
+          "description": "nonEmpty(order_id)",
+          "schemaKind": "structured",
+          "schemaDegradedReasons": [],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {
+              "order_id": {
+                "type": "string"
+              },
+              "currentState": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "order_id",
+              "currentState"
+            ]
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "nextState": {
+                "type": "string",
+                "enum": [
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "转移后状态（期望: S1，可选枚举值: S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "nextState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {
+            "order_id": "string-7t4m51",
+            "currentState": "-"
+          },
+          "responseExample": {
+            "nextState": "S0"
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /v1/orders/confirm",
+              "code": "curl -X POST 'https://api.platform.example.com/v1/orders/confirm' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n  \"order_id\": \"string-19d2bp8\",\n  \"currentState\": \"-\"\n}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /v1/orders/confirm",
+              "code": "fetch('https://api.platform.example.com/v1/orders/confirm', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n  \"order_id\": \"string-19d2bp8\",\n  \"currentState\": \"-\"\n}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /v1/orders/confirm",
+              "code": "import requests\n\nresp = requests.post('https://api.platform.example.com/v1/orders/confirm', json={\n  \"order_id\": \"string-19d2bp8\",\n  \"currentState\": \"-\"\n})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "order_id",
+              "type": "string",
+              "description": "confirm_order 契约层请求字段（字段 order_id，类型 string）",
+              "required": true
+            },
+            {
+              "name": "currentState",
+              "type": "string",
+              "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）",
+              "required": true
+            }
+          ],
+          "outputs": [
+            {
+              "name": "nextState",
+              "type": "string",
+              "description": "转移后状态（S1）",
+              "required": true
+            }
+          ],
+          "precondition": "nonEmpty(order_id)",
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": [
+            {
+              "id": "er_order_not_found",
+              "errorCode": "ERR_ORDER_NOT_FOUND",
+              "httpStatus": 404,
+              "description": "订单不存在或已失效"
+            }
+          ]
+        },
+        "relation": {
+          "ownedTransitions": [
+            "T1"
+          ],
+          "preconditionStates": [
+            "S0"
+          ],
+          "postconditionStates": [
+            "S1"
+          ],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318",
+          "transport": [
+            {
+              "type": "http",
+              "method": "POST",
+              "path": "/v1/orders/confirm",
+              "roleId": "platform",
+              "protocol": "P1",
+              "server": "https://api.platform.example.com"
+            }
+          ],
+          "errorMapHits": [
+            {
+              "errorCode": "ERR_ORDER_NOT_FOUND",
+              "httpStatus": 404
+            }
+          ]
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_T2": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_SYS_T2",
+          "name": "start_fulfillment",
+          "kind": "system",
+          "sourceId": "start_fulfillment",
+          "actionType": "state_transition",
+          "triggerRoleId": "merchant",
+          "description": "库存充足且订单已确认",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"库存充足且订单已确认\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {
+              "currentState": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "currentState"
+            ],
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "nextState": {
+                "type": "string",
+                "enum": [
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "转移后状态（期望: S2，可选枚举值: S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "nextState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {
+            "currentState": "-"
+          },
+          "responseExample": {
+            "nextState": "S0"
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /v1/fulfillment/start",
+              "code": "curl -X POST 'https://api.merchant.example.com/v1/fulfillment/start' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n  \"currentState\": \"-\"\n}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /v1/fulfillment/start",
+              "code": "fetch('https://api.merchant.example.com/v1/fulfillment/start', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n  \"currentState\": \"-\"\n}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /v1/fulfillment/start",
+              "code": "import requests\n\nresp = requests.post('https://api.merchant.example.com/v1/fulfillment/start', json={\n  \"currentState\": \"-\"\n})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "currentState",
+              "type": "string",
+              "description": "当前状态（期望为 S1）",
+              "required": true
+            }
+          ],
+          "outputs": [
+            {
+              "name": "nextState",
+              "type": "string",
+              "description": "转移后状态（S2）",
+              "required": true
+            }
+          ],
+          "precondition": "库存充足且订单已确认",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：库存充足且订单已确认"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [
+            "T2"
+          ],
+          "preconditionStates": [
+            "S1"
+          ],
+          "postconditionStates": [
+            "S2"
+          ],
+          "coveredInvariants": [
+            {
+              "id": "INV1",
+              "name": "履约数量一致",
+              "scopeStateIds": [
+                "S2",
+                "S3"
+              ],
+              "carrierRoleIds": [
+                "customer",
+                "merchant"
+              ]
+            }
+          ],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318",
+          "transport": [
+            {
+              "type": "http",
+              "method": "POST",
+              "path": "/v1/fulfillment/start",
+              "roleId": "merchant",
+              "protocol": "P1",
+              "server": "https://api.merchant.example.com"
+            }
+          ]
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_T3": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_SYS_T3",
+          "name": "complete_fulfillment",
+          "kind": "system",
+          "sourceId": "complete_fulfillment",
+          "actionType": "state_transition",
+          "triggerRoleId": "merchant",
+          "description": "fulfillment_qty == order_qty",
+          "schemaKind": "structured",
+          "schemaDegradedReasons": [],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {
+              "fulfillment_qty": {
+                "type": "integer"
+              },
+              "order_qty": {
+                "type": "integer"
+              },
+              "currentState": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "fulfillment_qty",
+              "order_qty",
+              "currentState"
+            ]
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "nextState": {
+                "type": "string",
+                "enum": [
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "转移后状态（期望: S3，可选枚举值: S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "nextState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {
+            "fulfillment_qty": 0,
+            "order_qty": 0,
+            "currentState": "-"
+          },
+          "responseExample": {
+            "nextState": "S0"
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /v1/fulfillment/complete",
+              "code": "curl -X POST 'https://api.merchant.example.com/v1/fulfillment/complete' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n  \"fulfillment_qty\": 0,\n  \"order_qty\": 0,\n  \"currentState\": \"-\"\n}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /v1/fulfillment/complete",
+              "code": "fetch('https://api.merchant.example.com/v1/fulfillment/complete', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n  \"fulfillment_qty\": 0,\n  \"order_qty\": 0,\n  \"currentState\": \"-\"\n}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /v1/fulfillment/complete",
+              "code": "import requests\n\nresp = requests.post('https://api.merchant.example.com/v1/fulfillment/complete', json={\n  \"fulfillment_qty\": 0,\n  \"order_qty\": 0,\n  \"currentState\": \"-\"\n})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "fulfillment_qty",
+              "type": "integer",
+              "description": "complete_fulfillment 契约层请求字段（字段 fulfillment_qty，类型 integer）",
+              "required": true
+            },
+            {
+              "name": "order_qty",
+              "type": "integer",
+              "description": "complete_fulfillment 契约层请求字段（字段 order_qty，类型 integer）",
+              "required": true
+            },
+            {
+              "name": "currentState",
+              "type": "string",
+              "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）",
+              "required": true
+            }
+          ],
+          "outputs": [
+            {
+              "name": "nextState",
+              "type": "string",
+              "description": "转移后状态（S3）",
+              "required": true
+            }
+          ],
+          "precondition": "fulfillment_qty == order_qty",
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": [
+            {
+              "id": "er_stock_insufficient",
+              "errorCode": "ERR_STOCK_INSUFFICIENT",
+              "httpStatus": 409,
+              "description": "库存不足，无法开始履约"
+            },
+            {
+              "id": "er_fulfillment_timeout",
+              "errorCode": "ERR_FULFILLMENT_TIMEOUT",
+              "httpStatus": 408,
+              "description": "履约超时未完成"
+            }
+          ]
+        },
+        "relation": {
+          "ownedTransitions": [
+            "T3"
+          ],
+          "preconditionStates": [
+            "S2"
+          ],
+          "postconditionStates": [
+            "S3"
+          ],
+          "coveredInvariants": [
+            {
+              "id": "INV1",
+              "name": "履约数量一致",
+              "scopeStateIds": [
+                "S2",
+                "S3"
+              ],
+              "carrierRoleIds": [
+                "customer",
+                "merchant"
+              ]
+            }
+          ],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318",
+          "transport": [
+            {
+              "type": "http",
+              "method": "POST",
+              "path": "/v1/fulfillment/complete",
+              "roleId": "merchant",
+              "protocol": "P1",
+              "server": "https://api.merchant.example.com"
+            }
+          ],
+          "errorMapHits": [
+            {
+              "errorCode": "ERR_STOCK_INSUFFICIENT",
+              "httpStatus": 409
+            },
+            {
+              "errorCode": "ERR_FULFILLMENT_TIMEOUT",
+              "httpStatus": 408
+            }
+          ]
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_T4": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_SYS_T4",
+          "name": "refund_cancel",
+          "kind": "system",
+          "sourceId": "refund_cancel",
+          "actionType": "state_transition",
+          "triggerRoleId": "platform",
+          "description": "退款已批准 且 P2.S_refunded",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"退款已批准 且 P2.S_refunded\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {
+              "currentState": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）"
+              },
+              "P2": {
+                "type": "string",
+                "description": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+              },
+              "S_refunded": {
+                "type": "string",
+                "description": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+              }
+            },
+            "required": [
+              "currentState",
+              "P2",
+              "S_refunded"
+            ],
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "nextState": {
+                "type": "string",
+                "enum": [
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "转移后状态（期望: S4，可选枚举值: S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "nextState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {
+            "currentState": "-",
+            "P2": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \"any\" 作为描述，机",
+            "S_refunded": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \"any\" 作为描述，机"
+          },
+          "responseExample": {
+            "nextState": "S0"
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /v1/orders/refund-cancel",
+              "code": "curl -X POST 'https://api.platform.example.com/v1/orders/refund-cancel' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n  \"currentState\": \"-\",\n  \"P2\": \"守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \\\"any\\\" 作为描述，机\",\n  \"S_refunded\": \"守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \\\"any\\\" 作为描述，机\"\n}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /v1/orders/refund-cancel",
+              "code": "fetch('https://api.platform.example.com/v1/orders/refund-cancel', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n  \"currentState\": \"-\",\n  \"P2\": \"守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \\\"any\\\" 作为描述，机\",\n  \"S_refunded\": \"守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \\\"any\\\" 作为描述，机\"\n}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /v1/orders/refund-cancel",
+              "code": "import requests\n\nresp = requests.post('https://api.platform.example.com/v1/orders/refund-cancel', json={\n  \"currentState\": \"-\",\n  \"P2\": \"守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \\\"any\\\" 作为描述，机\",\n  \"S_refunded\": \"守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \\\"any\\\" 作为描述，机\"\n})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "currentState",
+              "type": "string",
+              "description": "当前状态（期望为 S2）",
+              "required": true
+            },
+            {
+              "name": "P2",
+              "type": "any",
+              "description": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+              "required": true
+            },
+            {
+              "name": "S_refunded",
+              "type": "any",
+              "description": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+              "required": true
+            }
+          ],
+          "outputs": [
+            {
+              "name": "nextState",
+              "type": "string",
+              "description": "转移后状态（S4）",
+              "required": true
+            }
+          ],
+          "precondition": "退款已批准 且 P2.S_refunded",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：退款已批准 且 P2.S_refunded"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [
+            "T4"
+          ],
+          "preconditionStates": [
+            "S2"
+          ],
+          "postconditionStates": [
+            "S4"
+          ],
+          "coveredInvariants": [
+            {
+              "id": "INV2",
+              "name": "取消不产生履约费用",
+              "scopeStateIds": [
+                "S4"
+              ],
+              "carrierRoleIds": [
+                "platform"
+              ]
+            }
+          ],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318",
+          "transport": [
+            {
+              "type": "http",
+              "method": "POST",
+              "path": "/v1/orders/refund-cancel",
+              "roleId": "platform",
+              "protocol": "P1",
+              "server": "https://api.platform.example.com"
+            }
+          ]
+        },
+        "crossRefs": [
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "target": "S_refunded",
+            "sourceField": "precondition",
+            "context": "退款已批准 且 P2.S_refunded",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "S_refunded",
+              "reason": "语义别名：P2 当前版本状态集无 S_refunded，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "target": "S_refunded",
+            "sourceField": "preconditions[0].description",
+            "context": "…点，自然语言未机械提取：退款已批准 且 P2.S_refunded",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "S_refunded",
+              "reason": "语义别名：P2 当前版本状态集无 S_refunded，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "target": "S_refunded",
+            "sourceField": "inputs[1].description",
+            "context": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "S_refunded",
+              "reason": "语义别名：P2 当前版本状态集无 S_refunded，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "target": "S_refunded",
+            "sourceField": "inputs[2].description",
+            "context": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "S_refunded",
+              "reason": "语义别名：P2 当前版本状态集无 S_refunded，接口/资源池亦无命中"
+            }
+          }
+        ]
+      },
+      "IF_OBS_STATE_S0": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_OBS_STATE_S0",
+          "name": "observe_已创建",
+          "kind": "observation",
+          "sourceId": "S0",
+          "triggerRoleId": null,
+          "description": "observe_已创建",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 已创建（S0）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 已创建（S0）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_STATE_S1": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_OBS_STATE_S1",
+          "name": "observe_已确认",
+          "kind": "observation",
+          "sourceId": "S1",
+          "triggerRoleId": null,
+          "description": "observe_已确认",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 已确认（S1）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 已确认（S1）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_STATE_S2": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_OBS_STATE_S2",
+          "name": "observe_履约中",
+          "kind": "observation",
+          "sourceId": "S2",
+          "triggerRoleId": null,
+          "description": "observe_履约中",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 履约中（S2）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 履约中（S2）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_STATE_S3": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_OBS_STATE_S3",
+          "name": "observe_已履约完成",
+          "kind": "observation",
+          "sourceId": "S3",
+          "triggerRoleId": null,
+          "description": "observe_已履约完成",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 已履约完成（S3）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 已履约完成（S3）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_STATE_S4": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_OBS_STATE_S4",
+          "name": "observe_已取消",
+          "kind": "observation",
+          "sourceId": "S4",
+          "triggerRoleId": null,
+          "description": "observe_已取消",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 已取消（S4）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 已取消（S4）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV1": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_OBS_INV_INV1",
+          "name": "observe_INV1",
+          "kind": "observation",
+          "sourceId": "INV1",
+          "triggerRoleId": null,
+          "description": "observe_INV1",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 履约数量一致（INV1）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 履约数量一致（INV1）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [
+            {
+              "kind": "json-schema",
+              "description": "不变量 INV1（fulfillment_qty == order_qty）：谓词 fulfillment_qty == order_qty：跨字段相等（结构表达：字段必填；相等语义超出单文档 JSON Schema 范围，由不变量级校验承接）",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fulfillment_qty": {},
+                  "order_qty": {}
+                },
+                "required": [
+                  "fulfillment_qty",
+                  "order_qty"
+                ],
+                "description": "跨字段相等约束：fulfillment_qty == order_qty"
+              }
+            }
+          ],
+          "invariantIds": [
+            "INV1"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV2": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_OBS_INV_INV2",
+          "name": "observe_INV2",
+          "kind": "observation",
+          "sourceId": "INV2",
+          "triggerRoleId": null,
+          "description": "observe_INV2",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 取消不产生履约费用（INV2）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 取消不产生履约费用（INV2）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [
+            "INV2"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      }
+    },
+    "P2": {
+      "IF_SYS_T1": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_T1",
+          "name": "pay",
+          "kind": "system",
+          "sourceId": "pay",
+          "actionType": "state_transition",
+          "triggerRoleId": "customer",
+          "description": "nonNegative(amount)",
+          "schemaKind": "structured",
+          "schemaDegradedReasons": [],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": "number"
+              },
+              "currentState": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "amount",
+              "currentState"
+            ]
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "nextState": {
+                "type": "string",
+                "enum": [
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "转移后状态（期望: S1，可选枚举值: S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "nextState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {
+            "amount": 1,
+            "currentState": "-"
+          },
+          "responseExample": {
+            "nextState": "S0"
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /v2/payments",
+              "code": "curl -X POST 'https://api.pay.example.com/v2/payments' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n  \"amount\": 1,\n  \"currentState\": \"-\"\n}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /v2/payments",
+              "code": "fetch('https://api.pay.example.com/v2/payments', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n  \"amount\": 1,\n  \"currentState\": \"-\"\n}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /v2/payments",
+              "code": "import requests\n\nresp = requests.post('https://api.pay.example.com/v2/payments', json={\n  \"amount\": 1,\n  \"currentState\": \"-\"\n})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "amount",
+              "type": "number",
+              "description": "pay 契约层请求字段（字段 amount，类型 number）",
+              "required": true
+            },
+            {
+              "name": "currentState",
+              "type": "string",
+              "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）",
+              "required": true
+            }
+          ],
+          "outputs": [
+            {
+              "name": "nextState",
+              "type": "string",
+              "description": "转移后状态（S1）",
+              "required": true
+            }
+          ],
+          "precondition": "nonNegative(amount)",
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": [
+            {
+              "id": "er_payment_failed",
+              "errorCode": "ERR_PAYMENT_FAILED",
+              "httpStatus": 402,
+              "description": "支付失败，金额扣款未成功"
+            }
+          ]
+        },
+        "relation": {
+          "ownedTransitions": [
+            "T1"
+          ],
+          "preconditionStates": [
+            "S0"
+          ],
+          "postconditionStates": [
+            "S1"
+          ],
+          "coveredInvariants": [
+            {
+              "id": "INV1",
+              "name": "金额一致性",
+              "scopeStateIds": [
+                "S0",
+                "S1",
+                "S2"
+              ],
+              "carrierRoleIds": [
+                "customer",
+                "platform"
+              ]
+            },
+            {
+              "id": "INV2",
+              "name": "支付幂等键唯一",
+              "scopeStateIds": [
+                "S0",
+                "S1",
+                "S2"
+              ],
+              "carrierRoleIds": [
+                "customer",
+                "platform"
+              ]
+            }
+          ],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318",
+          "transport": [
+            {
+              "type": "http",
+              "method": "POST",
+              "path": "/v2/payments",
+              "roleId": "payment_gateway",
+              "protocol": "P2",
+              "server": "https://api.pay.example.com"
+            }
+          ],
+          "errorMapHits": [
+            {
+              "errorCode": "ERR_PAYMENT_FAILED",
+              "httpStatus": 402
+            }
+          ]
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_T2": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_T2",
+          "name": "pay_success",
+          "kind": "system",
+          "sourceId": "pay_success",
+          "actionType": "state_transition",
+          "triggerRoleId": "payment_gateway",
+          "description": "支付网关回调签名校验通过",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"支付网关回调签名校验通过\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {
+              "currentState": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "currentState"
+            ],
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "nextState": {
+                "type": "string",
+                "enum": [
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "转移后状态（期望: S2，可选枚举值: S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "nextState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {
+            "currentState": "-"
+          },
+          "responseExample": {
+            "nextState": "S0"
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n  \"currentState\": \"-\"\n}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n  \"currentState\": \"-\"\n}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={\n  \"currentState\": \"-\"\n})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "currentState",
+              "type": "string",
+              "description": "当前状态（期望为 S1）",
+              "required": true
+            }
+          ],
+          "outputs": [
+            {
+              "name": "nextState",
+              "type": "string",
+              "description": "转移后状态（S2）",
+              "required": true
+            }
+          ],
+          "precondition": "支付网关回调签名校验通过",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：支付网关回调签名校验通过"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [
+            "T2"
+          ],
+          "preconditionStates": [
+            "S1"
+          ],
+          "postconditionStates": [
+            "S2"
+          ],
+          "coveredInvariants": [
+            {
+              "id": "INV1",
+              "name": "金额一致性",
+              "scopeStateIds": [
+                "S0",
+                "S1",
+                "S2"
+              ],
+              "carrierRoleIds": [
+                "customer",
+                "platform"
+              ]
+            },
+            {
+              "id": "INV2",
+              "name": "支付幂等键唯一",
+              "scopeStateIds": [
+                "S0",
+                "S1",
+                "S2"
+              ],
+              "carrierRoleIds": [
+                "customer",
+                "platform"
+              ]
+            }
+          ],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_T3": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_T3",
+          "name": "pay_failed",
+          "kind": "system",
+          "sourceId": "pay_failed",
+          "actionType": "state_transition",
+          "triggerRoleId": "payment_gateway",
+          "description": "回调签名校验失败且重试次数超限",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"回调签名校验失败且重试次数超限\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {
+              "currentState": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "currentState"
+            ],
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "nextState": {
+                "type": "string",
+                "enum": [
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "转移后状态（期望: S4，可选枚举值: S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "nextState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {
+            "currentState": "-"
+          },
+          "responseExample": {
+            "nextState": "S0"
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n  \"currentState\": \"-\"\n}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n  \"currentState\": \"-\"\n}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={\n  \"currentState\": \"-\"\n})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "currentState",
+              "type": "string",
+              "description": "当前状态（期望为 S1）",
+              "required": true
+            }
+          ],
+          "outputs": [
+            {
+              "name": "nextState",
+              "type": "string",
+              "description": "转移后状态（S4）",
+              "required": true
+            }
+          ],
+          "precondition": "回调签名校验失败且重试次数超限",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：回调签名校验失败且重试次数超限"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [
+            "T3"
+          ],
+          "preconditionStates": [
+            "S1"
+          ],
+          "postconditionStates": [
+            "S4"
+          ],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_T4": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_T4",
+          "name": "refund",
+          "kind": "system",
+          "sourceId": "refund",
+          "actionType": "state_transition",
+          "triggerRoleId": "platform",
+          "description": "nonEmpty(refund_reason)",
+          "schemaKind": "structured",
+          "schemaDegradedReasons": [],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {
+              "refund_reason": {
+                "type": "string"
+              },
+              "currentState": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "refund_reason",
+              "currentState"
+            ]
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "nextState": {
+                "type": "string",
+                "enum": [
+                  "S0",
+                  "S1",
+                  "S2",
+                  "S3",
+                  "S4"
+                ],
+                "description": "转移后状态（期望: S3，可选枚举值: S0/S1/S2/S3/S4）"
+              }
+            },
+            "required": [
+              "nextState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {
+            "refund_reason": "string-ex9h46",
+            "currentState": "-"
+          },
+          "responseExample": {
+            "nextState": "S0"
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /v2/refunds",
+              "code": "curl -X POST 'https://api.platform.example.com/v2/refunds' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n  \"refund_reason\": \"string-8bx03c\",\n  \"currentState\": \"-\"\n}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /v2/refunds",
+              "code": "fetch('https://api.platform.example.com/v2/refunds', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n  \"refund_reason\": \"string-8bx03c\",\n  \"currentState\": \"-\"\n}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /v2/refunds",
+              "code": "import requests\n\nresp = requests.post('https://api.platform.example.com/v2/refunds', json={\n  \"refund_reason\": \"string-8bx03c\",\n  \"currentState\": \"-\"\n})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "refund_reason",
+              "type": "string",
+              "description": "refund 契约层请求字段（字段 refund_reason，类型 string）",
+              "required": true
+            },
+            {
+              "name": "currentState",
+              "type": "string",
+              "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）",
+              "required": true
+            }
+          ],
+          "outputs": [
+            {
+              "name": "nextState",
+              "type": "string",
+              "description": "转移后状态（S3）",
+              "required": true
+            }
+          ],
+          "precondition": "nonEmpty(refund_reason)",
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": [
+            {
+              "id": "er_refund_rejected",
+              "errorCode": "ERR_REFUND_REJECTED",
+              "httpStatus": 409,
+              "description": "退款被拒，订单状态不允许退款"
+            }
+          ]
+        },
+        "relation": {
+          "ownedTransitions": [
+            "T4"
+          ],
+          "preconditionStates": [
+            "S2"
+          ],
+          "postconditionStates": [
+            "S3"
+          ],
+          "coveredInvariants": [
+            {
+              "id": "INV3",
+              "name": "退款须已支付",
+              "scopeStateIds": [
+                "S3"
+              ],
+              "carrierRoleIds": [
+                "platform"
+              ]
+            }
+          ],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318",
+          "transport": [
+            {
+              "type": "http",
+              "method": "POST",
+              "path": "/v2/refunds",
+              "roleId": "platform",
+              "protocol": "P2",
+              "server": "https://api.platform.example.com"
+            }
+          ],
+          "errorMapHits": [
+            {
+              "errorCode": "ERR_REFUND_REJECTED",
+              "httpStatus": 409
+            }
+          ]
+        },
+        "crossRefs": [
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "target": "S_refunded",
+            "sourceField": "precondition",
+            "context": "退款已批准 且 P2.S_refunded",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "S_refunded",
+              "reason": "语义别名：P2 当前版本状态集无 S_refunded，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "target": "S_refunded",
+            "sourceField": "preconditions[0].description",
+            "context": "…点，自然语言未机械提取：退款已批准 且 P2.S_refunded",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "S_refunded",
+              "reason": "语义别名：P2 当前版本状态集无 S_refunded，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "target": "S_refunded",
+            "sourceField": "inputs[1].description",
+            "context": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "S_refunded",
+              "reason": "语义别名：P2 当前版本状态集无 S_refunded，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "target": "S_refunded",
+            "sourceField": "inputs[2].description",
+            "context": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "S_refunded",
+              "reason": "语义别名：P2 当前版本状态集无 S_refunded，接口/资源池亦无命中"
+            }
+          }
+        ]
+      },
+      "IF_OBS_STATE_S0": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_STATE_S0",
+          "name": "observe_待支付",
+          "kind": "observation",
+          "sourceId": "S0",
+          "triggerRoleId": null,
+          "description": "observe_待支付",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 待支付（S0）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 待支付（S0）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_STATE_S1": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_STATE_S1",
+          "name": "observe_支付中",
+          "kind": "observation",
+          "sourceId": "S1",
+          "triggerRoleId": null,
+          "description": "observe_支付中",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 支付中（S1）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 支付中（S1）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_STATE_S2": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_STATE_S2",
+          "name": "observe_已支付",
+          "kind": "observation",
+          "sourceId": "S2",
+          "triggerRoleId": null,
+          "description": "observe_已支付",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 已支付（S2）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 已支付（S2）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_STATE_S3": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_STATE_S3",
+          "name": "observe_已退款",
+          "kind": "observation",
+          "sourceId": "S3",
+          "triggerRoleId": null,
+          "description": "observe_已退款",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 已退款（S3）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 已退款（S3）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_STATE_S4": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_STATE_S4",
+          "name": "observe_支付失败",
+          "kind": "observation",
+          "sourceId": "S4",
+          "triggerRoleId": null,
+          "description": "observe_支付失败",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "isInState": {
+                "type": "boolean",
+                "description": "当前是否处于 支付失败（S4）状态"
+              }
+            },
+            "required": [
+              "isInState"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "isInState": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "isInState",
+              "type": "boolean",
+              "description": "当前是否处于 支付失败（S4）状态",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV1": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_INV_INV1",
+          "name": "observe_INV1",
+          "kind": "observation",
+          "sourceId": "INV1",
+          "triggerRoleId": null,
+          "description": "observe_INV1",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 金额一致性（INV1）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 金额一致性（INV1）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [
+            {
+              "kind": "json-schema",
+              "description": "不变量 INV1（paid_amount == order_amount）：谓词 paid_amount == order_amount：跨字段相等（结构表达：字段必填；相等语义超出单文档 JSON Schema 范围，由不变量级校验承接）",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "paid_amount": {},
+                  "order_amount": {}
+                },
+                "required": [
+                  "paid_amount",
+                  "order_amount"
+                ],
+                "description": "跨字段相等约束：paid_amount == order_amount"
+              }
+            }
+          ],
+          "invariantIds": [
+            "INV1"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV2": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_INV_INV2",
+          "name": "observe_INV2",
+          "kind": "observation",
+          "sourceId": "INV2",
+          "triggerRoleId": null,
+          "description": "observe_INV2",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 支付幂等键唯一（INV2）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 支付幂等键唯一（INV2）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [
+            {
+              "kind": "json-schema",
+              "description": "不变量 INV2（unique(payment_id)）：谓词 unique(payment_id)：payment_id 元素唯一（uniqueItems；数据级不变量直连 E4 SQL 校验生成器）",
+              "schema": {
+                "type": "array",
+                "uniqueItems": true,
+                "description": "payment_id 值唯一"
+              }
+            }
+          ],
+          "invariantIds": [
+            "INV2"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV3": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_INV_INV3",
+          "name": "observe_INV3",
+          "kind": "observation",
+          "sourceId": "INV3",
+          "triggerRoleId": null,
+          "description": "observe_INV3",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 退款须已支付（INV3）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 退款须已支付（INV3）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [
+            "INV3"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": true,
+          "bindingsFingerprintAtBuild": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318"
+        },
+        "crossRefs": []
+      }
+    }
+  },
+  "catalog": {
+    "byProtocol": {
+      "P1": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T1"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T2"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T3"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T4"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S0"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S1"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S2"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S3"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S4"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_INV_INV1"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_INV_INV2"
+        }
+      ],
+      "P2": [
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T3"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T4"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S0"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S3"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S4"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV3"
+        }
+      ]
+    },
+    "byRole": {
+      "customer": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T1"
+        }
+      ],
+      "merchant": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T2"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T3"
+        }
+      ],
+      "platform": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T4"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T4"
+        }
+      ],
+      "观测": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S0"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S1"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S2"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S3"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_STATE_S4"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_INV_INV1"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_OBS_INV_INV2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S0"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S3"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_STATE_S4"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV3"
+        }
+      ],
+      "payment_gateway": [
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T3"
+        }
+      ]
+    },
+    "byPreconditionState": {
+      "S0": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T1"
+        }
+      ],
+      "S1": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T3"
+        }
+      ],
+      "S2": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T3"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_T4"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_T4"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.0",
+  "kind": "project-manifest",
+  "generatedAt": "2026-08-30T14:14:33.155Z",
+  "project": {
+    "systemName": "履约-支付组合系统",
+    "version": "0.1.0",
+    "changeType": "protocol_tweak"
+  },
+  "bundles": {
+    "composition": {
+      "file": "data.json",
+      "schemaVersion": "1.1",
+      "modelVersion": "0.1.0"
+    },
+    "interfaceDetails": {
+      "file": "interface-details.json",
+      "schemaVersion": "1.1"
+    },
+    "protocols": [
+      {
+        "id": "P1",
+        "name": "履约协议",
+        "modelPath": "protocol/P1/model.md",
+        "modelVersion": "1.0.0",
+        "dataFile": "p1.data.json",
+        "dataSchemaVersion": "1.0",
+        "dataSourceModelVersion": "1.0.0",
+        "bindingsFingerprint": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318",
+        "interfaceCount": 11
+      },
+      {
+        "id": "P2",
+        "name": "支付协议",
+        "modelPath": "protocol/P2/model.md",
+        "modelVersion": "1.0.0",
+        "dataFile": "p2.data.json",
+        "dataSchemaVersion": "1.0",
+        "dataSourceModelVersion": "1.0.0",
+        "bindingsFingerprint": "9968d811e2259b62e0dd0dc888ed6f8e98f9a19ad70e8eda4de070ee25d27318",
+        "interfaceCount": 12
+      }
+    ],
+    "diff": [
+      {
+        "id": "payment-v1-v2",
+        "file": "payment.diff.data.json",
+        "schemaVersion": "1.0",
+        "sourceProtocolId": "P2",
+        "baseModelVersion": "1.0.0",
+        "targetModelVersion": "1.1.0"
+      }
+    ]
+  },
+  "redactionNotice": [
+    "本产物由 derive-web --project 机械生成；不含 authConfig.token/secret/password 等敏感字段。",
+    "本产物不读取 bindings.yaml 内容与进程环境变量；bindings 仅以 sha256 指纹声明存在性。"
+  ]
+}

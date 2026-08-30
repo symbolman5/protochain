@@ -1,0 +1,1256 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-25T09:41:16.085Z",
+  "sourceModelVersion": "1.1.0",
+  "protocol": {
+    "name": "支付协议",
+    "version": "1.1.0",
+    "purpose": "支付协议 v1→v2 演进素材（TC6 ⑤ / TC9 ⑦ diff 载体）：新增\"部分退款\"转移 T5 + metadata.version 升级",
+    "roles": [
+      {
+        "id": "customer",
+        "name": "顾客",
+        "roleType": "consensus"
+      },
+      {
+        "id": "platform",
+        "name": "平台",
+        "roleType": "participant"
+      },
+      {
+        "id": "payment_gateway",
+        "name": "支付网关",
+        "roleType": "participant"
+      }
+    ]
+  },
+  "interfaces": [
+    {
+      "id": "IF_SYS_T1",
+      "name": "pay",
+      "kind": "system",
+      "description": "nonNegative(amount)",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "amount",
+          "currentState"
+        ]
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S1，可选枚举值: S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "number",
+          "description": "pay 契约层请求字段（字段 amount，类型 number）",
+          "required": true
+        },
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S1）",
+          "required": true
+        }
+      ],
+      "precondition": "nonNegative(amount)",
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T2",
+      "name": "pay_success",
+      "kind": "system",
+      "description": "支付网关回调签名校验通过",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S2，可选枚举值: S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S1）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S2）",
+          "required": true
+        }
+      ],
+      "precondition": "支付网关回调签名校验通过",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：支付网关回调签名校验通过"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"支付网关回调签名校验通过\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T3",
+      "name": "pay_failed",
+      "kind": "system",
+      "description": "回调签名校验失败且重试次数超限",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S4，可选枚举值: S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S1）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S4）",
+          "required": true
+        }
+      ],
+      "precondition": "回调签名校验失败且重试次数超限",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：回调签名校验失败且重试次数超限"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"回调签名校验失败且重试次数超限\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T4",
+      "name": "refund",
+      "kind": "system",
+      "description": "nonEmpty(refund_reason)",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "refund_reason": {
+            "type": "string"
+          },
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "refund_reason",
+          "currentState"
+        ]
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S3，可选枚举值: S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "refund_reason",
+          "type": "string",
+          "description": "refund 契约层请求字段（字段 refund_reason，类型 string）",
+          "required": true
+        },
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S3）",
+          "required": true
+        }
+      ],
+      "precondition": "nonEmpty(refund_reason)",
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_T5",
+      "name": "refund_partial",
+      "kind": "system",
+      "description": "partial_refund_approved",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "partial_amount": {
+            "type": "number"
+          },
+          "refund_reason": {
+            "type": "string"
+          },
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "partial_amount",
+          "refund_reason",
+          "currentState"
+        ]
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S3，可选枚举值: S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "partial_amount",
+          "type": "number",
+          "description": "refund_partial 契约层请求字段（字段 partial_amount，类型 number）",
+          "required": true
+        },
+        {
+          "name": "refund_reason",
+          "type": "string",
+          "description": "refund_partial 契约层请求字段（字段 refund_reason，类型 string）",
+          "required": true
+        },
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S3）",
+          "required": true
+        }
+      ],
+      "precondition": "partial_refund_approved",
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_OBS_STATE_S0",
+      "name": "observe_待支付",
+      "kind": "observation",
+      "description": "observe_待支付",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 待支付（S0）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 待支付（S0）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S1",
+      "name": "observe_支付中",
+      "kind": "observation",
+      "description": "observe_支付中",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 支付中（S1）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 支付中（S1）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S2",
+      "name": "observe_已支付",
+      "kind": "observation",
+      "description": "observe_已支付",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已支付（S2）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已支付（S2）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S3",
+      "name": "observe_已退款",
+      "kind": "observation",
+      "description": "observe_已退款",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已退款（S3）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已退款（S3）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S4",
+      "name": "observe_支付失败",
+      "kind": "observation",
+      "description": "observe_支付失败",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 支付失败（S4）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 支付失败（S4）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV1",
+      "name": "observe_INV1",
+      "kind": "observation",
+      "description": "observe_INV1",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 金额一致性（INV1）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 金额一致性（INV1）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [
+        {
+          "kind": "json-schema",
+          "description": "不变量 INV1（paid_amount == order_amount）：谓词 paid_amount == order_amount：跨字段相等（结构表达：字段必填；相等语义超出单文档 JSON Schema 范围，由不变量级校验承接）",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "paid_amount": {},
+              "order_amount": {}
+            },
+            "required": [
+              "paid_amount",
+              "order_amount"
+            ],
+            "description": "跨字段相等约束：paid_amount == order_amount"
+          }
+        }
+      ],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV1"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV2",
+      "name": "observe_INV2",
+      "kind": "observation",
+      "description": "observe_INV2",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 支付幂等键唯一（INV2）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 支付幂等键唯一（INV2）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [
+        {
+          "kind": "json-schema",
+          "description": "不变量 INV2（unique(payment_id)）：谓词 unique(payment_id)：payment_id 元素唯一（uniqueItems；数据级不变量直连 E4 SQL 校验生成器）",
+          "schema": {
+            "type": "array",
+            "uniqueItems": true,
+            "description": "payment_id 值唯一"
+          }
+        }
+      ],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV2"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV3",
+      "name": "observe_INV3",
+      "kind": "observation",
+      "description": "observe_INV3",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 退款须已支付（INV3）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 退款须已支付（INV3）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV3"
+      ]
+    }
+  ],
+  "testCases": [
+    {
+      "id": "P_full_refund",
+      "stateIds": [
+        "S0",
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "transitionIds": [
+        "T1",
+        "T2",
+        "T4"
+      ],
+      "deviations": []
+    },
+    {
+      "id": "P_partial_refund",
+      "stateIds": [
+        "S0",
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "transitionIds": [
+        "T1",
+        "T2",
+        "T5"
+      ],
+      "deviations": []
+    },
+    {
+      "id": "P_pay_failed",
+      "stateIds": [
+        "S0",
+        "S1",
+        "S4"
+      ],
+      "transitionIds": [
+        "T1",
+        "T3"
+      ],
+      "deviations": []
+    }
+  ],
+  "verification": {
+    "hasReport": false,
+    "passed": false,
+    "counts": {
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0
+    },
+    "deviationSummary": {
+      "stateMismatch": 0,
+      "fieldMismatch": 0,
+      "missingAction": 0,
+      "invariantViolation": 0,
+      "timingViolation": 0,
+      "errorMismatch": 0,
+      "unexpectedError": 0,
+      "other": 0
+    },
+    "sideBySide": []
+  },
+  "diff": {
+    "metadataChanges": [
+      {
+        "path": "metadata.version",
+        "kind": "modified",
+        "oldValue": "1.0.0",
+        "newValue": "1.1.0"
+      },
+      {
+        "path": "metadata.purpose",
+        "kind": "modified",
+        "oldValue": "描述支付从发起、回调成功到退款的完整生命周期；包含 W1-b 关系断言段（三种断言各至少一条）与受限谓词语法守卫（TC1/TC2 实例载体）",
+        "newValue": "支付协议 v1→v2 演进素材（TC6 ⑤ / TC9 ⑦ diff 载体）：新增\"部分退款\"转移 T5 + metadata.version 升级"
+      }
+    ],
+    "readableChanges": [
+      {
+        "path": "readable.background",
+        "kind": "modified",
+        "oldValue": "支付协议定义顾客发起支付、支付网关回调结果、平台审批退款的协作规则。核心约束是：支付金额必须与订单金额一致（paid_amount == order_amount），支付幂等键全局唯一（unique(payment_id)，数据级不变量），退款必须发生在支付成功后。",
+        "newValue": "支付协议定义顾客发起支付、支付网关回调结果、平台审批退款的协作规则。v2 新增部分退款能力：已支付订单可在全额退款之外进行部分退款（T5）。核心约束不变：支付金额必须与订单金额一致（paid_amount == order_amount），支付幂等键全局唯一（unique(payment_id)）。"
+      },
+      {
+        "path": "readable.workflow",
+        "kind": "modified",
+        "oldValue": "顾客发起支付后订单进入支付中状态，支付网关回调成功则进入已支付状态（可退款），回调失败则进入支付失败终态；平台审批通过后发起退款，订单进入已退款终态。",
+        "newValue": "顾客发起支付后订单进入支付中状态，支付网关回调成功则进入已支付状态；平台审批通过后发起全额退款（T4）或部分退款（T5），订单进入已退款终态。"
+      },
+      {
+        "path": "readable.concepts[退款]",
+        "kind": "modified",
+        "oldValue": "仅已支付订单可发起退款，退款后进入终态",
+        "newValue": "仅已支付订单可发起退款；v2 支持部分退款（退款金额 ≤ 已支付金额）"
+      }
+    ],
+    "derivableChanges": [
+      {
+        "elementType": "transition",
+        "elementId": "T5",
+        "kind": "added"
+      }
+    ],
+    "diffedAt": "2026-08-25T09:41:16.069Z",
+    "summary": "元数据 2 项变更；可读层 3 项变更；可推演层 1 项变更"
+  },
+  "impact": {
+    "affectedSteps": [
+      "check",
+      "reason",
+      "formalize",
+      "derive-specs",
+      "derive-contracts",
+      "generate-tests",
+      "generate-cases",
+      "check-impl",
+      "verify"
+    ],
+    "affectedArtifacts": [
+      "derived/completeness-report.json",
+      "derived/reasoning-report.json",
+      "derived/formal/",
+      "derived/specs.json",
+      "derived/contracts.json",
+      "derived/test-tool/",
+      "derived/test-cases.json",
+      "derived/impl-check/",
+      "derived/verification/"
+    ],
+    "incrementalPlan": [
+      "check",
+      "reason",
+      "formalize",
+      "derive-specs",
+      "derive-contracts",
+      "generate-tests",
+      "generate-cases",
+      "check-impl",
+      "verify"
+    ],
+    "analyzedAt": "2026-08-25T09:41:16.069Z",
+    "humanReadable": [
+      {
+        "trigger": "新增 transition: T5",
+        "affected": [
+          "check",
+          "reason",
+          "formalize",
+          "derive-specs",
+          "derive-contracts",
+          "generate-tests",
+          "generate-cases",
+          "check-impl",
+          "verify"
+        ]
+      }
+    ]
+  },
+  "implCheck": null,
+  "stateMachine": {
+    "mermaid": "stateDiagram-v2\n    S0 : S0: 待支付 (初始)\n    S1 : S1: 支付中\n    S2 : S2: 已支付\n    S3 : S3: 已退款 (终态)\n    S4 : S4: 支付失败 (终态)\n    S0 --> S1 : pay[nonNegative(amount)]\n    S1 --> S2 : pay_success[支付网关回调签名校验通过]\n    S1 --> S4 : pay_failed[回调签名校验失败且重试次数超限]\n    S2 --> S3 : refund[nonEmpty(refund_reason)]\n    S2 --> S3 : refund_partial[partial_refund_approved]",
+    "nodes": [
+      {
+        "id": "S0",
+        "name": "待支付",
+        "type": "initial",
+        "roleIds": [
+          "customer"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S1",
+        "name": "支付中",
+        "type": "normal",
+        "roleIds": [
+          "customer"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S2",
+        "name": "已支付",
+        "type": "normal",
+        "roleIds": [
+          "customer",
+          "platform"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S3",
+        "name": "已退款",
+        "type": "terminal",
+        "roleIds": [
+          "platform"
+        ],
+        "terminal": true
+      },
+      {
+        "id": "S4",
+        "name": "支付失败",
+        "type": "terminal",
+        "roleIds": [
+          "customer"
+        ],
+        "terminal": true
+      }
+    ],
+    "edges": [
+      {
+        "id": "T1",
+        "action": "pay",
+        "from": [
+          "S0"
+        ],
+        "to": "S1",
+        "triggerRoleId": "customer",
+        "degraded": false,
+        "derivedFrom": "T1",
+        "guard": "nonNegative(amount)",
+        "guardSchemaKind": "json-schema",
+        "timing": [
+          {
+            "id": "TM1",
+            "type": "timeout",
+            "boundMs": 300000
+          }
+        ]
+      },
+      {
+        "id": "T2",
+        "action": "pay_success",
+        "from": [
+          "S1"
+        ],
+        "to": "S2",
+        "triggerRoleId": "payment_gateway",
+        "degraded": false,
+        "derivedFrom": "T2",
+        "guard": "支付网关回调签名校验通过",
+        "guardSchemaKind": "description-only"
+      },
+      {
+        "id": "T3",
+        "action": "pay_failed",
+        "from": [
+          "S1"
+        ],
+        "to": "S4",
+        "triggerRoleId": "payment_gateway",
+        "degraded": true,
+        "derivedFrom": "T3",
+        "guard": "回调签名校验失败且重试次数超限",
+        "guardSchemaKind": "description-only",
+        "timing": [
+          {
+            "id": "TM1",
+            "type": "timeout",
+            "boundMs": 300000
+          }
+        ]
+      },
+      {
+        "id": "T4",
+        "action": "refund",
+        "from": [
+          "S2"
+        ],
+        "to": "S3",
+        "triggerRoleId": "platform",
+        "degraded": false,
+        "derivedFrom": "T4",
+        "guard": "nonEmpty(refund_reason)",
+        "guardSchemaKind": "json-schema"
+      },
+      {
+        "id": "T5",
+        "action": "refund_partial",
+        "from": [
+          "S2"
+        ],
+        "to": "S3",
+        "triggerRoleId": "platform",
+        "degraded": false,
+        "derivedFrom": "T5",
+        "guard": "partial_refund_approved",
+        "guardSchemaKind": "description-only"
+      }
+    ],
+    "edgeCoverage": {
+      "T1": "uncovered",
+      "T2": "uncovered",
+      "T3": "uncovered",
+      "T4": "uncovered",
+      "T5": "uncovered"
+    },
+    "invariantScope": {
+      "INV1": {
+        "name": "金额一致性",
+        "scopeStateIds": [
+          "S0",
+          "S1",
+          "S2"
+        ],
+        "carrierRoleIds": [
+          "customer",
+          "platform"
+        ]
+      },
+      "INV2": {
+        "name": "支付幂等键唯一",
+        "scopeStateIds": [
+          "S0",
+          "S1",
+          "S2"
+        ],
+        "carrierRoleIds": [
+          "customer",
+          "platform"
+        ]
+      },
+      "INV3": {
+        "name": "退款须已支付",
+        "scopeStateIds": [
+          "S3"
+        ],
+        "carrierRoleIds": [
+          "platform"
+        ]
+      }
+    }
+  },
+  "relations": {
+    "sourceModelVersion": "1.1.0",
+    "entries": [
+      {
+        "kind": "causes_state_change",
+        "fromId": "T1",
+        "toId": "S1",
+        "derivedFrom": [
+          "T1"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T2",
+        "toId": "S2",
+        "derivedFrom": [
+          "T2"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T3",
+        "toId": "S4",
+        "derivedFrom": [
+          "T3"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T4",
+        "toId": "S3",
+        "derivedFrom": [
+          "T4"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T5",
+        "toId": "S3",
+        "derivedFrom": [
+          "T5"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV1",
+        "toId": "S0,S1,S2",
+        "derivedFrom": [
+          "INV1"
+        ],
+        "scopeStateIds": [
+          "S0",
+          "S1",
+          "S2"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV2",
+        "toId": "S0,S1,S2",
+        "derivedFrom": [
+          "INV2"
+        ],
+        "scopeStateIds": [
+          "S0",
+          "S1",
+          "S2"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV3",
+        "toId": "S3",
+        "derivedFrom": [
+          "INV3"
+        ],
+        "scopeStateIds": [
+          "S3"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T1",
+        "toId": "T2",
+        "derivedFrom": [
+          "T1",
+          "T2"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T1",
+        "toId": "T3",
+        "derivedFrom": [
+          "T1",
+          "T3"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T2",
+        "toId": "T4",
+        "derivedFrom": [
+          "T2",
+          "T4"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T2",
+        "toId": "T5",
+        "derivedFrom": [
+          "T2",
+          "T5"
+        ]
+      },
+      {
+        "kind": "timing",
+        "fromId": "pay",
+        "toId": "pay_failed",
+        "derivedFrom": [
+          "TM1"
+        ],
+        "boundMs": 300000
+      }
+    ]
+  },
+  "diffView": {
+    "changedTransitions": [
+      "T5"
+    ],
+    "changedStates": [],
+    "changedOthers": [],
+    "affectedInterfaces": [
+      "IF_SYS_T5"
+    ],
+    "affectedCases": [
+      "P_partial_refund"
+    ],
+    "summary": "元数据 2 项变更；可读层 3 项变更；可推演层 1 项变更"
+  },
+  "redactionNotice": [
+    "本产物由 derive-web 机械生成；不含 authConfig.token/secret/password 等敏感字段。",
+    "本产物不读取 bindings.yaml；不读取进程环境变量。",
+    "P0 范围仅只读展示；编辑能力在 P1 提供。"
+  ],
+  "exceptionPaths": [
+    {
+      "id": "EX1",
+      "name": "支付超时"
+    }
+  ]
+}

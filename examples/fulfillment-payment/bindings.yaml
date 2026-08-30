@@ -1,0 +1,50 @@
+# G6（C-G6-5 / 10 §17.3）演示实例绑定配置
+# 角色级 baseUrl（WebBindingView.roles[].baseUrl；webgen/index.ts L307）；
+# interfaces[].transport(method/path/type) 供界面展示完整 URL（apifox 式）；
+# errorMap 供错误码表命中（与 model.md contracts errorResponses 口径一致）。
+# 注意：本文件仅含非敏感投影子集（baseUrl/transport/errorMap），不含 authConfig/tls 密钥段（Gif-3）。
+
+roles:
+  customer:
+    baseUrl: https://api.shop.example.com
+  platform:
+    baseUrl: https://api.platform.example.com
+  merchant:
+    baseUrl: https://api.merchant.example.com
+  payment_gateway:
+    baseUrl: https://api.pay.example.com
+
+interfaces:
+  # ── P1 履约协议 ──
+  - action: confirm_order
+    roleId: platform
+    protocol: P1
+    transport: { type: http, method: POST, path: /v1/orders/confirm }
+  - action: start_fulfillment
+    roleId: merchant
+    protocol: P1
+    transport: { type: http, method: POST, path: /v1/fulfillment/start }
+  - action: complete_fulfillment
+    roleId: merchant
+    protocol: P1
+    transport: { type: http, method: POST, path: /v1/fulfillment/complete }
+  - action: refund_cancel
+    roleId: platform
+    protocol: P1
+    transport: { type: http, method: POST, path: /v1/orders/refund-cancel }
+  # ── P2 支付协议 ──
+  - action: pay
+    roleId: payment_gateway
+    protocol: P2
+    transport: { type: http, method: POST, path: /v2/payments }
+  - action: refund
+    roleId: platform
+    protocol: P2
+    transport: { type: http, method: POST, path: /v2/refunds }
+
+errorMap:
+  ERR_ORDER_NOT_FOUND: { httpStatus: 404 }
+  ERR_STOCK_INSUFFICIENT: { httpStatus: 409 }
+  ERR_FULFILLMENT_TIMEOUT: { httpStatus: 408 }
+  ERR_PAYMENT_FAILED: { httpStatus: 402 }
+  ERR_REFUND_REJECTED: { httpStatus: 409 }

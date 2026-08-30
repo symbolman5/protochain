@@ -1,0 +1,7 @@
+name: fulfillment-payment
+formalTool: auto
+paths:
+  protocol: protocol
+  derived: derived
+  scaffold: scaffold
+  diff: derived/diff

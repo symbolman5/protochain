@@ -1,0 +1,997 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-30T14:14:23.490Z",
+  "sourceModelVersion": "1.0.0",
+  "protocol": {
+    "name": "履约协议",
+    "version": "1.0.0",
+    "purpose": "描述订单确认、履约执行到履约完成的完整生命周期，守卫条件包含受限谓词语法命中与自然语言未命中两类样例（W2 实例载体）",
+    "roles": [
+      {
+        "id": "customer",
+        "name": "顾客",
+        "roleType": "consensus"
+      },
+      {
+        "id": "platform",
+        "name": "平台",
+        "roleType": "participant"
+      },
+      {
+        "id": "merchant",
+        "name": "商家",
+        "roleType": "participant"
+      }
+    ]
+  },
+  "interfaces": [
+    {
+      "id": "IF_SYS_T1",
+      "name": "confirm_order",
+      "kind": "system",
+      "description": "nonEmpty(order_id)",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string"
+          },
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "order_id",
+          "currentState"
+        ]
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S1，可选枚举值: S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "order_id",
+          "type": "string",
+          "description": "confirm_order 契约层请求字段（字段 order_id，类型 string）",
+          "required": true
+        },
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望 S0，可选枚举值: -/S0/S1/S2/S3/S4）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S1）",
+          "required": true
+        }
+      ],
+      "precondition": "nonEmpty(order_id)",
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition",
+      "errorResponses": [
+        {
+          "id": "er_order_not_found",
+          "errorCode": "ERR_ORDER_NOT_FOUND",
+          "httpStatus": 404,
+          "description": "订单不存在或已失效"
+        }
+      ],
+      "triggerRoleId": "customer"
+    },
+    {
+      "id": "IF_SYS_T2",
+      "name": "start_fulfillment",
+      "kind": "system",
+      "description": "库存充足且订单已确认",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S1，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "currentState"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S2，可选枚举值: S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S1）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S2）",
+          "required": true
+        }
+      ],
+      "precondition": "库存充足且订单已确认",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：库存充足且订单已确认"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"库存充足且订单已确认\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition",
+      "triggerRoleId": "merchant"
+    },
+    {
+      "id": "IF_SYS_T3",
+      "name": "complete_fulfillment",
+      "kind": "system",
+      "description": "fulfillment_qty == order_qty",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "fulfillment_qty": {
+            "type": "integer"
+          },
+          "order_qty": {
+            "type": "integer"
+          },
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "fulfillment_qty",
+          "order_qty",
+          "currentState"
+        ]
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S3，可选枚举值: S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "fulfillment_qty",
+          "type": "integer",
+          "description": "complete_fulfillment 契约层请求字段（字段 fulfillment_qty，类型 integer）",
+          "required": true
+        },
+        {
+          "name": "order_qty",
+          "type": "integer",
+          "description": "complete_fulfillment 契约层请求字段（字段 order_qty，类型 integer）",
+          "required": true
+        },
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S3）",
+          "required": true
+        }
+      ],
+      "precondition": "fulfillment_qty == order_qty",
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "structured",
+      "schemaDegradedReasons": [],
+      "actionType": "state_transition",
+      "errorResponses": [
+        {
+          "id": "er_stock_insufficient",
+          "errorCode": "ERR_STOCK_INSUFFICIENT",
+          "httpStatus": 409,
+          "description": "库存不足，无法开始履约"
+        },
+        {
+          "id": "er_fulfillment_timeout",
+          "errorCode": "ERR_FULFILLMENT_TIMEOUT",
+          "httpStatus": 408,
+          "description": "履约超时未完成"
+        }
+      ],
+      "triggerRoleId": "merchant"
+    },
+    {
+      "id": "IF_SYS_T4",
+      "name": "refund_cancel",
+      "kind": "system",
+      "description": "退款已批准 且 P2.S_refunded",
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "currentState": {
+            "type": "string",
+            "enum": [
+              "-",
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "当前状态（期望 S2，可选枚举值: -/S0/S1/S2/S3/S4）"
+          },
+          "P2": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          },
+          "S_refunded": {
+            "type": "string",
+            "description": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）（schema 声明类型 \"any\" 作为描述，机械映射为 string）"
+          }
+        },
+        "required": [
+          "currentState",
+          "P2",
+          "S_refunded"
+        ],
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "nextState": {
+            "type": "string",
+            "enum": [
+              "S0",
+              "S1",
+              "S2",
+              "S3",
+              "S4"
+            ],
+            "description": "转移后状态（期望: S4，可选枚举值: S0/S1/S2/S3/S4）"
+          }
+        },
+        "required": [
+          "nextState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [
+        {
+          "name": "currentState",
+          "type": "string",
+          "description": "当前状态（期望为 S2）",
+          "required": true
+        },
+        {
+          "name": "P2",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+          "required": true
+        },
+        {
+          "name": "S_refunded",
+          "type": "any",
+          "description": "守卫条件参数（来自 guard: 退款已批准 且 P2.S_refunded）",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextState",
+          "type": "string",
+          "description": "转移后状态（S4）",
+          "required": true
+        }
+      ],
+      "precondition": "退款已批准 且 P2.S_refunded",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：退款已批准 且 P2.S_refunded"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"退款已批准 且 P2.S_refunded\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition",
+      "triggerRoleId": "platform"
+    },
+    {
+      "id": "IF_OBS_STATE_S0",
+      "name": "observe_已创建",
+      "kind": "observation",
+      "description": "observe_已创建",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已创建（S0）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已创建（S0）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S1",
+      "name": "observe_已确认",
+      "kind": "observation",
+      "description": "observe_已确认",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已确认（S1）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已确认（S1）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S2",
+      "name": "observe_履约中",
+      "kind": "observation",
+      "description": "observe_履约中",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 履约中（S2）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 履约中（S2）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S3",
+      "name": "observe_已履约完成",
+      "kind": "observation",
+      "description": "observe_已履约完成",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已履约完成（S3）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已履约完成（S3）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_STATE_S4",
+      "name": "observe_已取消",
+      "kind": "observation",
+      "description": "observe_已取消",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "isInState": {
+            "type": "boolean",
+            "description": "当前是否处于 已取消（S4）状态"
+          }
+        },
+        "required": [
+          "isInState"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "isInState",
+          "type": "boolean",
+          "description": "当前是否处于 已取消（S4）状态",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured"
+    },
+    {
+      "id": "IF_OBS_INV_INV1",
+      "name": "observe_INV1",
+      "kind": "observation",
+      "description": "observe_INV1",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 履约数量一致（INV1）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 履约数量一致（INV1）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [
+        {
+          "kind": "json-schema",
+          "description": "不变量 INV1（fulfillment_qty == order_qty）：谓词 fulfillment_qty == order_qty：跨字段相等（结构表达：字段必填；相等语义超出单文档 JSON Schema 范围，由不变量级校验承接）",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "fulfillment_qty": {},
+              "order_qty": {}
+            },
+            "required": [
+              "fulfillment_qty",
+              "order_qty"
+            ],
+            "description": "跨字段相等约束：fulfillment_qty == order_qty"
+          }
+        }
+      ],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV1"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV2",
+      "name": "observe_INV2",
+      "kind": "observation",
+      "description": "observe_INV2",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 取消不产生履约费用（INV2）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 取消不产生履约费用（INV2）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV2"
+      ]
+    }
+  ],
+  "testCases": [
+    {
+      "id": "PATH_01_main",
+      "length": 3,
+      "stateIds": [
+        "S0",
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "transitionIds": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "description": "S0 → S1 → S2 → S3",
+      "deviations": []
+    },
+    {
+      "id": "PATH_02_main",
+      "length": 3,
+      "stateIds": [
+        "S0",
+        "S1",
+        "S2",
+        "S4"
+      ],
+      "transitionIds": [
+        "T1",
+        "T2",
+        "T4"
+      ],
+      "description": "S0 → S1 → S2 → S4",
+      "deviations": []
+    }
+  ],
+  "verification": {
+    "hasReport": false,
+    "passed": false,
+    "counts": {
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0
+    },
+    "deviationSummary": {
+      "stateMismatch": 0,
+      "fieldMismatch": 0,
+      "missingAction": 0,
+      "invariantViolation": 0,
+      "timingViolation": 0,
+      "errorMismatch": 0,
+      "unexpectedError": 0,
+      "other": 0
+    },
+    "sideBySide": []
+  },
+  "diff": null,
+  "impact": null,
+  "implCheck": null,
+  "stateMachine": {
+    "mermaid": "stateDiagram-v2\n    S0 : S0: 已创建 (初始)\n    S1 : S1: 已确认\n    S2 : S2: 履约中\n    S3 : S3: 已履约完成 (终态)\n    S4 : S4: 已取消 (终态)\n    S0 --> S1 : confirm_order[nonEmpty(order_id)]\n    S1 --> S2 : start_fulfillment[库存充足且订单已确认]\n    S2 --> S3 : complete_fulfillment[fulfillment_qty == order_qty]\n    S2 --> S4 : refund_cancel[退款已批准 且 P2.S_refunded]",
+    "nodes": [
+      {
+        "id": "S0",
+        "name": "已创建",
+        "type": "initial",
+        "roleIds": [
+          "customer"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S1",
+        "name": "已确认",
+        "type": "normal",
+        "roleIds": [
+          "customer"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S2",
+        "name": "履约中",
+        "type": "normal",
+        "roleIds": [
+          "merchant"
+        ],
+        "terminal": false
+      },
+      {
+        "id": "S3",
+        "name": "已履约完成",
+        "type": "terminal",
+        "roleIds": [
+          "customer"
+        ],
+        "terminal": true
+      },
+      {
+        "id": "S4",
+        "name": "已取消",
+        "type": "terminal",
+        "roleIds": [
+          "platform"
+        ],
+        "terminal": true
+      }
+    ],
+    "edges": [
+      {
+        "id": "T1",
+        "action": "confirm_order",
+        "from": [
+          "S0"
+        ],
+        "to": "S1",
+        "triggerRoleId": "customer",
+        "degraded": false,
+        "derivedFrom": "T1",
+        "guard": "nonEmpty(order_id)",
+        "guardSchemaKind": "json-schema"
+      },
+      {
+        "id": "T2",
+        "action": "start_fulfillment",
+        "from": [
+          "S1"
+        ],
+        "to": "S2",
+        "triggerRoleId": "merchant",
+        "degraded": false,
+        "derivedFrom": "T2",
+        "guard": "库存充足且订单已确认",
+        "guardSchemaKind": "description-only",
+        "timing": [
+          {
+            "id": "TM1",
+            "type": "timeout",
+            "boundMs": 3600000
+          }
+        ]
+      },
+      {
+        "id": "T3",
+        "action": "complete_fulfillment",
+        "from": [
+          "S2"
+        ],
+        "to": "S3",
+        "triggerRoleId": "merchant",
+        "degraded": false,
+        "derivedFrom": "T3",
+        "guard": "fulfillment_qty == order_qty",
+        "guardSchemaKind": "json-schema",
+        "timing": [
+          {
+            "id": "TM1",
+            "type": "timeout",
+            "boundMs": 3600000
+          }
+        ]
+      },
+      {
+        "id": "T4",
+        "action": "refund_cancel",
+        "from": [
+          "S2"
+        ],
+        "to": "S4",
+        "triggerRoleId": "platform",
+        "degraded": true,
+        "derivedFrom": "T4",
+        "guard": "退款已批准 且 P2.S_refunded",
+        "guardSchemaKind": "description-only"
+      }
+    ],
+    "edgeCoverage": {
+      "T1": "uncovered",
+      "T2": "uncovered",
+      "T3": "uncovered",
+      "T4": "uncovered"
+    },
+    "invariantScope": {
+      "INV1": {
+        "name": "履约数量一致",
+        "scopeStateIds": [
+          "S2",
+          "S3"
+        ],
+        "carrierRoleIds": [
+          "customer",
+          "merchant"
+        ]
+      },
+      "INV2": {
+        "name": "取消不产生履约费用",
+        "scopeStateIds": [
+          "S4"
+        ],
+        "carrierRoleIds": [
+          "platform"
+        ]
+      }
+    }
+  },
+  "relations": {
+    "sourceModelVersion": "1.0.0",
+    "entries": [
+      {
+        "kind": "causes_state_change",
+        "fromId": "T1",
+        "toId": "S1",
+        "derivedFrom": [
+          "T1"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T2",
+        "toId": "S2",
+        "derivedFrom": [
+          "T2"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T3",
+        "toId": "S3",
+        "derivedFrom": [
+          "T3"
+        ]
+      },
+      {
+        "kind": "causes_state_change",
+        "fromId": "T4",
+        "toId": "S4",
+        "derivedFrom": [
+          "T4"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV1",
+        "toId": "S2,S3",
+        "derivedFrom": [
+          "INV1"
+        ],
+        "scopeStateIds": [
+          "S2",
+          "S3"
+        ]
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV2",
+        "toId": "S4",
+        "derivedFrom": [
+          "INV2"
+        ],
+        "scopeStateIds": [
+          "S4"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T1",
+        "toId": "T2",
+        "derivedFrom": [
+          "T1",
+          "T2"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T2",
+        "toId": "T3",
+        "derivedFrom": [
+          "T2",
+          "T3"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "fromId": "T2",
+        "toId": "T4",
+        "derivedFrom": [
+          "T2",
+          "T4"
+        ]
+      },
+      {
+        "kind": "timing",
+        "fromId": "start_fulfillment",
+        "toId": "complete_fulfillment",
+        "derivedFrom": [
+          "TM1"
+        ],
+        "boundMs": 3600000
+      }
+    ]
+  },
+  "redactionNotice": [
+    "本产物由 derive-web 机械生成；不含 authConfig.token/secret/password 等敏感字段。",
+    "本产物不读取 bindings.yaml；不读取进程环境变量。",
+    "P0 范围仅只读展示；编辑能力在 P1 提供。"
+  ],
+  "exceptionPaths": [
+    {
+      "id": "EX1",
+      "name": "履约超时"
+    }
+  ]
+}
