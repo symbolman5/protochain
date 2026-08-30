@@ -680,3 +680,70 @@ h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacin
 }
 .proto-rel-ongone { color: #9a6700; }
 .protocol-panel .proto-empty { color: #9a6700; }
+
+/* ---------- V5 组件层面板（§11.3 组件模型视图） ---------- */
+.component-panel .comp-empty { color: #9a6700; font-size: 12px; padding: 6px 2px; }
+.comp-section { margin-top: 8px; }
+.comp-section-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+
+/* ① 接口 → 实现组件表 */
+.comp-impl-table, .comp-storage-table {
+  border-collapse: collapse; font-size: 12px; min-width: 100%;
+  border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+}
+.comp-impl-table th, .comp-impl-table td,
+.comp-storage-table th, .comp-storage-table td { border: 1px solid #e9ecf1; padding: 4px 6px; text-align: left; vertical-align: top; }
+.comp-impl-table th, .comp-storage-table th { background: #f6f8fb; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.comp-impl-row { background: #fff; }
+.comp-impl-row.hl { background: #ffe9a8; }
+.comp-impl-id { color: var(--muted); font-size: 11px; margin-right: 6px; }
+.comp-impl-name { font-weight: 600; }
+.comp-impl-component {
+  display: inline-block; border: 1px solid #c3d8fb; border-radius: 999px;
+  padding: 0 8px; background: #f2f6fe; color: #2f6fed; font-size: 11px; cursor: pointer;
+}
+.comp-impl-component.hl { background: #ffe9a8; border-color: #d4a72c; color: #7a5b00; }
+.comp-impl-desc { color: var(--muted); font-size: 11px; }
+
+/* ② 实体维度 → 存储表 */
+.comp-storage-dim { font-weight: 600; margin-right: 6px; }
+.comp-storage-owner { color: var(--muted); font-size: 11px; }
+.comp-storage-table-tag {
+  display: inline-block; border: 1px solid #d6c3ee; border-radius: 999px;
+  padding: 0 8px; background: #f8f4fd; color: #7d4bb4; font-size: 11px;
+}
+.comp-storage-row.hl { background: #ffe9a8; }
+.comp-storage-desc { color: var(--muted); font-size: 11px; }
+
+/* ③ 组件 → 组件传输表 */
+.comp-transfer-list { display: flex; flex-direction: column; gap: 4px; }
+.comp-transfer-row {
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px;
+  font-size: 12px; background: #fff; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.comp-transfer-row.hl { background: #ffe9a8; }
+.comp-transfer-pair { font-weight: 600; }
+.comp-transfer-channel { font-size: 11px; color: var(--muted); }
+.comp-transfer-desc { color: var(--muted); font-size: 11px; max-width: 420px; }
+.comp-mode { font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px solid; font-weight: 600; }
+.comp-mode-sync { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.comp-mode-async { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+
+/* ④ 架构总览拓扑 */
+.comp-topo-nodes { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 6px; }
+.comp-topo-nodes-label { font-size: 11px; color: var(--muted); }
+.comp-topo-node {
+  font-size: 11px; border: 1px solid #c3d8fb; border-radius: 999px; padding: 2px 10px;
+  background: #f2f6fe; color: #2f6fed; cursor: pointer;
+}
+.comp-topo-node.hl { background: #ffe9a8; border-color: #d4a72c; color: #7a5b00; }
+.comp-topo-edges { display: flex; flex-direction: column; gap: 4px; }
+.comp-topo-edge {
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+  font-size: 12px; background: #fff; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.comp-topo-arrow { font-weight: 600; }
+.comp-topo-channel { font-size: 11px; color: var(--muted); }
+
+/* 双向跳转：协议层跨面板高亮（独立类名，不与协议层自身联动互踩） */
+.proto-op-row.hl-comp { background: #ffe9a8; box-shadow: inset 0 0 0 1px #d4a72c; }

@@ -151,6 +151,7 @@ describe('viewer 静态资产冒烟（W3-a / TA3）', () => {
     //   interface-view-utils.js（共享纯函数）、interface-catalog-panel.js（接口目录）、
     //   interface-jump-bridge.js（状态机→接口跳转）。全部本地相对路径、无 CDN、无框架。
     // V4 在 G5 骨架之上新增 protocol-panel.js（协议层面板，§11.3）。
+    // V5 在其后新增 component-panel.js（组件层面板，§11.3 组件模型视图）。
     expect(scripts).toEqual([
       'assets/parser.js',
       'n1-guard.js',
@@ -168,6 +169,7 @@ describe('viewer 静态资产冒烟（W3-a / TA3）', () => {
       'interface-catalog-panel.js',
       'interface-jump-bridge.js',
       'protocol-panel.js',
+      'component-panel.js',
     ]);
   });
 });
