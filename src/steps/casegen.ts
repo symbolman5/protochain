@@ -88,6 +88,25 @@ function formatCaseSummary(testCases: TestCaseSet): string {
     lines.push(`  路径覆盖: ${c.pathCoverage.covered}/${c.pathCoverage.total}`);
   }
 
+  // G7-S4：对抗性用例（X5/X6/X12）与差额降级记录
+  const adversarial = testCases.adversarialCases ?? [];
+  if (adversarial.length > 0) {
+    const byKind = (k: string) => adversarial.filter((a) => a.kind === k).length;
+    lines.push(
+      `  对抗用例: ${adversarial.length} 条（X5 observed 直写违例 ${byKind('observed-write')} / X6 guard 失败后状态不变 ${byKind('guard-failure')} / X12 收敛断言 ${byKind('convergence')}）`
+    );
+  }
+  const degraded = testCases.degradedReasons ?? [];
+  if (degraded.length > 0) {
+    lines.push(`  降级记录: ${degraded.length} 条（R4 差额 / P2-8 detection 缺省）`);
+    for (const d of degraded.slice(0, 5)) {
+      lines.push(`    - ${d}`);
+    }
+    if (degraded.length > 5) {
+      lines.push(`    ... 还有 ${degraded.length - 5} 条`);
+    }
+  }
+
   // 未覆盖项
   const uncovered = c.uncoveredDispositions;
   if (uncovered.length > 0) {

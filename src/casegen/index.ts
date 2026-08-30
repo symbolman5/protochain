@@ -26,6 +26,11 @@ import type {
   StateDimension,
   AIAdapter,
   AIPrompt,
+  AdversarialCase,
+  AdversarialCaseKind,
+  JSONSchema,
+  SchemaExpression,
+  TransitionDef,
 } from '../model/types.js';
 import { parseAIJson } from '../ai/adapter.js';
 import {
@@ -38,6 +43,8 @@ import {
   isCreationTransition,
   type StateMachine,
 } from '../model/state-machines.js';
+import { buildDimensionKinds } from '../model/dimension-kind.js';
+import { translatePredicate } from '../specifier/predicates.js';
 
 export interface CaseGenOptions {
   /** 覆盖度准则 */
@@ -67,12 +74,22 @@ export function generateCases(
   const initialStateId = derivable.initialStateId ??
     derivable.states.find((s) => s.type === 'initial')?.id;
 
+  // G7-S4：对抗性用例（X5 observed 直写违例 / X6 guard 失败后状态不变 / X12 收敛断言）
+  // 与状态机路径生成正交：无初始状态时同样生成（不依赖路径可达性）。
+  const adversarial = generateAdversarialCases(model);
+
   if (!initialStateId) {
     // 无初始状态：无法生成路径，但覆盖度报告仍应反映实际状态/转移总数
     return {
       paths: [],
       coverage: computeCoverage(derivable, [], criterion, maxPathLength),
       generatedAt: new Date().toISOString(),
+      ...(adversarial.cases.length > 0
+        ? { adversarialCases: adversarial.cases }
+        : {}),
+      ...(adversarial.degradedReasons.length > 0
+        ? { degradedReasons: adversarial.degradedReasons }
+        : {}),
     };
   }
 
@@ -104,6 +121,12 @@ export function generateCases(
     generatedAt: new Date().toISOString(),
     // 通过自定义扩展字段承载附属实体覆盖度——TypeScript 上无对应字段时按 unknown 透传
     ...(submachineCoverage ? { submachineCoverage } : {}),
+    ...(adversarial.cases.length > 0
+      ? { adversarialCases: adversarial.cases }
+      : {}),
+    ...(adversarial.degradedReasons.length > 0
+      ? { degradedReasons: adversarial.degradedReasons }
+      : {}),
   } as TestCaseSet;
 }
 
@@ -131,12 +154,21 @@ export async function generateCasesWithAI(
     derivable.initialStateId ??
     derivable.states.find((s) => s.type === 'initial')?.id;
 
+  // G7-S4：对抗性用例（与 AI 路径生成正交，确定性生成）
+  const adversarial = generateAdversarialCases(model);
+
   if (!initialStateId) {
     // 与确定性路径一致：无初始状态时返回空路径 + 覆盖度报告
     return {
       paths: [],
       coverage: computeCoverage(derivable, [], criterion, maxPathLength),
       generatedAt: new Date().toISOString(),
+      ...(adversarial.cases.length > 0
+        ? { adversarialCases: adversarial.cases }
+        : {}),
+      ...(adversarial.degradedReasons.length > 0
+        ? { degradedReasons: adversarial.degradedReasons }
+        : {}),
     };
   }
 
@@ -226,6 +258,12 @@ export async function generateCasesWithAI(
     paths,
     coverage: computeCoverage(derivable, paths, criterion, maxPathLength),
     generatedAt: new Date().toISOString(),
+    ...(adversarial.cases.length > 0
+      ? { adversarialCases: adversarial.cases }
+      : {}),
+    ...(adversarial.degradedReasons.length > 0
+      ? { degradedReasons: adversarial.degradedReasons }
+      : {}),
   };
 }
 
@@ -1012,3 +1050,422 @@ function emptyCoverage(criterion: 'state' | 'transition' | 'path'): CoverageRepo
     uncoveredDispositions: [],
   };
 }
+
+// ============================================================================
+// G7-S4（X5 / X6 / X12）：对抗性用例生成
+// ============================================================================
+//
+// 三类此前无法生成的用例模板（execution-plan.md §S4）：
+// - X5 observed 直写违例：observed 维度 × role 接口 → 断言调用必须失败
+//   （observed 维度只能由事实侧 system/external 写入，角色不能凭意图制造事实）
+// - X6 guard 失败后状态不变：preconditions 每个合取项 → ①调用失败
+//   ②affectsDimensions 取值与调用前完全一致（R5：用例文件头部必须声明冻结边界，
+//   mock 掉调度器/定时器，防止 scheduled 重算/超时任务并发改状态导致 flaky）
+// - X12 收敛断言：remedy.detection → 制造违约 ⇒ 等待 ≤ boundMs ⇒ 断言收敛
+//
+// 降级口径（R4 / P2-8）：
+// - 用例数 < 理论上限（observed 违例 ≤ observed 维度数；guard 反例 ≤ 全部合取项之和）
+//   的差额必须显式降级记录（degradedReasons），不得静默；
+// - remedy 声明了但 detection 缺省 → 显式降级记录（不生成 X12 用例，不静默）。
+
+export interface AdversarialGenerationResult {
+  cases: AdversarialCase[];
+  degradedReasons: string[];
+}
+
+/** 主入口：三类对抗性用例 + 差额/缺省降级记录（确定性、纯函数） */
+export function generateAdversarialCases(
+  model: SourceProtocolModel
+): AdversarialGenerationResult {
+  const cases: AdversarialCase[] = [];
+  const degradedReasons: string[] = [];
+  const ir = model.derivable;
+
+  generateObservedWriteCases(model, cases, degradedReasons); // X5
+  generateGuardFailureCases(model, cases, degradedReasons); // X6
+  generateConvergenceCases(ir, cases, degradedReasons); // X12
+
+  return { cases, degradedReasons };
+}
+
+// ----------------------------------------------------------------------------
+// X5 · observed 直写违例
+// ----------------------------------------------------------------------------
+
+function generateObservedWriteCases(
+  model: SourceProtocolModel,
+  cases: AdversarialCase[],
+  degradedReasons: string[]
+): void {
+  const ir = model.derivable;
+
+  // 维度 kind 判定复用 buildDimensionKinds（与 S1 specifier / S2 checker 同一单一事实源）。
+  // 混合写入方（dimension-kind-conflict）在 S1 已硬失败；此处独立运行时（测试/手工模型）
+  // 以错误收集替代抛错——记降级，不阻断路径用例生成（与 checker 的错误收集口径一致）。
+  let views: ReturnType<typeof buildDimensionKinds>['entries'];
+  try {
+    views = buildDimensionKinds(ir).entries;
+  } catch (err) {
+    degradedReasons.push(
+      `X5 差额：维度 kind 机械推导失败（${err instanceof Error ? err.message : String(err)}），无法生成 observed 直写违例用例 [R4]`
+    );
+    return;
+  }
+
+  for (const v of views) {
+    // 混合（W(dim) 同时含 role 与非 role）：kind 未产出 → 降级
+    if (!v.kind) {
+      degradedReasons.push(
+        `X5 差额：维度 ${v.dimension}（${v.owner}）kind 未判定（W(dim)=${v.writers.length > 0 ? v.writers.join(',') : '∅'}，dimension-kind-undetermined），无法生成 observed 直写违例用例 [R4]`
+      );
+      continue;
+    }
+    // X5 只针对 observed 维度；declared 维度角色可凭意图写，不构成直写违例
+    if (v.kind !== 'observed') continue;
+
+    // 需要一个 role 接口作为「直写违例」的载体（合规模型下 role 接口不会写 observed 维度，
+    // 违例 = role 接口尝试直写该维度；用例断言必须失败）
+    const roleTransition = ir.transitions.find((t) => t.triggerType === 'role');
+    if (!roleTransition) {
+      degradedReasons.push(
+        `X5 差额：维度 ${v.dimension}（${v.owner}）kind='observed'，但模型无任何 role 接口可作为直写违例载体，无法生成用例 [R4]`
+      );
+      continue;
+    }
+
+    const sourceLabel = v.kindSource === 'asserted' ? '（人写断言）' : '（机械推导）';
+    cases.push({
+      id: `X5_${sanitizeId(v.owner)}_${sanitizeId(v.dimension)}`,
+      kind: 'observed-write',
+      source: `维度 ${v.dimension}（${v.owner}）kind='observed'${sourceLabel}`,
+      interfaceId: roleTransition.action,
+      expectFailure: true,
+      body: buildX5Body(v.owner, v.dimension, roleTransition),
+    });
+  }
+}
+
+function buildX5Body(owner: string, dimension: string, roleTransition: TransitionDef): string {
+  const action = roleTransition.action;
+  return [
+    `/**`,
+    ` * X5 observed 直写违例（G7-S4）`,
+    ` * 数据源（model.md）：维度 ${dimension}（${owner}）kind='observed'`,
+    ` * 断言：role 接口 ${action} 直写 observed 维度 ${dimension} 必须失败`,
+    ` * 语义：observed 维度只能由事实侧（system/external）写入，角色不能凭意图制造事实`,
+    ` */`,
+    `import { describe, it, expect } from '@jest/globals';`,
+    ``,
+    `describe('X5 observed 直写违例：${dimension}（${owner}）', () => {`,
+    `  it('role 接口 ${action} 直写 observed 维度 ${dimension} 必须失败', () => {`,
+    `    // 前置：进入合法状态（无调度并发窗口）`,
+    `    goto('${roleTransition.from[0] ?? ''}');`,
+    `    // 快照：observed 维度当前取值`,
+    `    const before = snapshot(['${dimension}']);`,
+    `    // 直写违例：role 接口请求携带 observed 维度写入意图`,
+    `    const res = call('${action}', { directWrite: { '${dimension}': 'violation' } });`,
+    `    // 断言①：调用必须失败（角色不能凭意图制造事实）`,
+    `    expect(res.failed).toBe(true);`,
+    `    // 断言②：observed 维度取值未被改写`,
+    `    expect(snapshot(['${dimension}'])).toEqual(before);`,
+    `  });`,
+    `});`,
+    ``,
+  ].join('\n');
+}
+
+// ----------------------------------------------------------------------------
+// X6 · guard 失败后状态不变
+// ----------------------------------------------------------------------------
+
+/** X6 合取项（可置否 = 能机械构造违反输入的合取条件） */
+interface X6Conjunct {
+  /** 合取项原文（人读；J2 失败信息指回） */
+  text: string;
+  /** 是否可机械构造「置否」输入 */
+  negatable: boolean;
+  /** 可置否时的违反输入（置否值） */
+  negationPayload?: unknown;
+}
+
+function generateGuardFailureCases(
+  model: SourceProtocolModel,
+  cases: AdversarialCase[],
+  degradedReasons: string[]
+): void {
+  const ir = model.derivable;
+  const contracts = model.contractInput?.contracts ?? [];
+  const contractByKey = new Map<string, (typeof contracts)[number]>();
+  for (const c of contracts) {
+    contractByKey.set(c.interface, c);
+    if (c.sourceId) contractByKey.set(c.sourceId, c);
+  }
+
+  for (const t of ir.transitions ?? []) {
+    if (!t.guard && !contractByKey.has(t.action) && !contractByKey.has(t.id)) continue;
+    const conjuncts = resolveX6Conjuncts(t, contractByKey.get(t.action) ?? contractByKey.get(t.id));
+    const dims = t.affectsDimensions ?? [];
+    conjuncts.forEach((c, i) => {
+      if (c.negatable) {
+        cases.push({
+          id: `X6_${sanitizeId(t.id)}_c${i}`,
+          kind: 'guard-failure',
+          source: `转移 ${t.id}（action=${t.action}）preconditions 合取项[${i}]「${c.text}」`,
+          interfaceId: t.action,
+          expectFailure: true,
+          negatedConjunct: i,
+          conjunctText: c.text,
+          stateImmutableDimensions: dims,
+          body: buildX6Body(t, c, i, dims),
+        });
+      } else {
+        // R4：无法机械构造置否输入 → 显式降级（不生成空壳用例）
+        degradedReasons.push(
+          `X6 差额：转移 ${t.id}（action=${t.action}）guard 合取项[${i}]「${c.text}」未机械结构化（无法构造置否输入），不生成反例 [R4]`
+        );
+      }
+    });
+  }
+}
+
+/**
+ * 合取项解析：契约层 preconditions（结构化 SchemaExpression[]）优先；
+ * 缺省时 guard 字符串按逻辑与（&& / 且 / and）拆分，合取项逐个过受限谓词翻译。
+ */
+function resolveX6Conjuncts(
+  t: TransitionDef,
+  contract: { preconditions?: SchemaExpression[] } | undefined
+): X6Conjunct[] {
+  const contractPre = contract?.preconditions;
+  if (contractPre && contractPre.length > 0) {
+    return contractPre.map((p) => {
+      if (p.kind === 'json-schema' && p.schema) {
+        return {
+          text: p.description ?? 'preconditions 合取项',
+          negatable: true,
+          negationPayload: buildNegationPayload(p.schema),
+        };
+      }
+      return {
+        text: p.description ?? 'preconditions 合取项',
+        negatable: false,
+      };
+    });
+  }
+
+  if (!t.guard) return [];
+  return splitConjuncts(t.guard).map((part) => {
+    const pred = translatePredicate(part);
+    if (pred) {
+      return {
+        text: part,
+        negatable: true,
+        negationPayload: buildNegationPayload(pred.schema),
+      };
+    }
+    return { text: part, negatable: false };
+  });
+}
+
+/** 按逻辑与拆分 guard（仅顶层：括号深度 0 处；中文「且」允许无空格，英文 and 亦作合取分隔） */
+function splitConjuncts(guard: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  // 返回当前位置是否命中顶层分隔符（括号深度 0 时）：命中返回分隔符长度，否则 0
+  const splitterLenAt = (i: number): number => {
+    if (depth > 0) return 0;
+    const rest = guard.slice(i);
+    if (rest.startsWith('&&')) return 2;
+    if (rest.startsWith('且')) return 1;
+    if (/^and\s/i.test(rest)) return 3;
+    return 0;
+  };
+  for (let i = 0; i < guard.length; ) {
+    const ch = guard[i];
+    if (ch === '(') {
+      depth++;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === ')') {
+      depth = Math.max(0, depth - 1);
+      current += ch;
+      i++;
+      continue;
+    }
+    const len = splitterLenAt(i);
+    if (len > 0) {
+      const trimmed = current.trim();
+      if (trimmed) parts.push(trimmed);
+      current = '';
+      i += len;
+      continue;
+    }
+    current += ch;
+    i++;
+  }
+  const last = current.trim();
+  if (last) parts.push(last);
+  return parts.length > 0 ? parts : [guard.trim()];
+}
+
+/**
+ * 构造「违反 schema」的置否输入（X6 反例的机械构造，确定性）：
+ * - object + required → 缺 required 字段（最简单、最通用）
+ * - minLength → 空串；minimum → 下界减一；pattern → 不匹配串；uniqueItems → 重复元素
+ * - 其余基本类型 → 类型不符值；兜底 → 任意非空对象
+ */
+function buildNegationPayload(schema: JSONSchema): unknown {
+  if (schema.type === 'object' && schema.required && schema.required.length > 0) {
+    return {}; // 缺 required 字段
+  }
+  if (schema.minLength !== undefined) return '';
+  if (schema.minimum !== undefined) return (schema.minimum as number) - 1;
+  if (schema.pattern) return `__violates_${schema.pattern}__`;
+  if (schema.uniqueItems) return ['dup', 'dup'];
+  if (schema.type === 'string') return '';
+  if (schema.type === 'number' || schema.type === 'integer') return -1;
+  if (schema.type === 'boolean') return 'not-a-boolean';
+  return { __violates_schema__: true };
+}
+
+/** X6 用例文件正文：头部必须含 R5 冻结边界声明（缺失即未完成任务，S4-3） */
+function buildX6Body(t: TransitionDef, c: X6Conjunct, index: number, dims: string[]): string {
+  const payload = c.negationPayload === undefined ? '{}' : JSON.stringify(c.negationPayload);
+  const dimsJson = JSON.stringify(dims);
+  return [
+    `/**`,
+    ` * X6 guard 失败后状态不变（G7-S4）`,
+    ` * 数据源（model.md）：转移 ${t.id}（action=${t.action}）preconditions 合取项[${index}]「${c.text}」`,
+    ` * 断言：① 调用必须失败 ② affectsDimensions 取值与调用前完全一致`,
+    ` *`,
+    ` * ===== R5 冻结边界声明（S4-3，缺失即未完成）=====`,
+    ` * 本用例冻结调度器与定时器：mock 掉 scheduled 任务派发与超时定时器，`,
+    ` * 防止重算/超时任务在断言窗口内并发改写状态导致随机失败（flaky）。`,
+    ` * 实现：jest.useFakeTimers() + schedulerMock.disable()（testtool/mock）。`,
+    ` * =================================================`,
+    ` */`,
+    `import { describe, it, expect, jest } from '@jest/globals';`,
+    `import { schedulerMock } from '<testtool>/mock';`,
+    ``,
+    `describe('X6 guard 失败后状态不变：${t.action}（${t.id}）', () => {`,
+    `  beforeEach(() => {`,
+    `    // R5：冻结边界 —— mock 掉调度器与定时器`,
+    `    jest.useFakeTimers();`,
+    `    schedulerMock.disable();`,
+    `  });`,
+    `  afterEach(() => {`,
+    `    schedulerMock.restore();`,
+    `    jest.useRealTimers();`,
+    `  });`,
+    ``,
+    `  it('合取项[${index}]「${c.text}」置否后调用必须失败且状态不变', () => {`,
+    `    // 前置：进入 ${t.from[0] ?? '未知'} 状态`,
+    `    goto('${t.from[0] ?? ''}');`,
+    `    // 快照：affectsDimensions 取值（${dims.length > 0 ? dims.join(', ') : '空集：无维度受影响'}）`,
+    `    const before = snapshot(${dimsJson});`,
+    `    // 置否合取项[${index}]：构造违反「${c.text}」的输入`,
+    `    const payload = ${payload};`,
+    `    // 调用接口（合取项不满足 → 必须失败）`,
+    `    const res = call('${t.action}', payload);`,
+    `    // 断言①：调用必须失败`,
+    `    expect(res.failed).toBe(true);`,
+    `    // 断言②：affectsDimensions 取值与调用前完全一致`,
+    `    expect(snapshot(${dimsJson})).toEqual(before);`,
+    `  });`,
+    `});`,
+    ``,
+  ].join('\n');
+}
+
+// ----------------------------------------------------------------------------
+// X12 · 收敛断言（remedy.detection）
+// ----------------------------------------------------------------------------
+
+function generateConvergenceCases(
+  ir: DerivableLayer,
+  cases: AdversarialCase[],
+  degradedReasons: string[]
+): void {
+  const timings = ir.timing ?? [];
+  for (const inv of ir.invariants ?? []) {
+    const remedy = inv.remedy;
+    // 未声明 remedy：X12 不适用（不生成也不降级——不是缺口）
+    if (!remedy) continue;
+    // P2-8：detection 缺省 → 显式降级记录，不静默
+    if (!remedy.detection) {
+      degradedReasons.push(
+        `X12 降级：不变量 ${inv.id}（${inv.name}）声明了 remedy（action=${remedy.action}）但 detection 缺省（P2-8），无法生成收敛断言用例，显式降级不静默`
+      );
+      continue;
+    }
+    // boundMs 来自关联时序约束（timing.source/target 指向该不变量且带 boundMs）；
+    // 缺省 → 用例仍生成（S4-4：用例数 = 有 detection 的不变量数），等待上限显式标注降级
+    const related = timings.filter(
+      (tm) => tm.source === inv.id || tm.target === inv.id
+    );
+    const boundMs = related.find((tm) => tm.boundMs !== undefined)?.boundMs;
+    if (boundMs === undefined) {
+      degradedReasons.push(
+        `X12 降级：不变量 ${inv.id} 的 remedy.detection 已声明，但无关联时序约束（timing.source/target 指向 ${inv.id}）带 boundMs，收敛等待上限未声明，用例以「立即收敛 + 显式标注」执行`
+      );
+    }
+    const detectionText =
+      remedy.detection.description ?? remedy.detection.schema?.description ?? inv.expression;
+    cases.push({
+      id: `X12_${sanitizeId(inv.id)}`,
+      kind: 'convergence',
+      source: `不变量 ${inv.id}（${inv.name}）remedy.detection`,
+      interfaceId: inv.id,
+      violation: inv.expression,
+      ...(boundMs !== undefined ? { boundMs } : {}),
+      detection: detectionText,
+      body: buildX12Body(inv.id, inv.name, inv.expression, detectionText, boundMs),
+    });
+  }
+}
+
+function buildX12Body(
+  invId: string,
+  invName: string,
+  expression: string,
+  detection: string,
+  boundMs?: number
+): string {
+  const boundLine =
+    boundMs === undefined
+      ? `    // 收敛等待上限未声明（无关联 timing.boundMs）：立即检查 + 显式标注降级`
+      : `    // 等待 ≤ ${boundMs}ms 后断言收敛`;
+  const elapsedLine =
+    boundMs === undefined
+      ? `    expect(elapsed()).toBeGreaterThanOrEqual(0); // 无 boundMs：仅验证收敛发生`
+      : `    expect(elapsed()).toBeLessThanOrEqual(${boundMs});`;
+  return [
+    `/**`,
+    ` * X12 收敛断言（G7-S4）`,
+    ` * 数据源（model.md）：不变量 ${invId}（${invName}）remedy.detection`,
+    ` * 断言：制造违约 ⇒ 等待 ≤ boundMs ⇒ 状态收敛（检测方式：${detection}）`,
+    ` */`,
+    `import { describe, it, expect } from '@jest/globals';`,
+    ``,
+    `describe('X12 收敛断言：${invId} ${invName}', () => {`,
+    `  it('制造违约后收敛（${boundMs === undefined ? 'boundMs 未声明' : `boundMs=${boundMs}`}）', async () => {`,
+    `    // 制造违约：违反不变量表达式「${expression}」`,
+    `    makeViolation('${expression}');`,
+    boundLine,
+    `    // 收敛断言：检测方式「${detection}」`,
+    `    await expect(converged('${detection}')).resolves.toBe(true);`,
+    elapsedLine,
+    `  });`,
+    `});`,
+    ``,
+  ].join('\n');
+}
+
+/** 用例 ID 中的非法字符净化（维度名/实体名可能含空格或特殊字符） */
+function sanitizeId(s: string): string {
+  return s.replace(/[^A-Za-z0-9_]/g, '_');
+}
+

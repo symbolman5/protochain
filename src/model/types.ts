@@ -282,6 +282,18 @@ export interface InvariantDef {
    * 用于 verify 阶段生成"对该表该表达式的只读 SELECT"语句。
    */
   storageRef?: string;
+  /**
+   * P2-8（G7-S4）：不变量补救声明 —— 拆「检测方式」+「处置动作」。
+   * - detection：如何检测违约（可机械消费 → 生成收敛断言用例 X12）；缺省 → 显式降级记录（不静默）。
+   * - action：处置动作（自由文本，永远留给人看，不做机械消费）。
+   * 老模型无此字段 → undefined（兼容零回归）。
+   */
+  remedy?: {
+    /** 如何检测违约 —— 可生成断言（X12 收敛断言数据源）；缺省显式降级记录 */
+    detection?: SchemaExpression;
+    /** 处置动作 —— 自由文本，给人看 */
+    action: string;
+  };
 }
 
 export interface TimingDef {
@@ -1093,6 +1105,49 @@ export interface TestCaseSet {
   coverage: CoverageReport;
   /** 生成时间戳 */
   generatedAt: string;
+  /**
+   * G7-S4（X5/X6/X12）：对抗性用例（observed 直写违例 / guard 失败后状态不变 / 收敛断言）。
+   * 缺省 = 老行为（无对抗用例）。
+   */
+  adversarialCases?: AdversarialCase[];
+  /**
+   * G7-S4：差额降级记录（R4）与检测缺省降级（P2-8）。
+   * 用例数 < 理论上限的差额必须在此显式记录，不得静默。
+   */
+  degradedReasons?: string[];
+}
+
+/** G7-S4 对抗性用例种类 */
+export type AdversarialCaseKind = 'observed-write' | 'guard-failure' | 'convergence';
+
+/**
+ * G7-S4：单条对抗性用例（X5 / X6 / X12）。
+ * body 为可执行测试脚本（.test.ts 形态）；X6 用例 body 头部必须含 R5 冻结边界声明
+ * （mock 掉调度器/定时器），否则视为未完成任务。
+ */
+export interface AdversarialCase {
+  id: string;
+  kind: AdversarialCaseKind;
+  /** 数据源定位（model.md 声明）——J2 旅程验收：失败信息能指回具体声明 */
+  source: string;
+  /** 被测接口/转移标识（如 transition action 或不变量 ID） */
+  interfaceId: string;
+  /** X5/X6：期望调用必须失败 */
+  expectFailure?: boolean;
+  /** X6：调用前须快照并断言取值完全一致的维度（affectsDimensions 投影） */
+  stateImmutableDimensions?: string[];
+  /** X6：被置否的合取项序号（0 基） */
+  negatedConjunct?: number;
+  /** X6：被置否的合取项原文 */
+  conjunctText?: string;
+  /** X12：制造违约的说明（不变量表达式原文） */
+  violation?: string;
+  /** X12：收敛等待上限（boundMs，来自关联时序约束；缺省=未声明） */
+  boundMs?: number;
+  /** X12：收敛断言（remedy.detection 原文） */
+  detection?: string;
+  /** 用例文件正文（可执行测试脚本；X6 头部含 R5 冻结边界声明） */
+  body: string;
 }
 
 export interface ProtocolPath {

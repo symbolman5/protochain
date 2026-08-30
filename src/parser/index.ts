@@ -529,6 +529,12 @@ function normalizeHeader(s: string): string {
     errorcode: 'errorcode',
     错误码: 'errorcode',
     '协议错误码': 'errorcode',
+    // ── G7-S4（P2-8）：不变量 remedy 声明（处置动作 + 检测方式） ──
+    remedy: 'remedyaction',
+    remedyaction: 'remedyaction',
+    处置动作: 'remedyaction',
+    remedydetection: 'remedydetection',
+    检测方式: 'remedydetection',
   };
   return map[trimmed] ?? trimmed;
 }
@@ -647,6 +653,24 @@ function rowToInvariant(row: Record<string, string>): InvariantDef {
   // 若声明，把位置拼到 description 末段，下游 sqlcheck 据此归入 by-design 段。
   if (row.guardlocation && row.guardlocation.trim().length > 0) {
     inv.description = (inv.description ?? '') + ` [guard:${row.guardlocation.trim()}]`;
+  }
+  // ── G7-S4（P2-8）：不变量 remedy 声明（可选列：处置动作 / 检测方式） ──
+  // 老表格无 remedy 列 → 不设 remedy（兼容零回归）；有 remedy_action 无 detection → 显式降级（P2-8）。
+  const remedyAction = row.remedyaction?.trim();
+  if (remedyAction) {
+    const remedyDetection = row.remedydetection?.trim();
+    inv.remedy = {
+      action: remedyAction,
+      ...(remedyDetection
+        ? {
+            // detection 为可选 SchemaExpression：表格文本形态 → description-only（保留人读原文）
+            detection: {
+              kind: 'description-only' as const,
+              description: remedyDetection,
+            },
+          }
+        : {}),
+    };
   }
   return inv;
 }
