@@ -34,6 +34,7 @@ import type {
   ProjectInterfaceDetailData,
 } from '../model/types.js';
 import { decomposeStateMachines } from '../model/state-machines.js';
+import { KIND_RULES } from './kind-rules.js';
 import { buildRelations, type RelationKind, type RelationProjectionEntry } from '../webgen/relations.js';
 import { tryParseGuardSchema } from '../specifier/schema-builder.js';
 import { extractPredicateFieldRefs } from '../specifier/predicates.js';
@@ -95,6 +96,17 @@ export function checkCompleteness(
   //   - Rule 3 报错分层（引用完整优先，引用不完整则跳过分型交叉校验）
   // ----------------------------------------------------------------------
   checkTypingCrossValidation(model, referenceIssues, fieldIssues, structuralIssues);
+
+  // ----------------------------------------------------------------------
+  // 5f. R-KIND-1~4 维度 kind 机械检查规则组（X2 / M10 / X3 / P1-3 判据10）
+  //   规则注册表见 src/checker/kind-rules.ts（沿用 mcheck/rules.ts 组织方式）：
+  //   - R-KIND-1（X2）：observed 维度（含人写断言）不得有 role 接口写入 → 硬失败
+  //   - R-KIND-2（M10）：W(dim) 混合 / 断言与推导冲突 → 硬失败
+  //   - R-KIND-3（X3）：不变量涉及 observed 维度却标 always/缺 boundMs → 硬失败
+  //   - R-KIND-4（X7）：角色无任何接口以它触发 → 告警
+  //   R-KIND-1~3 为 error 级（机械 passed=false）；R-KIND-4 为 warning（不阻断）。
+  // ----------------------------------------------------------------------
+  checkKindRules(model, referenceIssues);
 
   // ----------------------------------------------------------------------
   // 5. 跨协议引用收集（① 阶段标记，①-C 阶段在 composition-checker 校验）
@@ -1516,6 +1528,23 @@ function collectPendingCrossProtocolRefs(
 }
 
 // ============================================================================
+// 5f. R-KIND-1~4 维度 kind 机械检查规则组（注册表执行入口）
+// ============================================================================
+
+/**
+ * 遍历 KIND_RULES 注册表执行全部规则，把 issue 并入 referenceIssues。
+ * 注册表定义见 src/checker/kind-rules.ts（沿用 src/mcheck/rules.ts 组织方式）。
+ */
+export function checkKindRules(
+  model: SourceProtocolModel,
+  issues: CheckIssue[]
+): void {
+  for (const rule of KIND_RULES) {
+    issues.push(...rule.check({ model }));
+  }
+}
+
+// ============================================================================
 // 工具
 // ============================================================================
 
@@ -1621,3 +1650,12 @@ export function checkInterfaceDetailsExamples(data: ProjectInterfaceDetailData):
   }
   return { passed: fieldIssues.length === 0, structuralIssues: [], fieldIssues, referenceIssues: [] };
 }
+
+// 规则组导出（对齐 src/mcheck/index.ts 的导出风格，供外部/CLI/测试按需 import）
+export { KIND_RULES, KIND_RULE_IDS, resolveDimensionKinds } from './kind-rules.js';
+export {
+  ruleRKind1ObservedNoRoleWriters,
+  ruleRKind2MixedWritersAndAssertionConflict,
+  ruleRKind3ObservedInvariantNeedsBoundMs,
+  ruleRKind4RoleWithoutTriggerInterface,
+} from './kind-rules.js';
