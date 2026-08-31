@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-08-30T17:53:07.974Z",
+  "generatedAt": "2026-08-31T17:03:31.078Z",
   "sourceModelVersion": "1.0.0",
   "protocol": {
     "name": "账号域",
@@ -82,7 +82,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"账号.账号状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/login"
+      },
+      "authorization": {
+        "type": "bearer",
+        "credential": "登录会话",
+        "selfContained": "local-verify"
+      }
     },
     {
       "id": "IF_SYS_OP2",
@@ -141,7 +150,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"账号.账号状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/ban-user"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP3",
@@ -174,7 +192,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"（周期性全量重算）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/recompute-account-quota"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     }
   ],
   "testCases": [],
@@ -340,6 +367,20 @@
         "channel": "event",
         "mode": "async",
         "description": "上报资源占用统计输入等观测事件（组合层 INV-3/4 对账数据来源）"
+      }
+    ],
+    "components": [
+      {
+        "name": "control-plane",
+        "description": "管理面：账号登录/封禁/配额重算（P1 账号域控制面；跨 P1/P2/P3 组件归属见 composition.md）",
+        "baseUrl": "https://control.example.com",
+        "auth": "bearer"
+      },
+      {
+        "name": "data-plane",
+        "description": "数据面：上报资源占用统计输入等观测事件（组合层 INV-3/4 对账数据来源）",
+        "baseUrl": "https://data.example.com",
+        "auth": "none"
       }
     ]
   },

@@ -239,38 +239,6 @@ credentials:
   description: 回收已移除资源删除文件对象/清除映射实例，异步清理任务
 ```
 
-# 组件映射
-
-```yaml
-interfaceImplementations:
-  - { interface: 匿名发布资源, component: control-plane, description: 匿名发布登记资源记录并派生认领码（管理类写路径） }
-  - { interface: 认领资源, component: control-plane, description: 认领资源（跨资源与认领码同一事务；guard 跨协议校验 P1 账号/配额） }
-  - { interface: 移除资源, component: control-plane, description: 归属人移除资源 }
-  - { interface: 审查资源, component: control-plane, description: 运营审查资源 }
-  - { interface: 封禁资源, component: control-plane, description: 运营封禁资源 }
-  - { interface: 心跳超时判定, component: control-plane, description: 心跳超时判定（调度） }
-  - { interface: 认领码过期, component: control-plane, description: 认领码过期判定（调度） }
-  - { interface: 回收已移除资源, component: control-plane, description: 已移除资源回收（调度） }
-  - { interface: 请求访问资源（无认领码）, component: data-plane, description: 兑现公网访问（代理/拒绝判定，服务兑现依赖 P3） }
-  - { interface: 携带认领码访问, component: data-plane, description: 携带认领码访问的跳转判定 }
-  - { interface: 上传文件内容, component: data-plane, description: 文件上传兑现 }
-  - { interface: 上报心跳, component: data-plane, description: 心跳接收（观测事实采集） }
-  - { interface: 结束运行 / 断开, component: data-plane, description: 断开事件接收（观测事实采集） }
-dimensionStorage:
-  - { dimension: 形态, table: resources, description: 资源记录（短时内网映射/长期文件托管） }
-  - { dimension: 归属状态, table: resources }
-  - { dimension: 处置状态, table: resources }
-  - { dimension: 访问策略, table: resources, description: 从归属状态派生的冗余副本（INV-1） }
-  - { dimension: 审核状态, table: resources }
-  - { dimension: 连接状态, table: mapping_instances }
-  - { dimension: 存在性, table: files }
-  - { dimension: 兑付状态, table: claim_codes }
-  - { dimension: 有效期状态, table: claim_codes }
-componentTransfers:
-  - { from: control-plane, to: data-plane, channel: event, mode: async, description: 推送访问策略副本（组合层 INV-11，跨 P2/P3；T_sync 内收敛，超期未同步数据面 fail-closed） }
-  - { from: data-plane, to: control-plane, channel: event, mode: async, description: 上报心跳/断开等观测事件（INV-5 离线释放数据来源） }
-```
-
 <!--
 R3b 拆分备注（P2 资源发布与兑现）：
 1. 来源：examples/anonymous-saas/protocol/model.md（R3a 单协议六张清单版）按「实体关系簇 + 角色边界」拆分。

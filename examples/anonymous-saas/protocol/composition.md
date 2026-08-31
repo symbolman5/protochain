@@ -173,6 +173,93 @@ rule: 系统定时任务（心跳超时判定/认领码过期/配额重算/证�
 span: [P1, P2, P3]
 ```
 
+# 组件映射
+
+```yaml
+components:
+  - name: control-plane
+    description: 管理面：账号/资源/策略/调度（跨 P1/P2/P3）
+    baseUrl: https://control.example.com
+    auth: bearer
+  - name: data-plane
+    description: 数据面：代理/上传/心跳/健康探测（跨 P2/P3）
+    baseUrl: https://data.example.com
+    auth: none
+interfaceImplementations:
+  - interface: 登录
+    protocolId: P1
+    component: control-plane
+  - interface: 封禁用户
+    protocolId: P1
+    component: control-plane
+  - interface: 重算账号配额
+    protocolId: P1
+    component: control-plane
+  - interface: 匿名发布资源
+    protocolId: P2
+    component: control-plane
+  - interface: 认领资源
+    protocolId: P2
+    component: control-plane
+  - interface: 移除资源
+    protocolId: P2
+    component: control-plane
+  - interface: 审查资源
+    protocolId: P2
+    component: control-plane
+  - interface: 封禁资源
+    protocolId: P2
+    component: control-plane
+  - interface: 心跳超时判定
+    protocolId: P2
+    component: control-plane
+  - interface: 认领码过期
+    protocolId: P2
+    component: control-plane
+  - interface: 回收已移除资源
+    protocolId: P2
+    component: control-plane
+  - interface: 请求访问资源（无认领码）
+    protocolId: P2
+    component: data-plane
+  - interface: 携带认领码访问
+    protocolId: P2
+    component: data-plane
+  - interface: 上传文件内容
+    protocolId: P2
+    component: data-plane
+  - interface: 上报心跳
+    protocolId: P2
+    component: data-plane
+  - interface: 结束运行 / 断开
+    protocolId: P2
+    component: data-plane
+  - interface: 登记转发服务器
+    protocolId: P3
+    component: control-plane
+  - interface: 下线转发服务器
+    protocolId: P3
+    component: control-plane
+  - interface: 登记接入域名
+    protocolId: P3
+    component: control-plane
+  - interface: 下线接入域名
+    protocolId: P3
+    component: control-plane
+  - interface: 登记 / 更换域名证书
+    protocolId: P3
+    component: control-plane
+  - interface: 吊销域名证书
+    protocolId: P3
+    component: control-plane
+  - interface: 重算证书有效期档
+    protocolId: P3
+    component: control-plane
+  - interface: 探测转发服务器健康
+    protocolId: P3
+    component: data-plane
+```
+
 <!--
 R3b 组合层备注：
 1. 拆分来源：examples/anonymous-saas/protocol/model.md（R3a 单协议六张清单版，11 条不变量）。

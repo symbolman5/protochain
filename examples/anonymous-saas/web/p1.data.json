@@ -1,0 +1,422 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-31T17:04:01.887Z",
+  "sourceModelVersion": "1.0.0",
+  "protocol": {
+    "name": "账号域",
+    "version": "1.0.0",
+    "purpose": "匿名 SaaS 多协议拆分（R3b）· P1 账号域：账号、账号配额、登录会话凭证。本子协议自包含六张清单（操作=改实体维度、无状态机段、实体维度带 kind 断言）；跨协议约束（配额与资源占用 INV-3/4、封禁连带 INV-6）走组合层 protocol/composition.md",
+    "roles": [
+      {
+        "id": "account_holder",
+        "name": "账号持有者（认领者）",
+        "roleType": "participant"
+      },
+      {
+        "id": "system",
+        "name": "系统自身（调度与观测）",
+        "roleType": "consensus"
+      },
+      {
+        "id": "operator",
+        "name": "运营人员",
+        "roleType": "participant"
+      }
+    ]
+  },
+  "interfaces": [
+    {
+      "id": "IF_SYS_OP1",
+      "name": "登录",
+      "kind": "system",
+      "description": "账号.账号状态=正常",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：签发登录会话（凭证：登录会话，可本地验证）"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：签发登录会话（凭证：登录会话，可本地验证）"
+        }
+      ],
+      "precondition": "账号.账号状态=正常",
+      "postconditions": [
+        "签发登录会话（凭证：登录会话，可本地验证）"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：账号.账号状态=正常"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "签发登录会话（凭证：登录会话，可本地验证）"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "签发登录会话（凭证：登录会话，可本地验证）"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"账号.账号状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/login"
+      },
+      "authorization": {
+        "type": "bearer",
+        "credential": "登录会话",
+        "selfContained": "local-verify"
+      }
+    },
+    {
+      "id": "IF_SYS_OP2",
+      "name": "封禁用户",
+      "kind": "system",
+      "description": "账号.账号状态=正常",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+        }
+      ],
+      "precondition": "账号.账号状态=正常",
+      "postconditions": [
+        "名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：账号.账号状态=正常"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"账号.账号状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/ban-user"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
+    },
+    {
+      "id": "IF_SYS_OP3",
+      "name": "重算账号配额",
+      "kind": "system",
+      "description": "（周期性全量重算）",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "（周期性全量重算）",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：（周期性全量重算）"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"（周期性全量重算）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/recompute-account-quota"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
+    }
+  ],
+  "testCases": [],
+  "verification": {
+    "hasReport": false,
+    "passed": false,
+    "counts": {
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0
+    },
+    "deviationSummary": {
+      "stateMismatch": 0,
+      "fieldMismatch": 0,
+      "missingAction": 0,
+      "invariantViolation": 0,
+      "timingViolation": 0,
+      "errorMismatch": 0,
+      "unexpectedError": 0,
+      "other": 0
+    },
+    "sideBySide": []
+  },
+  "diff": null,
+  "impact": null,
+  "implCheck": null,
+  "stateMachine": {
+    "mermaid": "stateDiagram-v2",
+    "nodes": [],
+    "edges": [],
+    "edgeCoverage": {},
+    "invariantScope": {}
+  },
+  "relations": {
+    "sourceModelVersion": "1.0.0",
+    "entries": []
+  },
+  "redactionNotice": [
+    "本产物由 derive-web 机械生成；不含 authConfig.token/secret/password 等敏感字段。",
+    "本产物不读取 bindings.yaml；不读取进程环境变量。",
+    "P0 范围仅只读展示；编辑能力在 P1 提供。"
+  ],
+  "dimensions": [
+    {
+      "owner": "账号",
+      "dimension": "账号状态",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": [
+        "role"
+      ]
+    },
+    {
+      "owner": "账号配额",
+      "dimension": "文件空间状态",
+      "kind": "observed",
+      "kindSource": "asserted",
+      "writers": [
+        "system"
+      ]
+    },
+    {
+      "owner": "账号配额",
+      "dimension": "映射并发状态",
+      "kind": "observed",
+      "kindSource": "asserted",
+      "writers": [
+        "system"
+      ]
+    }
+  ],
+  "modelRelations": [
+    {
+      "from": "账号",
+      "to": "账号配额",
+      "type": "组合",
+      "constraint": "生命周期同步、配额身份无需独立追溯 ⇒ 按判据应并入账号；模型暂分开记（待确认）",
+      "onGone": "账号消失 ⇒ 配额同时消失（本模型中账号不可注销）；反过来：配额记录缺失 ⇒ 按默认档初始化为「有余量」，不阻塞查看与封禁"
+    }
+  ],
+  "storage": {
+    "dimensionCount": 3,
+    "coveredDimensionCount": 3,
+    "coverageRate": 1,
+    "entities": [
+      {
+        "entity": "账号",
+        "dimensionCount": 1,
+        "dimensions": [
+          {
+            "name": "账号状态",
+            "type": "TODO",
+            "kind": "declared"
+          }
+        ]
+      },
+      {
+        "entity": "账号配额",
+        "dimensionCount": 2,
+        "dimensions": [
+          {
+            "name": "文件空间状态",
+            "type": "TODO",
+            "kind": "observed"
+          },
+          {
+            "name": "映射并发状态",
+            "type": "TODO",
+            "kind": "observed"
+          }
+        ]
+      }
+    ]
+  },
+  "credentials": [
+    {
+      "name": "登录会话",
+      "issuer": "system",
+      "holder": "account_holder",
+      "redeemer": "account_holder",
+      "selfContained": "local-verify",
+      "ttl": "短，具体待定",
+      "revoke": "主动退出即失效；账号被封禁后需等令牌过期或查吊销列表——自包含带来撤销窗口（INV-6）",
+      "premise": "传输与存储保密；是否绑定设备 / 来源待确认"
+    }
+  ],
+  "components": {
+    "interfaceImplementations": [
+      {
+        "interface": "登录",
+        "component": "control-plane",
+        "description": "账号登录签发会话"
+      },
+      {
+        "interface": "封禁用户",
+        "component": "control-plane",
+        "description": "运营封禁用户（账号侧置账号状态=已封禁；资源侧补偿由组合层 INV-6 承接）"
+      },
+      {
+        "interface": "重算账号配额",
+        "component": "control-plane",
+        "description": "账号配额档位重算（调度；占用统计输入来自 P2 资源域）"
+      }
+    ],
+    "dimensionStorage": [
+      {
+        "dimension": "账号状态",
+        "table": "accounts"
+      },
+      {
+        "dimension": "文件空间状态",
+        "table": "quotas"
+      },
+      {
+        "dimension": "映射并发状态",
+        "table": "quotas"
+      }
+    ],
+    "componentTransfers": [
+      {
+        "from": "data-plane",
+        "to": "control-plane",
+        "channel": "event",
+        "mode": "async",
+        "description": "上报资源占用统计输入等观测事件（组合层 INV-3/4 对账数据来源）"
+      }
+    ],
+    "components": [
+      {
+        "name": "control-plane",
+        "description": "管理面：账号登录/封禁/配额重算（P1 账号域控制面；跨 P1/P2/P3 组件归属见 composition.md）",
+        "baseUrl": "https://control.example.com",
+        "auth": "bearer"
+      },
+      {
+        "name": "data-plane",
+        "description": "数据面：上报资源占用统计输入等观测事件（组合层 INV-3/4 对账数据来源）",
+        "baseUrl": "https://data.example.com",
+        "auth": "none"
+      }
+    ]
+  },
+  "adversarialCases": [
+    {
+      "id": "X15______expired",
+      "kind": "credential-expired",
+      "source": "credential: 段凭证 登录会话（ttl=短，具体待定）",
+      "interfaceId": "登录会话",
+      "expectFailure": true,
+      "expectedCredentialBehavior": "reject",
+      "credential": "登录会话",
+      "selfContained": "local-verify",
+      "body": "/**\n * X15 凭证过期必须失效（G7-S6 / P2-6）\n * 数据源（model.md）：credential: 段凭证 登录会话（ttl=短，具体待定）\n * 断言：凭证已过期时验证必须失败（过期 ⇒ 失效，S6-4）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X15 凭证过期必须失效：登录会话', () => {\n  it('凭证 登录会话 已过期（ttl=短，具体待定）时验证必须失败', () => {\n    // 制造过期：把凭证时间推进到 ttl 有效期之后\n    makeCredentialExpired('登录会话');\n    // 验证凭证：过期 ⇒ 必须失效\n    const res = verifyCredential('登录会话');\n    expect(res.valid).toBe(false);\n  });\n});\n"
+    },
+    {
+      "id": "X15______revoked",
+      "kind": "credential-revoked",
+      "source": "credential: 段凭证 登录会话（revoke=主动退出即失效；账号被封禁后需等令牌过期或查吊销列表——自包含带来撤销窗口（INV-6））",
+      "interfaceId": "登录会话",
+      "expectFailure": true,
+      "expectedCredentialBehavior": "reject",
+      "credential": "登录会话",
+      "selfContained": "local-verify",
+      "body": "/**\n * X15 凭证已撤销必须失效（G7-S6 / P2-6）\n * 数据源（model.md）：credential: 段凭证 登录会话（revoke=主动退出即失效；账号被封禁后需等令牌过期或查吊销列表——自包含带来撤销窗口（INV-6））\n * 断言：凭证已撤销时验证必须失败（撤销 ⇒ 失效，S6-4）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X15 凭证已撤销必须失效：登录会话', () => {\n  it('凭证 登录会话 已撤销（revoke=主动退出即失效；账号被封禁后需等令牌过期或查吊销列表——自包含带来撤销窗口（INV-6））时验证必须失败', () => {\n    // 制造撤销：按撤销语义 主动退出即失效；账号被封禁后需等令牌过期或查吊销列表——自包含带来撤销窗口（INV-6） 撤销凭证\n    makeCredentialRevoked('登录会话');\n    // 验证凭证：已撤销 ⇒ 必须失效\n    const res = verifyCredential('登录会话');\n    expect(res.valid).toBe(false);\n  });\n});\n"
+    },
+    {
+      "id": "X15______lookup",
+      "kind": "credential-lookup",
+      "source": "credential: 段凭证 登录会话（selfContained=local-verify）",
+      "interfaceId": "登录会话",
+      "expectFailure": false,
+      "expectedCredentialBehavior": "verify",
+      "credential": "登录会话",
+      "selfContained": "local-verify",
+      "body": "/**\n * X15 凭证回查失败（G7-S6 / P2-6）\n * 数据源（model.md）：credential: 段凭证 登录会话（selfContained=local-verify）\n * 断言：回查失败时仍验证通过（local-verify，S6-2，fail-open）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X15 凭证回查失败：登录会话（local-verify）', () => {\n  it('回查失败时验证仍通过（local-verify，fail-open）', () => {\n    // 制造回查失败：lookup 端点不可达 / 超时 / 5xx\n    simulateLookupFailure('登录会话');\n    // local-verify：凭证可本地验证，回查失败不阻断——仍验证通过（S6-2，fail-open）\n    const res = verifyCredential('登录会话');\n    expect(res.valid).toBe(true);\n  });\n});\n"
+    }
+  ]
+}

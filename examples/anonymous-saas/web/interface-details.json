@@ -1,0 +1,3417 @@
+{
+  "schemaVersion": "1.1",
+  "kind": "interface-details",
+  "generatedAt": "2026-08-31T17:04:01.962Z",
+  "protocolVersions": {
+    "P1": "1.0.0",
+    "P2": "1.0.0",
+    "P3": "1.0.0"
+  },
+  "entries": {
+    "P1": {
+      "IF_SYS_OP1": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_SYS_OP1",
+          "name": "登录",
+          "kind": "system",
+          "sourceId": "登录",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "账号.账号状态=正常",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"账号.账号状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：签发登录会话（凭证：登录会话，可本地验证）"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-kks598"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：签发登录会话（凭证：登录会话，可本地验证）"
+            }
+          ],
+          "precondition": "账号.账号状态=正常",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：账号.账号状态=正常"
+            }
+          ],
+          "postconditions": [
+            "签发登录会话（凭证：登录会话，可本地验证）"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "签发登录会话（凭证：登录会话，可本地验证）"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "签发登录会话（凭证：登录会话，可本地验证）"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP2": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_SYS_OP2",
+          "name": "封禁用户",
+          "kind": "system",
+          "sourceId": "封禁用户",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "账号.账号状态=正常",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"账号.账号状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-dtdmgr"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+            }
+          ],
+          "precondition": "账号.账号状态=正常",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：账号.账号状态=正常"
+            }
+          ],
+          "postconditions": [
+            "名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "名下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": [
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "sourceField": "outputs[0].description",
+            "context": "…下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "",
+              "reason": "语义别名：P2 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "sourceField": "postconditions[0]",
+            "context": "…下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "",
+              "reason": "语义别名：P2 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "sourceField": "sideEffects[0].description",
+            "context": "…下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "",
+              "reason": "语义别名：P2 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          }
+        ]
+      },
+      "IF_SYS_OP3": {
+        "protocolId": "P1",
+        "interface": {
+          "id": "IF_SYS_OP3",
+          "name": "重算账号配额",
+          "kind": "system",
+          "sourceId": "重算账号配额",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "（周期性全量重算）",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"（周期性全量重算）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "（周期性全量重算）",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：（周期性全量重算）"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      }
+    },
+    "P2": {
+      "IF_SYS_OP1": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP1",
+          "name": "匿名发布资源",
+          "kind": "system",
+          "sourceId": "匿名发布资源",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "发布形态合法（短时内网映射 | 长期文件托管 二选一）· 无账号、无配额校验（见待确认 #1）",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"发布形态合法（短时内网映射 | 长期文件托管 二选一）· 无账号、无配额校验（见待确认 #1）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：派生 1 个认领码"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-qdn07x"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：派生 1 个认领码"
+            }
+          ],
+          "precondition": "发布形态合法（短时内网映射 | 长期文件托管 二选一）· 无账号、无配额校验（见待确认 #1）",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：发布形态合法（短时内网映射 | 长期文件托管 二选一）· 无账号、无配额校验（见待确认 #1）"
+            }
+          ],
+          "postconditions": [
+            "派生 1 个认领码"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "派生 1 个认领码"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "派生 1 个认领码"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP2": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP2",
+          "name": "上报心跳",
+          "kind": "system",
+          "sourceId": "上报心跳",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "资源.形态=短时内网映射 ∧ 资源.处置状态=正常",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"资源.形态=短时内网映射 ∧ 资源.处置状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "资源.形态=短时内网映射 ∧ 资源.处置状态=正常",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：资源.形态=短时内网映射 ∧ 资源.处置状态=正常"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": [
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "sourceField": "outputs[0].description",
+            "context": "…下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "",
+              "reason": "语义别名：P2 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "sourceField": "postconditions[0]",
+            "context": "…下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "",
+              "reason": "语义别名：P2 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "sourceField": "sideEffects[0].description",
+            "context": "…下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "",
+              "reason": "语义别名：P2 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          }
+        ]
+      },
+      "IF_SYS_OP3": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP3",
+          "name": "结束运行 / 断开",
+          "kind": "system",
+          "sourceId": "结束运行 / 断开",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "连接状态=在线",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"连接状态=在线\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：并发占用随后释放（见 INV-5）"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-cutymz"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：并发占用随后释放（见 INV-5）"
+            }
+          ],
+          "precondition": "连接状态=在线",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：连接状态=在线"
+            }
+          ],
+          "postconditions": [
+            "并发占用随后释放（见 INV-5）"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "并发占用随后释放（见 INV-5）"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "并发占用随后释放（见 INV-5）"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP4": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP4",
+          "name": "上传文件内容",
+          "kind": "system",
+          "sourceId": "上传文件内容",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "资源.形态=长期文件托管 ∧ 资源.处置状态=正常",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"资源.形态=长期文件托管 ∧ 资源.处置状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "资源.形态=长期文件托管 ∧ 资源.处置状态=正常",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：资源.形态=长期文件托管 ∧ 资源.处置状态=正常"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP5": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP5",
+          "name": "请求访问资源（无认领码）",
+          "kind": "system",
+          "sourceId": "请求访问资源（无认领码）",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "访问策略=放行 ∧ 处置状态=正常",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"访问策略=放行 ∧ 处置状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：无; 判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-1yd4z15"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：无; 判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+            }
+          ],
+          "precondition": "访问策略=放行 ∧ 处置状态=正常",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：访问策略=放行 ∧ 处置状态=正常"
+            }
+          ],
+          "postconditions": [
+            "无",
+            "判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "无"
+            },
+            {
+              "kind": "description-only",
+              "description": "判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "无"
+            },
+            {
+              "kind": "description-only",
+              "description": "判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": [
+          {
+            "kind": "guard",
+            "toProtocol": "P3",
+            "sourceField": "outputs[0].description",
+            "context": "…不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P3",
+              "target": "",
+              "reason": "语义别名：P3 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P3",
+            "sourceField": "postconditions[1]",
+            "context": "…不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P3",
+              "target": "",
+              "reason": "语义别名：P3 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P3",
+            "sourceField": "sideEffects[1].description",
+            "context": "…不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P3",
+              "target": "",
+              "reason": "语义别名：P3 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          }
+        ]
+      },
+      "IF_SYS_OP6": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP6",
+          "name": "携带认领码访问",
+          "kind": "system",
+          "sourceId": "携带认领码访问",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：无; 判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-1rlqg8o"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：无; 判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+            }
+          ],
+          "precondition": "归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用"
+            }
+          ],
+          "postconditions": [
+            "无",
+            "判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "无"
+            },
+            {
+              "kind": "description-only",
+              "description": "判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "无"
+            },
+            {
+              "kind": "description-only",
+              "description": "判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP7": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP7",
+          "name": "认领资源",
+          "kind": "system",
+          "sourceId": "认领资源",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据; 若拆成两步，INV-2 必须降级为 eventually_within"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-1kubxg7"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据; 若拆成两步，INV-2 必须降级为 eventually_within"
+            }
+          ],
+          "precondition": "归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)"
+            }
+          ],
+          "postconditions": [
+            "跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据",
+            "若拆成两步，INV-2 必须降级为 eventually_within"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据"
+            },
+            {
+              "kind": "description-only",
+              "description": "若拆成两步，INV-2 必须降级为 eventually_within"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据"
+            },
+            {
+              "kind": "description-only",
+              "description": "若拆成两步，INV-2 必须降级为 eventually_within"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": [
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "precondition",
+            "context": "… 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映…",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "precondition",
+            "context": "…∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒…",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "precondition",
+            "context": "…发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "preconditions[0].description",
+            "context": "… 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映…",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "preconditions[0].description",
+            "context": "…∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒…",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "preconditions[0].description",
+            "context": "…发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          }
+        ]
+      },
+      "IF_SYS_OP8": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP8",
+          "name": "移除资源",
+          "kind": "system",
+          "sourceId": "移除资源",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "处置状态≠已移除",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"处置状态≠已移除\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "处置状态≠已移除",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：处置状态≠已移除"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP9": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP9",
+          "name": "审查资源",
+          "kind": "system",
+          "sourceId": "审查资源",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "审核状态=待审",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"审核状态=待审\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "审核状态=待审",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：审核状态=待审"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP10": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP10",
+          "name": "封禁资源",
+          "kind": "system",
+          "sourceId": "封禁资源",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "审核状态=违规",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"审核状态=违规\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：认领码不可兑付"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-35qrzx"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：认领码不可兑付"
+            }
+          ],
+          "precondition": "审核状态=违规",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：审核状态=违规"
+            }
+          ],
+          "postconditions": [
+            "认领码不可兑付"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "认领码不可兑付"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "认领码不可兑付"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP11": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP11",
+          "name": "心跳超时判定",
+          "kind": "system",
+          "sourceId": "心跳超时判定",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "连接状态=在线 ∧ 超过 T_hb 未收到心跳",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"连接状态=在线 ∧ 超过 T_hb 未收到心跳\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "连接状态=在线 ∧ 超过 T_hb 未收到心跳",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：连接状态=在线 ∧ 超过 T_hb 未收到心跳"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP12": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP12",
+          "name": "认领码过期",
+          "kind": "system",
+          "sourceId": "认领码过期",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "认领码.兑付状态=未使用 ∧ 超过有效期",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"认领码.兑付状态=未使用 ∧ 超过有效期\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "认领码.兑付状态=未使用 ∧ 超过有效期",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：认领码.兑付状态=未使用 ∧ 超过有效期"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP13": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_SYS_OP13",
+          "name": "回收已移除资源",
+          "kind": "system",
+          "sourceId": "回收已移除资源",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "处置状态=已移除 ∧ 超过保留期",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"处置状态=已移除 ∧ 超过保留期\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：删除文件对象 / 清除映射实例 / 归档记录"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-1hwn9lm"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：删除文件对象 / 清除映射实例 / 归档记录"
+            }
+          ],
+          "precondition": "处置状态=已移除 ∧ 超过保留期",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：处置状态=已移除 ∧ 超过保留期"
+            }
+          ],
+          "postconditions": [
+            "删除文件对象 / 清除映射实例 / 归档记录"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "删除文件对象 / 清除映射实例 / 归档记录"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "删除文件对象 / 清除映射实例 / 归档记录"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV-1": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_INV_INV-1",
+          "name": "observe_INV-1",
+          "kind": "observation",
+          "sourceId": "INV-1",
+          "triggerRoleId": null,
+          "description": "observe_INV-1",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 放行须已认领且正常（INV-1）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 放行须已认领且正常（INV-1）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [
+            "INV-1"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV-2": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_INV_INV-2",
+          "name": "observe_INV-2",
+          "kind": "observation",
+          "sourceId": "INV-2",
+          "triggerRoleId": null,
+          "description": "observe_INV-2",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 认领唯一性（INV-2）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 认领唯一性（INV-2）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [
+            "INV-2"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV-5": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_INV_INV-5",
+          "name": "observe_INV-5",
+          "kind": "observation",
+          "sourceId": "INV-5",
+          "triggerRoleId": null,
+          "description": "observe_INV-5",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 离线不计并发（INV-5）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 离线不计并发（INV-5）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [
+            "INV-5"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV-7": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_INV_INV-7",
+          "name": "observe_INV-7",
+          "kind": "observation",
+          "sourceId": "INV-7",
+          "triggerRoleId": null,
+          "description": "observe_INV-7",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 封禁即不可访问（INV-7）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 封禁即不可访问（INV-7）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [
+            "INV-7"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV-10": {
+        "protocolId": "P2",
+        "interface": {
+          "id": "IF_OBS_INV_INV-10",
+          "name": "observe_INV-10",
+          "kind": "observation",
+          "sourceId": "INV-10",
+          "triggerRoleId": null,
+          "description": "observe_INV-10",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 移除即拒绝（INV-10）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 移除即拒绝（INV-10）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [
+            "INV-10"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      }
+    },
+    "P3": {
+      "IF_SYS_OP1": {
+        "protocolId": "P3",
+        "interface": {
+          "id": "IF_SYS_OP1",
+          "name": "登记转发服务器",
+          "kind": "system",
+          "sourceId": "登记转发服务器",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "（新建登记，无既有状态 guard）",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"（新建登记，无既有状态 guard）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "（新建登记，无既有状态 guard）",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：（新建登记，无既有状态 guard）"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP2": {
+        "protocolId": "P3",
+        "interface": {
+          "id": "IF_SYS_OP2",
+          "name": "下线转发服务器",
+          "kind": "system",
+          "sourceId": "下线转发服务器",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "在册状态=在册",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"在册状态=在册\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "在册状态=在册",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：在册状态=在册"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": [
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "sourceField": "outputs[0].description",
+            "context": "…下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "",
+              "reason": "语义别名：P2 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "sourceField": "postconditions[0]",
+            "context": "…下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "",
+              "reason": "语义别名：P2 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P2",
+            "sourceField": "sideEffects[0].description",
+            "context": "…下资源访问策略置为拒绝由补偿任务异步完成（跨协议：P2 资源域，组合层 INV-6，T_ban 内收敛）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P2",
+              "target": "",
+              "reason": "语义别名：P2 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          }
+        ]
+      },
+      "IF_SYS_OP3": {
+        "protocolId": "P3",
+        "interface": {
+          "id": "IF_SYS_OP3",
+          "name": "登记接入域名",
+          "kind": "system",
+          "sourceId": "登记接入域名",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "（新建登记，无既有状态 guard）",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"（新建登记，无既有状态 guard）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "（新建登记，无既有状态 guard）",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：（新建登记，无既有状态 guard）"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP4": {
+        "protocolId": "P3",
+        "interface": {
+          "id": "IF_SYS_OP4",
+          "name": "下线接入域名",
+          "kind": "system",
+          "sourceId": "下线接入域名",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "在册状态=在册",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"在册状态=在册\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "在册状态=在册",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：在册状态=在册"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP5": {
+        "protocolId": "P3",
+        "interface": {
+          "id": "IF_SYS_OP5",
+          "name": "登记 / 更换域名证书",
+          "kind": "system",
+          "sourceId": "登记 / 更换域名证书",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "接入域名.在册状态=在册",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"接入域名.在册状态=在册\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "状态变更副作用：有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出; 证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+              }
+            },
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "effects": [
+              "string-54vs0q"
+            ]
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "effects",
+              "type": "string[]",
+              "description": "状态变更副作用：有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出; 证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+            }
+          ],
+          "precondition": "接入域名.在册状态=在册",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：接入域名.在册状态=在册"
+            }
+          ],
+          "postconditions": [
+            "有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出",
+            "证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+          ],
+          "postconditionExpressions": [
+            {
+              "kind": "description-only",
+              "description": "有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出"
+            },
+            {
+              "kind": "description-only",
+              "description": "证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+            }
+          ],
+          "sideEffects": [
+            {
+              "kind": "description-only",
+              "description": "有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出"
+            },
+            {
+              "kind": "description-only",
+              "description": "证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+            }
+          ],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": [
+          {
+            "kind": "guard",
+            "toProtocol": "P3",
+            "sourceField": "outputs[0].description",
+            "context": "…不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P3",
+              "target": "",
+              "reason": "语义别名：P3 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P3",
+            "sourceField": "postconditions[1]",
+            "context": "…不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P3",
+              "target": "",
+              "reason": "语义别名：P3 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P3",
+            "sourceField": "sideEffects[1].description",
+            "context": "…不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P3",
+              "target": "",
+              "reason": "语义别名：P3 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          }
+        ]
+      },
+      "IF_SYS_OP6": {
+        "protocolId": "P3",
+        "interface": {
+          "id": "IF_SYS_OP6",
+          "name": "吊销域名证书",
+          "kind": "system",
+          "sourceId": "吊销域名证书",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "域名覆盖=已覆盖",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"域名覆盖=已覆盖\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "域名覆盖=已覆盖",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：域名覆盖=已覆盖"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_SYS_OP7": {
+        "protocolId": "P3",
+        "interface": {
+          "id": "IF_SYS_OP7",
+          "name": "探测转发服务器健康",
+          "kind": "system",
+          "sourceId": "探测转发服务器健康",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "转发服务器.在册状态=在册（跨层 guard：作用在实例上，条件看它的记录）",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"转发服务器.在册状态=在册（跨层 guard：作用在实例上，条件看它的记录）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "转发服务器.在册状态=在册（跨层 guard：作用在实例上，条件看它的记录）",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：转发服务器.在册状态=在册（跨层 guard：作用在实例上，条件看它的记录）"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": [
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "precondition",
+            "context": "… 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映…",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "precondition",
+            "context": "…∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒…",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "precondition",
+            "context": "…发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "preconditions[0].description",
+            "context": "… 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映…",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "preconditions[0].description",
+            "context": "…∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒…",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          },
+          {
+            "kind": "guard",
+            "toProtocol": "P1",
+            "sourceField": "preconditions[0].description",
+            "context": "…发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)",
+            "downlink": {
+              "resolved": false,
+              "kind": null,
+              "protocolId": "P1",
+              "target": "",
+              "reason": "语义别名：P1 当前版本状态集无 ，接口/资源池亦无命中"
+            }
+          }
+        ]
+      },
+      "IF_SYS_OP8": {
+        "protocolId": "P3",
+        "interface": {
+          "id": "IF_SYS_OP8",
+          "name": "重算证书有效期档",
+          "kind": "system",
+          "sourceId": "重算证书有效期档",
+          "actionType": "state_transition",
+          "triggerRoleId": null,
+          "description": "（周期性巡检）",
+          "schemaKind": "legacy-stub",
+          "schemaDegradedReasons": [
+            "guard 表达式 \"（周期性巡检）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+          ],
+          "isContractCarrier": null,
+          "interfaceType": "state_machine",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {},
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [],
+          "precondition": "（周期性巡检）",
+          "preconditions": [
+            {
+              "kind": "legacy-stub",
+              "description": "guard 表达式含中文标点，自然语言未机械提取：（周期性巡检）"
+            }
+          ],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "sideEffects": [],
+          "invariantIds": [],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      },
+      "IF_OBS_INV_INV-8": {
+        "protocolId": "P3",
+        "interface": {
+          "id": "IF_OBS_INV_INV-8",
+          "name": "observe_INV-8",
+          "kind": "observation",
+          "sourceId": "INV-8",
+          "triggerRoleId": null,
+          "description": "observe_INV-8",
+          "schemaKind": "structured",
+          "isContractCarrier": null,
+          "interfaceType": "observation",
+          "requestSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "holds": {
+                "type": "boolean",
+                "description": "不变量 在册域名必有有效证书（INV-8）当前是否成立"
+              }
+            },
+            "required": [
+              "holds"
+            ],
+            "additionalProperties": true
+          },
+          "requestExample": {},
+          "responseExample": {
+            "holds": true
+          },
+          "codeSamples": [
+            {
+              "lang": "curl",
+              "label": "curl · POST /",
+              "code": "curl -X POST '/' \\\n  -H 'Content-Type: application/json' \\\n  -d '{}'"
+            },
+            {
+              "lang": "javascript",
+              "label": "javascript (fetch) · POST /",
+              "code": "fetch('/', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: {}\n});"
+            },
+            {
+              "lang": "python",
+              "label": "python (requests) · POST /",
+              "code": "import requests\n\nresp = requests.post('/', json={})\nprint(resp.status_code, resp.text)"
+            }
+          ],
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "holds",
+              "type": "boolean",
+              "description": "不变量 在册域名必有有效证书（INV-8）当前是否成立",
+              "required": true
+            }
+          ],
+          "preconditions": [],
+          "postconditions": [],
+          "postconditionExpressions": [],
+          "invariantIds": [
+            "INV-8"
+          ],
+          "observesResourcePoolId": null,
+          "errorResponses": []
+        },
+        "relation": {
+          "ownedTransitions": [],
+          "preconditionStates": [],
+          "postconditionStates": [],
+          "coveredInvariants": [],
+          "diffImpact": {
+            "affected": false,
+            "changedTransitions": [],
+            "changedStates": [],
+            "changedOthers": [],
+            "summary": null
+          }
+        },
+        "binding": {
+          "hasBindings": false,
+          "bindingsFingerprintAtBuild": null
+        },
+        "crossRefs": []
+      }
+    }
+  },
+  "catalog": {
+    "byProtocol": {
+      "P1": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_OP1"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_OP2"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_OP3"
+        }
+      ],
+      "P2": [
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP3"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP4"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP5"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP6"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP7"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP8"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP9"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP10"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP11"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP12"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP13"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-5"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-7"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-10"
+        }
+      ],
+      "P3": [
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP1"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP2"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP3"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP4"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP5"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP6"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP7"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP8"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_OBS_INV_INV-8"
+        }
+      ]
+    },
+    "byRole": {
+      "系统/未指派角色": [
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_OP1"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_OP2"
+        },
+        {
+          "protocolId": "P1",
+          "interfaceId": "IF_SYS_OP3"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP3"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP4"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP5"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP6"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP7"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP8"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP9"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP10"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP11"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP12"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_SYS_OP13"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP1"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP2"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP3"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP4"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP5"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP6"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP7"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_SYS_OP8"
+        }
+      ],
+      "观测": [
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-1"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-2"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-5"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-7"
+        },
+        {
+          "protocolId": "P2",
+          "interfaceId": "IF_OBS_INV_INV-10"
+        },
+        {
+          "protocolId": "P3",
+          "interfaceId": "IF_OBS_INV_INV-8"
+        }
+      ]
+    },
+    "byPreconditionState": {}
+  }
+}

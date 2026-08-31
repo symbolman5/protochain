@@ -95,21 +95,6 @@ credentials:
   onGone: "账号消失 ⇒ 配额同时消失（本模型中账号不可注销）；反过来：配额记录缺失 ⇒ 按默认档初始化为「有余量」，不阻塞查看与封禁"
 ```
 
-# 组件映射
-
-```yaml
-interfaceImplementations:
-  - { interface: 登录, component: control-plane, description: 账号登录签发会话 }
-  - { interface: 封禁用户, component: control-plane, description: 运营封禁用户（账号侧置账号状态=已封禁；资源侧补偿由组合层 INV-6 承接） }
-  - { interface: 重算账号配额, component: control-plane, description: 账号配额档位重算（调度；占用统计输入来自 P2 资源域） }
-dimensionStorage:
-  - { dimension: 账号状态, table: accounts }
-  - { dimension: 文件空间状态, table: quotas }
-  - { dimension: 映射并发状态, table: quotas }
-componentTransfers:
-  - { from: data-plane, to: control-plane, channel: event, mode: async, description: 上报资源占用统计输入等观测事件（组合层 INV-3/4 对账数据来源） }
-```
-
 <!--
 R3b 拆分备注（P1 账号域）：
 1. 来源：examples/anonymous-saas/protocol/model.md（R3a 单协议六张清单版）按「实体关系簇 + 角色边界」拆分。

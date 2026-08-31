@@ -156,29 +156,6 @@ credentials:
   onGone: "证书过期或吊销 ⇒ 对应 SNI 的 TLS 握手失败（fail-closed）"
 ```
 
-# 组件映射
-
-```yaml
-interfaceImplementations:
-  - { interface: 登记转发服务器, component: control-plane, description: 运维登记转发服务器 }
-  - { interface: 下线转发服务器, component: control-plane, description: 运维下线转发服务器 }
-  - { interface: 登记接入域名, component: control-plane, description: 运维登记接入域名 }
-  - { interface: 下线接入域名, component: control-plane, description: 运维下线接入域名 }
-  - { interface: 登记 / 更换域名证书, component: control-plane, description: 运维登记/更换域名证书 }
-  - { interface: 吊销域名证书, component: control-plane, description: 运维吊销域名证书 }
-  - { interface: 探测转发服务器健康, component: data-plane, description: 健康探测（观测事实采集） }
-  - { interface: 重算证书有效期档, component: control-plane, description: 证书有效期档巡检（调度） }
-dimensionStorage:
-  - { dimension: 在册状态, table: servers, description: 转发服务器在册状态 }
-  - { dimension: 服务状态, table: servers_instances }
-  - { dimension: 在册状态, table: domains, description: 接入域名在册状态 }
-  - { dimension: 域名覆盖, table: certs }
-  - { dimension: 有效期档, table: certs }
-componentTransfers:
-  - { from: control-plane, to: data-plane, channel: event, mode: async, description: 装载/停止装载域名证书（SNI 选择前提；证书过期或吊销 ⇒ fail-closed） }
-  - { from: data-plane, to: control-plane, channel: event, mode: async, description: 上报健康探测观测事件 }
-```
-
 <!--
 R3b 拆分备注（P3 基础设施）：
 1. 来源：examples/anonymous-saas/protocol/model.md（R3a 单协议六张清单版）按「实体关系簇 + 角色边界」拆分。

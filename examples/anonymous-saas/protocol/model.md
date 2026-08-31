@@ -429,56 +429,14 @@ credentials:
   description: 回收已移除资源删除文件对象/清除映射实例，异步清理任务
 ```
 
-# 组件映射
-
-```yaml
-interfaceImplementations:
-  - { interface: 匿名发布资源, component: control-plane, description: 匿名发布登记资源记录并派生认领码（管理类写路径） }
-  - { interface: 认领资源, component: control-plane, description: 认领资源（跨资源与认领码同一事务） }
-  - { interface: 移除资源, component: control-plane, description: 归属人移除资源 }
-  - { interface: 审查资源, component: control-plane, description: 运营审查资源 }
-  - { interface: 封禁资源, component: control-plane, description: 运营封禁资源 }
-  - { interface: 封禁用户, component: control-plane, description: 运营封禁用户（异步补偿名下资源访问策略） }
-  - { interface: 登录, component: control-plane, description: 账号登录签发会话 }
-  - { interface: 登记转发服务器, component: control-plane, description: 运维登记转发服务器 }
-  - { interface: 下线转发服务器, component: control-plane, description: 运维下线转发服务器 }
-  - { interface: 登记接入域名, component: control-plane, description: 运维登记接入域名 }
-  - { interface: 下线接入域名, component: control-plane, description: 运维下线接入域名 }
-  - { interface: 登记 / 更换域名证书, component: control-plane, description: 运维登记/更换域名证书 }
-  - { interface: 吊销域名证书, component: control-plane, description: 运维吊销域名证书 }
-  - { interface: 重算账号配额, component: control-plane, description: 账号配额重算（调度） }
-  - { interface: 重算证书有效期档, component: control-plane, description: 证书有效期档巡检（调度） }
-  - { interface: 认领码过期, component: control-plane, description: 认领码过期判定（调度） }
-  - { interface: 回收已移除资源, component: control-plane, description: 已移除资源回收（调度） }
-  - { interface: 心跳超时判定, component: control-plane, description: 心跳超时判定（调度） }
-  - { interface: 请求访问资源（无认领码）, component: data-plane, description: 兑现公网访问（代理/拒绝判定） }
-  - { interface: 携带认领码访问, component: data-plane, description: 携带认领码访问的跳转判定 }
-  - { interface: 上传文件内容, component: data-plane, description: 文件上传兑现 }
-  - { interface: 上报心跳, component: data-plane, description: 心跳接收（观测事实采集） }
-  - { interface: 结束运行 / 断开, component: data-plane, description: 断开事件接收（观测事实采集） }
-  - { interface: 探测转发服务器健康, component: data-plane, description: 健康探测（观测事实采集） }
-dimensionStorage:
-  - { dimension: 形态, table: resources, description: 资源记录（短时内网映射/长期文件托管） }
-  - { dimension: 归属状态, table: resources }
-  - { dimension: 处置状态, table: resources }
-  - { dimension: 访问策略, table: resources, description: 从归属状态派生的冗余副本（INV-1） }
-  - { dimension: 审核状态, table: resources }
-  - { dimension: 连接状态, table: mapping_instances }
-  - { dimension: 存在性, table: files }
-  - { dimension: 账号状态, table: accounts }
-  - { dimension: 文件空间状态, table: quotas }
-  - { dimension: 映射并发状态, table: quotas }
-  - { dimension: 在册状态, table: servers, description: 转发服务器在册状态 }
-  - { dimension: 服务状态, table: servers_instances }
-  - { dimension: 在册状态, table: domains, description: 接入域名在册状态 }
-  - { dimension: 域名覆盖, table: certs }
-  - { dimension: 有效期档, table: certs }
-  - { dimension: 兑付状态, table: claim_codes }
-  - { dimension: 有效期状态, table: claim_codes }
-componentTransfers:
-  - { from: control-plane, to: data-plane, channel: event, mode: async, description: 推送访问策略副本（INV-11，T_sync 内收敛；超期未同步数据面 fail-closed） }
-  - { from: data-plane, to: control-plane, channel: event, mode: async, description: 上报心跳/断开/健康探测等观测事件 }
-```
+> **组件模型**：本合并模型原内嵌「组件映射」段（interfaceImplementations / dimensionStorage /
+> componentTransfers）与子协议 components.md 重复（两源冲突会触发 T1a 硬失败），已删除并指向
+> 子协议独立文档（§1.4 新形态）：
+> - `protocol/P1/components.md`（账号域：组件定义 + 三表 + 接口契约）
+> - `protocol/P2/components.md`（资源发布与兑现：组件定义 + 三表 + 接口契约）
+> - `protocol/P3/components.md`（基础设施：组件定义 + 三表 + 接口契约）
+>
+> 跨协议组件归属（control-plane / data-plane 横跨 P1/P2/P3）见 `protocol/composition.md` 组件映射段。
 
 <!--
 R3a 范式转换备注（model.js 六张清单 → protochain 六张清单 DSL，V2 状态机版 4aa8b69 推翻重做）：

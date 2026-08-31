@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-08-30T17:55:55.716Z",
+  "generatedAt": "2026-08-31T17:03:43.792Z",
   "sourceModelVersion": "1.0.0",
   "protocol": {
     "name": "基础设施",
@@ -56,7 +56,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"（新建登记，无既有状态 guard）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/register-forward-server"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP2",
@@ -89,7 +98,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"在册状态=在册\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/deregister-forward-server"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP3",
@@ -122,7 +140,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"（新建登记，无既有状态 guard）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/register-domain"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP4",
@@ -155,7 +182,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"在册状态=在册\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/deregister-domain"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP5",
@@ -223,7 +259,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"接入域名.在册状态=在册\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/upsert-domain-cert"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP6",
@@ -256,7 +301,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"域名覆盖=已覆盖\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/revoke-domain-cert"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP7",
@@ -289,7 +343,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"转发服务器.在册状态=在册（跨层 guard：作用在实例上，条件看它的记录）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "GET",
+        "path": "/probe-forward-server-health"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP8",
@@ -322,7 +385,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"（周期性巡检）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/recompute-cert-expiry"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_OBS_INV_INV-8",
@@ -362,7 +434,16 @@
       "schemaKind": "structured",
       "invariantIds": [
         "INV-8"
-      ]
+      ],
+      "transport": {
+        "method": "GET",
+        "path": "/observe_inv-8"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     }
   ],
   "testCases": [],
@@ -671,6 +752,20 @@
         "channel": "event",
         "mode": "async",
         "description": "上报健康探测观测事件"
+      }
+    ],
+    "components": [
+      {
+        "name": "control-plane",
+        "description": "管理面：服务器/域名/证书登记与调度（P3 基础设施控制面；跨 P1/P2/P3 组件归属见 composition.md）",
+        "baseUrl": "https://control.example.com",
+        "auth": "bearer"
+      },
+      {
+        "name": "data-plane",
+        "description": "数据面：健康探测与证书装载（观测事实采集；SNI 选择前提，fail-closed）",
+        "baseUrl": "https://data.example.com",
+        "auth": "none"
       }
     ]
   },

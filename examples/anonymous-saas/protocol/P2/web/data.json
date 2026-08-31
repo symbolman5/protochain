@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-08-30T17:55:54.988Z",
+  "generatedAt": "2026-08-31T17:03:37.425Z",
   "sourceModelVersion": "1.0.0",
   "protocol": {
     "name": "资源发布与兑现",
@@ -92,7 +92,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"发布形态合法（短时内网映射 | 长期文件托管 二选一）· 无账号、无配额校验（见待确认 #1）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/publish-anonymous-resource"
+      },
+      "authorization": {
+        "type": "oauth",
+        "credential": "认领码",
+        "selfContained": "needs-lookup"
+      }
     },
     {
       "id": "IF_SYS_OP2",
@@ -125,7 +134,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"资源.形态=短时内网映射 ∧ 资源.处置状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "GET",
+        "path": "/report-heartbeat"
+      },
+      "authorization": {
+        "type": "oauth",
+        "credential": "认领码",
+        "selfContained": "needs-lookup"
+      }
     },
     {
       "id": "IF_SYS_OP3",
@@ -184,7 +202,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"连接状态=在线\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "GET",
+        "path": "/finish-运行-disconnect"
+      },
+      "authorization": {
+        "type": "oauth",
+        "credential": "认领码",
+        "selfContained": "needs-lookup"
+      }
     },
     {
       "id": "IF_SYS_OP4",
@@ -217,7 +244,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"资源.形态=长期文件托管 ∧ 资源.处置状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "GET",
+        "path": "/upload-file-content"
+      },
+      "authorization": {
+        "type": "oauth",
+        "credential": "认领码",
+        "selfContained": "needs-lookup"
+      }
     },
     {
       "id": "IF_SYS_OP5",
@@ -285,7 +321,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"访问策略=放行 ∧ 处置状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/request-access-resource-无-claim-码"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP6",
@@ -353,7 +398,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/carry-claim-码-access"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP7",
@@ -421,7 +475,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/claim-resource"
+      },
+      "authorization": {
+        "type": "oauth",
+        "credential": "认领码",
+        "selfContained": "needs-lookup"
+      }
     },
     {
       "id": "IF_SYS_OP8",
@@ -454,7 +517,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"处置状态≠已移除\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/remove-resource"
+      },
+      "authorization": {
+        "type": "oauth",
+        "credential": "认领码",
+        "selfContained": "needs-lookup"
+      }
     },
     {
       "id": "IF_SYS_OP9",
@@ -487,7 +559,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"审核状态=待审\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/review-resource"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP10",
@@ -546,7 +627,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"审核状态=违规\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/ban-resource"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP11",
@@ -579,7 +669,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"连接状态=在线 ∧ 超过 T_hb 未收到心跳\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/heartbeat-timeout-judge"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP12",
@@ -612,7 +711,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"认领码.兑付状态=未使用 ∧ 超过有效期\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/claim-码-expire"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_SYS_OP13",
@@ -671,7 +779,16 @@
       "schemaDegradedReasons": [
         "guard 表达式 \"处置状态=已移除 ∧ 超过保留期\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
       ],
-      "actionType": "state_transition"
+      "actionType": "state_transition",
+      "transport": {
+        "method": "POST",
+        "path": "/recycle-已-remove-resource"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_OBS_INV_INV-1",
@@ -711,7 +828,16 @@
       "schemaKind": "structured",
       "invariantIds": [
         "INV-1"
-      ]
+      ],
+      "transport": {
+        "method": "GET",
+        "path": "/observe_inv-1"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_OBS_INV_INV-2",
@@ -751,7 +877,16 @@
       "schemaKind": "structured",
       "invariantIds": [
         "INV-2"
-      ]
+      ],
+      "transport": {
+        "method": "GET",
+        "path": "/observe_inv-2"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_OBS_INV_INV-5",
@@ -791,7 +926,16 @@
       "schemaKind": "structured",
       "invariantIds": [
         "INV-5"
-      ]
+      ],
+      "transport": {
+        "method": "GET",
+        "path": "/observe_inv-5"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_OBS_INV_INV-7",
@@ -831,7 +975,16 @@
       "schemaKind": "structured",
       "invariantIds": [
         "INV-7"
-      ]
+      ],
+      "transport": {
+        "method": "GET",
+        "path": "/observe_inv-7"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     },
     {
       "id": "IF_OBS_INV_INV-10",
@@ -871,7 +1024,16 @@
       "schemaKind": "structured",
       "invariantIds": [
         "INV-10"
-      ]
+      ],
+      "transport": {
+        "method": "GET",
+        "path": "/observe_inv-10"
+      },
+      "authorization": {
+        "type": "none",
+        "degraded": true,
+        "reason": "组件模型未声明（接口未关联调用角色，无法推断凭证）"
+      }
     }
   ],
   "testCases": [],
@@ -1198,27 +1360,27 @@
         "dimensions": [
           {
             "name": "形态",
-            "type": "TODO",
+            "type": "ResourceForm",
             "kind": "declared"
           },
           {
             "name": "归属状态",
-            "type": "TODO",
+            "type": "OwnershipStatus",
             "kind": "declared"
           },
           {
             "name": "处置状态",
-            "type": "TODO",
+            "type": "DisposalStatus",
             "kind": "declared"
           },
           {
             "name": "访问策略",
-            "type": "TODO",
+            "type": "string",
             "kind": "declared"
           },
           {
             "name": "审核状态",
-            "type": "TODO",
+            "type": "string",
             "kind": "declared"
           }
         ]
@@ -1229,7 +1391,7 @@
         "dimensions": [
           {
             "name": "连接状态",
-            "type": "TODO",
+            "type": "string",
             "kind": "observed"
           }
         ]
@@ -1240,7 +1402,7 @@
         "dimensions": [
           {
             "name": "存在性",
-            "type": "TODO",
+            "type": "Existence",
             "kind": "observed"
           }
         ]
@@ -1251,12 +1413,12 @@
         "dimensions": [
           {
             "name": "兑付状态",
-            "type": "TODO",
+            "type": "string",
             "kind": "declared"
           },
           {
             "name": "有效期状态",
-            "type": "TODO",
+            "type": "string",
             "kind": "observed"
           }
         ]
@@ -1397,6 +1559,20 @@
         "channel": "event",
         "mode": "async",
         "description": "上报心跳/断开等观测事件（INV-5 离线释放数据来源）"
+      }
+    ],
+    "components": [
+      {
+        "name": "control-plane",
+        "description": "管理面：发布/认领/移除/审查/封禁/调度（P2 资源域控制面；跨 P1/P2/P3 组件归属见 composition.md）",
+        "baseUrl": "https://control.example.com",
+        "auth": "bearer"
+      },
+      {
+        "name": "data-plane",
+        "description": "数据面：访问兑现/文件上传/心跳/断开（观测事实采集；数据面服务兑现依赖 P3）",
+        "baseUrl": "https://data.example.com",
+        "auth": "none"
       }
     ]
   },
