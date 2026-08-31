@@ -6,15 +6,23 @@
  *   ① 路径用例区：55 条路径（testCases）渲染，行含 id / 长度徽章 / transitionIds / 验证徽章；
  *      点路径行展开显示覆盖的转移/状态（transitionIds[i]：stateIds[i] → stateIds[i+1]）；
  *      verification 执行结果徽章条（报告/通过/失败/跳过 + deviationSummary）。
- *   ② 对抗用例区：27 条按 kind 分组（observed-write 7 / convergence 11 / credential 9，
+ *   ② 对抗用例区：20 条按 kind 分组（convergence 11 / credential 9；
+ *      R3a 六张清单形态无 observed-write 载体），
  *      credential 组内 credential-expired|revoked|lookup 各 3），
  *      每条显示 id / kind 徽章 / source 原文 / expectFailure / 断言摘要（body「断言」行）。
  * V6-4 交互：点 guard-failure 用例 source（fulfillment-payment P1）→ 协议层对应操作行高亮
- *            （.proto-op-row.hl-case，DOM 断言）；点 X12 收敛 source → 不变量列 + 约束操作行高亮；
- *            点 X5 observed-write source → 维度行 + 操作行高亮。
+ *            （.proto-op-row.hl-case，DOM 断言）；点 X12 收敛 source → 不变量列 + 约束操作行高亮。
+ *            R3a：六张清单形态无 role 接口写 observed 维度 → X5 observed-write 用例载体缺失
+ *            （generate-cases R4 差额显式降级），X5 source 指回测试随载体移除。
  * V6-5 老数据降级：food-delivery（有路径无对抗）→ 路径区渲染、对抗区空态不崩；
  *            fulfillment-payment P1（2 路径 + 2 对抗）→ 双区渲染正确；
  *            无 testCases/adversarialCases → 面板级缺省提示；未导入 → 不渲染。
+ *
+ * R2b 整合（组件层 + 用例层挂进 R2a 新架构，§11.3 两层 + §11.4 用例视图）：
+ * R2b-2 三面板同页渲染：协议层主视图 + 组件层三表/拓扑 + 用例层 一次 renderAll 共存；
+ * R2b-3 三视图互通：点对抗用例 source → 协议层不变量列/维度行 + 组件层存储落点
+ *        （comp-storage-row.hl-case，§11.4「落在哪个存储」）同步高亮；
+ * R2b-4 降级沿用 V6-5（无 components/adversarialCases → 区块空态不崩）。
  *
  * 环境：jsdom（与 protocol-panel / component-panel test 同构）。
  */
@@ -85,7 +93,7 @@ function click(dom: JSDOM, el: Element): void {
 // ---------------------------------------------------------------------------
 
 describe('V6-3 用例面板渲染（anonymous-saas）', () => {
-  test('① 路径用例区：55 条路径、行含 id/长度徽章/transitionIds/验证徽章，verification 徽章条', () => {
+  test('① 路径用例区：0 条路径（R3a 六张清单形态无状态机段）、verification 徽章条', () => {
     const data = loadSaasData() as {
       testCases: Array<{
         id: string;
@@ -99,19 +107,11 @@ describe('V6-3 用例面板渲染（anonymous-saas）', () => {
     const { dom } = setupDom(data);
     const panel = dom.window.document.querySelector('.cases-panel');
     expect(panel).not.toBeNull();
-    // 路径行数 = testCases 数量
+    // 路径行数 = testCases 数量（六张清单形态 generate-cases 无状态机路径 → 0）
     const rows = [...dom.window.document.querySelectorAll('.case-path-row')];
     expect(rows.length).toBe(data.testCases.length);
-    expect(rows.length).toBe(55);
-    // 首条路径：id / 长度徽章 / transitionIds / 验证徽章（无 caseResults → 未验证）
-    const first = data.testCases[0];
-    const firstRow = dom.window.document.querySelector(`.case-path-row[data-path-id="${first.id}"]`)!;
-    expect(firstRow.textContent).toContain(first.id);
-    expect(firstRow.textContent).toContain(`${first.length} 步`);
-    expect(firstRow.textContent).toContain(first.transitionIds.join(' → '));
-    expect(firstRow.querySelector('.case-path-vb-na')).not.toBeNull();
-    expect(firstRow.textContent).toContain('未验证');
-    // verification 徽章条：报告 + 通过/失败/跳过 计数
+    expect(rows.length).toBe(0);
+    // verification 徽章条：报告 + 通过/失败/跳过 计数（无 caseResults → 未验证）
     const bar = dom.window.document.querySelector('.case-verify-bar');
     expect(bar).not.toBeNull();
     expect(bar!.textContent).toContain('报告：未生成');
@@ -120,32 +120,16 @@ describe('V6-3 用例面板渲染（anonymous-saas）', () => {
     expect(bar!.textContent).toContain(`跳过 ${data.verification.counts.skipped}`);
   });
 
-  test('① 点路径行展开 → 覆盖的转移/状态（transitionIds[i]：stateIds[i] → stateIds[i+1]）', () => {
+  test('① R3a 六张清单形态（无状态机段）：testCases 为空 → 路径区 0 行、面板不崩', () => {
     const data = loadSaasData() as {
-      testCases: Array<{ id: string; transitionIds: string[]; stateIds: string[] }>;
+      testCases: Array<{ id: string }>;
     };
+    expect(data.testCases).toHaveLength(0);
     const { dom } = setupDom(data);
-    const path = data.testCases[0];
-    const row = dom.window.document.querySelector(`.case-path-row[data-path-id="${path.id}"]`)!;
-    // 默认收起
-    expect(row.querySelector('.case-path-detail')!.classList.contains('open')).toBe(false);
-    click(dom, row.querySelector('.case-path-head')!);
-    expect(row.classList.contains('open')).toBe(true);
-    expect(row.querySelector('.case-path-detail')!.classList.contains('open')).toBe(true);
-    // 步数 = transitionIds 数；每步 Tn：Sx → Sy
-    const steps = [...row.querySelectorAll('.case-path-tstep')];
-    expect(steps.length).toBe(path.transitionIds.length);
-    for (let i = 0; i < path.transitionIds.length; i++) {
-      expect(steps[i].querySelector('.case-tstep-tid')!.textContent).toBe(path.transitionIds[i]);
-      expect(steps[i].textContent).toContain(path.stateIds[i]);
-      expect(steps[i].textContent).toContain(path.stateIds[i + 1]);
-    }
-    // 再点收起
-    click(dom, row.querySelector('.case-path-head')!);
-    expect(row.querySelector('.case-path-detail')!.classList.contains('open')).toBe(false);
+    expect(dom.window.document.querySelectorAll('.case-path-row').length).toBe(0);
   });
 
-  test('② 对抗用例区：27 条按 kind 分组（observed-write 7 / convergence 11 / credential 9），每条含 id/kind 徽章/source 原文/expectFailure/断言摘要', () => {
+  test('② 对抗用例区：20 条按 kind 分组（convergence 11 / credential 9；R3a 六张清单形态无 observed-write 载体），每条含 id/kind 徽章/source 原文/expectFailure/断言摘要', () => {
     const data = loadSaasData() as {
       adversarialCases: Array<{
         id: string;
@@ -159,11 +143,12 @@ describe('V6-3 用例面板渲染（anonymous-saas）', () => {
     // 行数 = adversarialCases 数量
     const rows = [...dom.window.document.querySelectorAll('.case-adv-row')];
     expect(rows.length).toBe(data.adversarialCases.length);
-    expect(rows.length).toBe(27);
-    // 分组：observed-write 7 / convergence 11 / credential 9（credential-* 归组）
+    expect(rows.length).toBe(20);
+    // 分组：observed-write 0（R3a 六张清单形态无 role 写 observed 维度 → X5 载体缺失，R4 差额显式降级）
+    //        / convergence 11 / credential 9（credential-* 归组）
     const groupRows = (g: string): number =>
       dom.window.document.querySelectorAll(`.case-adv-group[data-kind-group="${g}"] .case-adv-row`).length;
-    expect(groupRows('observed-write')).toBe(7);
+    expect(groupRows('observed-write')).toBe(0);
     expect(groupRows('guard-failure')).toBe(0);
     expect(groupRows('convergence')).toBe(11);
     expect(groupRows('credential')).toBe(9);
@@ -247,25 +232,109 @@ describe('V6-4 source 指回联动（点 source 高亮协议层）', () => {
     expect(dom.window.document.querySelectorAll('.proto-op-row.hl-case').length).toBeGreaterThan(0);
   });
 
-  test('X5 observed-write 用例（anonymous-saas）：点 source → 维度行 + 操作行高亮', () => {
+  // R3a：X5 observed-write source 指回测试已移除——六张清单形态无 role 接口写 observed 维度，
+  // X5 用例载体缺失（generate-cases R4 差额显式降级于 test-cases.json degradedReasons），
+  // source 指回交互已按新形态重建（下方 R2b-3：X12 收敛用例 → 协议层 + 组件层存储落点）。
+});
+
+// ---------------------------------------------------------------------------
+// R2b 整合（组件层 + 用例层挂进 R2a 新架构；§11.3 两层 + §11.4 用例视图）
+// ---------------------------------------------------------------------------
+
+describe('R2b 组件层 + 用例层整合（anonymous-saas）', () => {
+  test('R2b-2 三面板同页渲染：协议层主视图 + 组件层三表/拓扑 + 用例层 一次 renderAll 共存', () => {
+    const data = loadSaasData() as {
+      interfaces: unknown[];
+      components: {
+        interfaceImplementations: unknown[];
+        dimensionStorage: unknown[];
+        componentTransfers: unknown[];
+      };
+      testCases: unknown[];
+      adversarialCases: unknown[];
+    };
+    const { dom } = setupDom(data);
+    // 三面板同页（renderAll 链尾叠加：protocol 清空 #panels 后 component/cases 顺序追加）
+    expect(dom.window.document.querySelector('.protocol-panel')).not.toBeNull();
+    expect(dom.window.document.querySelector('.component-panel')).not.toBeNull();
+    expect(dom.window.document.querySelector('.cases-panel')).not.toBeNull();
+    // 组件层三表（24/17/2）+ 拓扑节点/边（R2b-2）
+    const implRows = dom.window.document.querySelectorAll('.comp-impl-row').length;
+    expect(implRows).toBe(data.components.interfaceImplementations.length);
+    expect(implRows).toBe(24);
+    expect(dom.window.document.querySelectorAll('.comp-storage-row').length).toBe(
+      data.components.dimensionStorage.length
+    );
+    expect(dom.window.document.querySelectorAll('.comp-transfer-row').length).toBe(
+      data.components.componentTransfers.length
+    );
+    expect(dom.window.document.querySelectorAll('.comp-transfer-row').length).toBe(2);
+    expect(dom.window.document.querySelectorAll('.comp-topo-node').length).toBeGreaterThan(0);
+    expect(dom.window.document.querySelectorAll('.comp-topo-edge').length).toBe(2);
+    // 用例层（R3a 六张清单形态：0 路径 + 20 对抗按 kind 分组）
+    expect(dom.window.document.querySelectorAll('.case-path-row').length).toBe(data.testCases.length);
+    expect(dom.window.document.querySelectorAll('.case-adv-row').length).toBe(data.adversarialCases.length);
+  });
+
+  test('R2b-3 三视图互通：点 X12 收敛 source → 协议层不变量列/维度行 + 组件层存储落点同步高亮（§11.4「落在哪个存储」）', () => {
+    const data = loadSaasData() as {
+      adversarialCases: Array<{ id: string; kind: string; interfaceId: string }>;
+      invariants: Array<{ id: string; dimensions: string[] }>;
+      components: { dimensionStorage: Array<{ dimension: string }> };
+    };
+    const { dom } = setupDom(data);
+    const conv = data.adversarialCases.find((a) => a.kind === 'convergence' && a.interfaceId === 'INV-1')!;
+    expect(conv).toBeDefined();
+    const src = dom.window.document.querySelector(`.case-adv-row[data-case-id="${conv.id}"] .case-adv-source`)!;
+    click(dom, src);
+    // 协议层：不变量列高亮（既有 V6-4 行为不回退）+ 维度行高亮
+    expect(
+      dom.window.document.querySelector(`.proto-inv-col[data-invariant-id="INV-1"]`)!.classList.contains('hl-case')
+    ).toBe(true);
+    // 组件层：INV-1 的 dimensions（归属状态/处置状态/访问策略）→ comp-storage-row.hl-case
+    const invDims = data.invariants.find((i) => i.id === 'INV-1')!.dimensions;
+    expect(invDims.length).toBeGreaterThan(0);
+    const hlStorage = [...dom.window.document.querySelectorAll('.comp-storage-row.hl-case')]
+      .map((r) => r.getAttribute('data-dimension'))
+      .filter((x): x is string => !!x);
+    for (const dim of invDims) {
+      expect(hlStorage).toContain(dim);
+      expect(
+        dom.window.document.querySelector(`.comp-storage-row[data-dimension="${dim}"]`)!.classList.contains('hl-case')
+      ).toBe(true);
+    }
+    // 非 INV-1 维度的存储行不误亮
+    const invDimSet = new Set(invDims);
+    for (const s of data.components.dimensionStorage) {
+      if (!invDimSet.has(s.dimension)) {
+        expect(
+          dom.window.document.querySelector(`.comp-storage-row[data-dimension="${s.dimension}"]`)!.classList.contains('hl-case')
+        ).toBe(false);
+      }
+    }
+  });
+
+  test('R2b-3 复用：点 credential 用例 source（提及 认领码 凭证）→ 协议层操作行 + 不变量高亮不崩、可再点其它 source 清旧高亮', () => {
     const data = loadSaasData() as {
       adversarialCases: Array<{ id: string; kind: string; interfaceId: string }>;
     };
     const { dom } = setupDom(data);
-    const x5 = data.adversarialCases.find((a) => a.kind === 'observed-write')!;
-    const src = dom.window.document.querySelector(`.case-adv-row[data-case-id="${x5.id}"] .case-adv-source`)!;
-    click(dom, src);
-    // source 提维度名 → 协议层维度行高亮（X5 source 必含维度名）
-    const source = src.querySelector('.case-adv-source-text')!.textContent ?? '';
-    const hlDims = [...dom.window.document.querySelectorAll('.proto-dim-row.hl-case')]
-      .map((r) => r.getAttribute('data-dimension'))
-      .filter((x): x is string => !!x);
-    expect(hlDims.length).toBeGreaterThan(0);
-    expect(source.length).toBeGreaterThan(0);
-    // interfaceId=action（接口 name）→ 操作行高亮（publish_resource → IF_SYS_T1）
+    const cred = data.adversarialCases.find((a) => a.kind === 'credential-expired' && a.interfaceId === '认领码')!;
+    expect(cred).toBeDefined();
+    const src = dom.window.document.querySelector(`.case-adv-row[data-case-id="${cred.id}"] .case-adv-source`)!;
+    expect(() => click(dom, src)).not.toThrow();
+    // 旧高亮清除机制：再点另一条用例 source → 前一条的 hl-case 被清除（不残留）
+    const conv = data.adversarialCases.find((a) => a.kind === 'convergence' && a.interfaceId === 'INV-2')!;
+    const src2 = dom.window.document.querySelector(`.case-adv-row[data-case-id="${conv.id}"] .case-adv-source`)!;
+    click(dom, src2);
     expect(
-      dom.window.document.querySelector(`.proto-op-row[data-interface-id="IF_SYS_T1"]`)!.classList.contains('hl-case')
+      dom.window.document.querySelector(`.proto-inv-col[data-invariant-id="INV-2"]`)!.classList.contains('hl-case')
     ).toBe(true);
+    expect(dom.window.document.querySelectorAll('.comp-storage-row.hl-case').length).toBeGreaterThan(0);
+    // 前一条用例自身行反馈已清除
+    expect(
+      dom.window.document.querySelector(`.case-adv-row[data-case-id="${cred.id}"]`)!.classList.contains('hl')
+    ).toBe(false);
   });
 });
 

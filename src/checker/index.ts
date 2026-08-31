@@ -193,11 +193,20 @@ function checkStructuralCompleteness(
     return;
   }
 
+  // R1a（六张清单形态）：无状态空间/转移规则段，但已声明「操作」/「实体维度」段 →
+  // 六张清单模型（操作=改实体维度，系统无单一状态轴），不强制要求状态机结构。
+  // 状态机降为兼容层：老实例声明状态机段则按现逻辑检查（零回归）。
+  const isSixListModel =
+    derivable.states.length === 0 &&
+    derivable.transitions.length === 0 &&
+    ((derivable.operations?.length ?? 0) > 0 ||
+      (derivable.entityDimensions?.length ?? 0) > 0);
+
   // 正常模式结构完备性
-  if (derivable.states.length === 0) {
+  if (derivable.states.length === 0 && !isSixListModel) {
     issues.push(errorIssue('可推演层 states 为空', 'derivable.states'));
   }
-  if (derivable.transitions.length === 0) {
+  if (derivable.transitions.length === 0 && !isSixListModel) {
     issues.push(
       warningIssue('可推演层 transitions 为空，无转移规则', 'derivable.transitions')
     );
@@ -206,11 +215,14 @@ function checkStructuralCompleteness(
   // 初始状态：每个状态机（连通分量）内必须存在且唯一。
   // 多实体协议（聚合 + 附属实体）允许每台子状态机各有入口 initial（如 P7 US1/PS1/PI1）；
   // 同一状态机内多 initial、或无入口的孤儿组件（既无 initial 也无创建转移目标）仍是建模错误。
+  // R1a：六张清单形态无状态机轴，不要求初始状态。
   const initialStates = derivable.states.filter((s) => s.type === 'initial');
   if (initialStates.length === 0) {
-    issues.push(
-      errorIssue('缺少初始状态（type=initial 的状态）', 'derivable.states')
-    );
+    if (!isSixListModel) {
+      issues.push(
+        errorIssue('缺少初始状态（type=initial 的状态）', 'derivable.states')
+      );
+    }
   } else {
     const { main, subMachines, orphanComponents } = decomposeStateMachines(
       derivable.states,
@@ -241,8 +253,12 @@ function checkStructuralCompleteness(
     }
   }
 
-  // 终态至少一个
-  if (derivable.terminalStateIds.length === 0 && !derivable.states.some((s) => s.type === 'terminal')) {
+  // 终态至少一个（R1a：六张清单形态无状态机轴，不要求终态）
+  if (
+    !isSixListModel &&
+    derivable.terminalStateIds.length === 0 &&
+    !derivable.states.some((s) => s.type === 'terminal')
+  ) {
     issues.push(
       warningIssue('未声明终态（type=terminal），活性质质无法保证', 'derivable.states')
     );
@@ -1221,6 +1237,13 @@ function collectModelFieldNames(model: SourceProtocolModel): Set<string> {
       if (d.name) names.add(d.name);
     }
   }
+  // R1b：附属实体维度（六张清单「实体维度」段投影为 subsidiaryEntities 维度）——
+  // 判据 5 的维度命名空间必须含它们，否则六张清单 guard 引用实体维度会被误报悬空
+  for (const ent of model.derivable.subsidiaryEntities ?? []) {
+    for (const d of ent.stateSpace.dimensions ?? []) {
+      if (d.name) names.add(d.name);
+    }
+  }
   for (const t of model.derivable.transitions) {
     for (const e of t.attributeEffects ?? []) {
       if (e.field) names.add(e.field);
@@ -1254,11 +1277,33 @@ function extractInvariantRefsFromGuard(guard: string): string[] {
 }
 
 /**
+ * 六张清单 guard 维度引用提取（R1b 判据 5 机械面，确定性无启发式，红线 2）：
+ * 只认两种形态——
+ * ①「实体.维度」：`.` 后的标识符 token（如「资源.形态」→「形态」）；
+ * ②「维度=值 / 维度≠值」：`=` / `≠` 前的标识符 token（如「连接状态=在线」→「连接状态」）。
+ * 自然语言段（无 `.`/`=`/`≠` 的句子）不提取。返回去重列表。
+ */
+function extractSixListGuardDimRefs(guard: string): string[] {
+  const refs = new Set<string>();
+  // ① 实体.维度（X.y → y）
+  const entityDimRe = /[\u4e00-\u9fa5A-Za-z0-9_]+\.([\u4e00-\u9fa5A-Za-z0-9_]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = entityDimRe.exec(guard)) !== null) refs.add(m[1]);
+  // ② 维度=值 / 维度≠值（y → y）
+  const bareRe = /([\u4e00-\u9fa5A-Za-z0-9_]+)\s*[=≠]/g;
+  while ((m = bareRe.exec(guard)) !== null) refs.add(m[1]);
+  return Array.from(refs);
+}
+
+/**
  * W2 guard schema 机械自检（TC5 / 02 §3 W2-b）：
  * - 所有 kind='json-schema' 的 guard 表达式必须可被 ajv 编译（编译失败 → 硬错误；
  *   如 matchesPattern 携带非法正则）；
  * - 跨字段引用闭合：谓词引用的字段必须在模型已声明字段命名空间内（引用不存在字段 → 硬错误）；
  * - invariant(INVn) 引用存在性：引用的不变量必须已声明（不存在 → 硬错误）。
+ * - R1b 判据 5（六张清单形态）：操作段 guard 引用的「实体.维度」/「维度=值」维度必须在
+ *   「实体维度」段存在（悬空硬失败；language.md 表2 填写规则）。只对 operations 生效
+ *   （老模型无 operations → 零输出零回归）。
  *
  * 复用 tryParseGuardSchema（specifier 同一纯函数）——单一事实源，与 specifier 判定一致。
  * 老模型（无谓词命中 guard）→ 零输出。
@@ -1313,6 +1358,26 @@ export function checkGuardSchemaSelfCheck(
             `转移 "${t.id}" 的 guard "${t.guard}" 引用不变量 "${invId}"，但该不变量未在 invariants 中声明`,
             'derivable.transitions.guard',
             t.id
+          )
+        );
+      }
+    }
+  }
+
+  // R1b 判据 5（六张清单形态）：操作段 guard 引用的维度必须在「实体维度」段存在
+  // （悬空硬失败，language.md §3 表2 填写规则）。只对 operations 生效（老模型零回归）。
+  const ops = model.derivable.operations ?? [];
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    if (!op.guard) continue;
+    for (const dim of extractSixListGuardDimRefs(op.guard)) {
+      if (!fieldUniverse.has(dim)) {
+        issues.push(
+          errorIssue(
+            `操作 "${op.id}"（${op.name}）的 guard "${op.guard}" 引用维度 "${dim}"，` +
+              `但该维度未在「实体维度」段声明（判据5：guard 引用的属性必须升为维度；引用了不存在的维度是硬错误）`,
+            `derivable.operations[${i}].guard`,
+            op.id
           )
         );
       }

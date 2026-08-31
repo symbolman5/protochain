@@ -465,10 +465,15 @@
     const states = ir.derivable.states;
     const transitions = ir.derivable.transitions;
     const roles = (ir.metadata.roles || []).map((r) => r.name).join('、');
+    // R2a：六张清单形态（无状态机轴）不显示"状态/转移"计数，改显形态标识
+    const hasStateMachine = states.length > 0 || transitions.length > 0;
+    const scale = hasStateMachine
+      ? `<span>状态 ${states.length} · 转移 ${transitions.length}</span>`
+      : `<span>六张清单形态 · 无状态机轴</span>`;
     els.modelInfo.innerHTML =
       '<div class="model-card">' +
       `<div class="model-name">${esc(ir.metadata.name)}</div>` +
-      `<div class="model-meta"><span>版本 v${esc(ir.metadata.version)}</span><span>状态 ${states.length} · 转移 ${transitions.length}</span></div>` +
+      `<div class="model-meta"><span>版本 v${esc(ir.metadata.version)}</span>${scale}</div>` +
       `<div class="model-roles">角色：${esc(roles)}</div>` +
       '</div>';
   }

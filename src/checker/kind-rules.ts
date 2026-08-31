@@ -46,6 +46,7 @@ import type {
   ComponentMappingDef,
 } from '../model/types.js';
 import type { DimensionKind, DimensionKindSource } from '../model/dimension-kind.js';
+import { mapOperationTriggerType } from '../model/dimension-kind.js';
 import { tryParseGuardSchema } from '../specifier/schema-builder.js';
 import Ajv from 'ajv';
 
@@ -105,14 +106,81 @@ export interface DimensionKindView {
   mismatch?: { asserted: DimensionKind; derived: DimensionKind };
 }
 
+/**
+ * R1b：统一接口视图 —— 状态机转移（老形态，兼容层）∪ 六张清单操作（新形态）。
+ * 六张清单形态无 transitions，写入方来自「操作」段接口（OperationDef，IR 层）；
+ * R-KIND 组凡遍历「接口」处一律经本视图，保证两种形态等价覆盖（R1b 改动1）。
+ */
+export interface InterfaceLikeDef {
+  id: string;
+  /** 动作名（转移 action / 操作 name） */
+  action: string;
+  triggerRoleId?: string;
+  /** 转移原文 trigger（角色 ID | 'system' | 外部角色；操作无此字段） */
+  trigger?: string;
+  /** 归一 triggerType：操作四值经 mapOperationTriggerType 映射为三值 */
+  triggerType: 'role' | 'system' | 'external';
+  guard?: string;
+  affectsDimensions: string[];
+  /** 六张清单操作的作用实体列表（表2「作用实体」列解析产物；转移无） */
+  targetEntities?: string[];
+  source: 'transition' | 'operation';
+  sourceIndex: number;
+}
+
+/** 遍历全部接口：transitions（老形态）∪ operations（六张清单形态），保序 */
+export function collectInterfaces(model: SourceProtocolModel): InterfaceLikeDef[] {
+  const out: InterfaceLikeDef[] = [];
+  for (const [i, t] of (model.derivable.transitions ?? []).entries()) {
+    out.push({
+      id: t.id,
+      action: t.action,
+      triggerRoleId: t.triggerRoleId,
+      trigger: t.trigger,
+      triggerType: t.triggerType,
+      guard: t.guard,
+      affectsDimensions: t.affectsDimensions ?? [],
+      source: 'transition',
+      sourceIndex: i,
+    });
+  }
+  for (const [i, op] of (model.derivable.operations ?? []).entries()) {
+    out.push({
+      id: op.id,
+      action: op.name,
+      triggerRoleId: op.triggerRoleId,
+      triggerType: mapOperationTriggerType(op.triggerType),
+      guard: op.guard,
+      affectsDimensions: op.affectsDimensions ?? [],
+      targetEntities: op.targetEntities,
+      source: 'operation',
+      sourceIndex: i,
+    });
+  }
+  return out;
+}
+
+/** 接口来源路径（issue elementPath 用；老形态保持原路径，零回归） */
+function interfacePath(iface: InterfaceLikeDef, field: string): string {
+  const kind = iface.source === 'operation' ? 'operations' : 'transitions';
+  return `derivable.${kind}[${iface.sourceIndex}].${field}`;
+}
+
+/** 接口来源标签（issue message 用：老形态「转移」，六张清单「操作」） */
+function interfaceLabel(iface: InterfaceLikeDef): string {
+  return iface.source === 'operation' ? '操作' : '转移';
+}
+
 /** 遍历全部 StateDimension 实例（states[].dimensions + subsidiaryEntities[].stateSpace.dimensions） */
 export function resolveDimensionKinds(model: SourceProtocolModel): DimensionKindView[] {
   const views: DimensionKindView[] = [];
   const ir = model.derivable;
+  const interfaces = collectInterfaces(model);
   const collect = (owner: string, dim: StateDimension): void => {
     // W(dim)：写入该维度的 triggerType 集合（去重排序）——与 buildDimensionKinds 同一口径
+    // （transitions ∪ operations；操作四值经 mapOperationTriggerType 归一为三值）
     const writerSet = new Set<string>();
-    for (const t of ir.transitions) {
+    for (const t of interfaces) {
       if ((t.affectsDimensions ?? []).includes(dim.name)) {
         writerSet.add(t.triggerType);
       }
@@ -198,8 +266,9 @@ function locateDimensionPath(
 // R-KIND-1（X2）：kind='observed'（含人写断言）⇒ 不得有任何 triggerType='role' 的接口写入
 // ---------------------------------------------------------------------------
 //
-// 判定主体 = kind（含人写断言），检查范围 = 转移层 affectsDimensions（R9 口径：
-// sideEffects 无法静态判定写入维度，显式降级）。正向命中即硬失败。
+// 判定主体 = kind（含人写断言），检查范围 = 接口层 affectsDimensions（R9 口径：
+// sideEffects 无法静态判定写入维度，显式降级）。R1b：接口层 = transitions ∪ operations。
+// 正向命中即硬失败。
 
 export const ruleRKind1ObservedNoRoleWriters: KindRule = {
   ruleId: 'R-KIND-1',
@@ -208,14 +277,16 @@ export const ruleRKind1ObservedNoRoleWriters: KindRule = {
   check(ctx: KindRuleContext): CheckIssue[] {
     const issues: CheckIssue[] = [];
     const views = resolveDimensionKinds(ctx.model);
+    // R1b：遍历统一接口视图（transitions ∪ operations）——六张清单形态写入方来自操作段
+    const interfaces = collectInterfaces(ctx.model);
     for (const v of views) {
       if (v.kind !== 'observed') continue;
-      for (const t of ctx.model.derivable.transitions) {
+      for (const t of interfaces) {
         if (t.triggerType === 'role' && (t.affectsDimensions ?? []).includes(v.dimension)) {
           const sourceLabel = v.kindSource === 'asserted' ? '人写断言' : '机械推导';
           issues.push(
             kindError(
-              `维度 "${v.dimension}"（${v.owner}）kind='observed'（${sourceLabel}），但转移 "${t.id}"（action=${t.action}）以 triggerType='role' 写入它；` +
+              `维度 "${v.dimension}"（${v.owner}）kind='observed'（${sourceLabel}），但${interfaceLabel(t)} "${t.id}"（action=${t.action}）以 triggerType='role' 写入它；` +
                 `observed 维度只能由事实侧（system/external）写入，角色不能凭意图制造事实 [R-KIND-1/X2]`,
               v.dimension,
               locateDimensionPath(ctx.model, v.owner, v.dimension)
@@ -369,7 +440,8 @@ export const ruleRKind4RoleWithoutTriggerInterface: KindRule = {
     const issues: CheckIssue[] = [];
     const roles = ctx.model.metadata.roles ?? [];
     const triggered = new Set<string>();
-    for (const t of ctx.model.derivable.transitions ?? []) {
+    // R1b：遍历统一接口视图（transitions ∪ operations）——六张清单形态角色由操作段触发
+    for (const t of collectInterfaces(ctx.model)) {
       if (t.triggerRoleId) triggered.add(t.triggerRoleId);
       if (t.trigger) triggered.add(t.trigger);
     }
@@ -405,10 +477,10 @@ export const ruleRKind4RoleWithoutTriggerInterface: KindRule = {
 // - 「非本系统组件且无程序化交互」= 该角色不出现在任何 states[].roleIds，且不在
 //   contractInput.parties（契约方 = 程序化交互方）→ 与系统完全游离 → 建议移出模型（分支③）。
 
-/** 收集「无任何接口以该角色为触发者」的角色 ID 集合（与 R-KIND-4 同一判定口径） */
+/** 收集「无任何接口以该角色为触发者」的角色 ID 集合（与 R-KIND-4 同一判定口径，R1b：transitions ∪ operations） */
 function roleIdsWithoutTriggerInterface(model: SourceProtocolModel): Set<string> {
   const triggered = new Set<string>();
-  for (const t of model.derivable.transitions ?? []) {
+  for (const t of collectInterfaces(model)) {
     if (t.triggerRoleId) triggered.add(t.triggerRoleId);
     if (t.trigger) triggered.add(t.trigger);
   }
@@ -501,9 +573,9 @@ export const ruleRKind7NoStateChangeCandidate: KindRule = {
     '接口未声明任何状态变更（affectsDimensions 为空）⇒ ③候选，②③之分人工复核留痕（X8，P1-4 判据3）',
   check(ctx: KindRuleContext): CheckIssue[] {
     const issues: CheckIssue[] = [];
-    const transitions = ctx.model.derivable.transitions ?? [];
-    for (let i = 0; i < transitions.length; i++) {
-      const t = transitions[i];
+    // R1b：遍历统一接口视图（transitions ∪ operations）——六张清单判断接口（change 无 =）同样筛候选
+    const interfaces = collectInterfaces(ctx.model);
+    for (const t of interfaces) {
       const dims = t.affectsDimensions ?? [];
       if (dims.length > 0) continue; // 分支①：改变状态 → 进模型，不筛候选
       const hasGuard = Boolean(t.guard && t.guard.trim() !== '');
@@ -512,11 +584,11 @@ export const ruleRKind7NoStateChangeCandidate: KindRule = {
         : '该接口无 guard（仅把状态交给调用方观测或纯状态推进，疑似分支③）';
       issues.push(
         kindWarning(
-          `接口/转移 "${t.id}"（action=${t.action}）未声明任何状态变更（affectsDimensions 为空），按判据3 为 ③候选：` +
+          `接口/${interfaceLabel(t)} "${t.id}"（action=${t.action}）未声明任何状态变更（affectsDimensions 为空），按判据3 为 ③候选：` +
             `${hint}；②③之分需人工复核并留痕（B-2：留痕=acceptance-record 或本 issue 描述字段），` +
             `机械层不做②③判定（P1-4 判据3，W2 同款显式降级不静默）[R-KIND-7/X8]`,
           t.id,
-          `derivable.transitions[${i}].affectsDimensions`
+          interfacePath(t, 'affectsDimensions')
         )
       );
     }
@@ -565,40 +637,48 @@ export const ruleRKind8CrossEntityNeedsTransactionBoundary: KindRule = {
     const ownerMap = buildDimensionOwnerMap(ctx.model);
     const boundaries = ctx.model.derivable.transactionBoundaries;
     const declaredIfaces = new Set<string>((boundaries ?? []).map((b) => b.interface));
-    const transitions = ctx.model.derivable.transitions ?? [];
-    for (let i = 0; i < transitions.length; i++) {
-      const t = transitions[i];
-      const dims = t.affectsDimensions ?? [];
-      if (dims.length < 2) continue; // 单维度或空 → 不可能跨实体
+    // R1b：遍历统一接口视图（transitions ∪ operations）。
+    // 跨实体判定：六张清单操作优先用「作用实体」列（targetEntities，表2 语义直读）；
+    // 状态机转移沿用 affectsDimensions → owner 映射（老形态零回归）。
+    const interfaces = collectInterfaces(ctx.model);
+    for (const t of interfaces) {
       const owners = new Set<string>();
-      for (const dim of dims) {
-        const owner = ownerMap.get(dim);
-        if (owner) owners.add(owner);
+      if (t.targetEntities && t.targetEntities.length > 0) {
+        for (const ent of t.targetEntities) owners.add(ent);
+      } else {
+        const dims = t.affectsDimensions ?? [];
+        if (dims.length < 2) continue; // 单维度或空 → 不可能跨实体
+        for (const dim of dims) {
+          const owner = ownerMap.get(dim);
+          if (owner) owners.add(owner);
+        }
       }
       if (owners.size < 2) continue; // 维度未跨 ≥2 实体（含未知 owner 维度不夸大判定）
       if (declaredIfaces.has(t.action) || declaredIfaces.has(t.id)) continue; // 已声明
       const ownersText = Array.from(owners).join(', ');
-      const dimsText = dims.join(', ');
+      const dimsText = (t.affectsDimensions ?? []).join(', ');
+      const label = interfaceLabel(t);
+      const path = interfacePath(t, 'affectsDimensions');
       if (boundaries !== undefined) {
         // 新模型（已启用事务边界段）：未声明 → 硬失败
         issues.push(
           kindError(
-            `转移 "${t.id}"（action=${t.action}）的 affectsDimensions（${dimsText}）跨 ${owners.size} 个实体（${ownersText}），` +
+            `${label} "${t.id}"（action=${t.action}）的${t.source === 'operation' ? '作用实体（target）' : 'affectsDimensions'}（${t.source === 'operation' ? ownersText : dimsText}）跨 ${owners.size} 个实体（${ownersText}），` +
               `但未在「事务边界」段声明事务边界（same_transaction / async_compensation）；` +
               `多实体操作的原子性/时间语义未定，直接决定架构，必须显式声明（P1-5 判据11）[R-KIND-8/X9]`,
             t.id,
-            `derivable.transitions[${i}].affectsDimensions`
+            path
           )
         );
       } else {
         // 老模型（未启用事务边界段）：告警 + 迁移截止日（决策 D-2）
         issues.push(
           kindWarning(
-            `转移 "${t.id}"（action=${t.action}）的 affectsDimensions（${dimsText}）跨 ${owners.size} 个实体（${ownersText}），` +
+            `${label} "${t.id}"（action=${t.action}）的${t.source === 'operation' ? '作用实体（target）' : 'affectsDimensions'}（${t.source === 'operation' ? ownersText : dimsText}）跨 ${owners.size} 个实体（${ownersText}），` +
               `未声明事务边界；老模型请在「事务边界」段补充声明（same_transaction / async_compensation），` +
               `迁移截止日 ${TRANSACTION_BOUNDARY_MIGRATION_DEADLINE}（决策 D-2）[R-KIND-8/X9]`,
             t.id,
-            `derivable.transitions[${i}].affectsDimensions`
+            path
           )
         );
       }
@@ -629,7 +709,13 @@ export interface GuardCoverageStats {
   /** 覆盖率（hit/total；total=0 时为 1） */
   hitRate: number;
   /** 未命中明细（显式降级记录，不静默） */
-  degraded: Array<{ transitionId: string; action: string; reason: string }>;
+  degraded: Array<{
+    transitionId: string;
+    action: string;
+    reason: string;
+    /** R1b：接口来源（transition | operation），issue message/elementPath 区分 */
+    source?: 'transition' | 'operation';
+  }>;
 }
 
 /** 解析转移的 preconditions 表达式（契约层优先，缺省 guard 受限谓词翻译；同 S4 口径） */
@@ -666,8 +752,9 @@ export function computeGuardCoverage(model: SourceProtocolModel): GuardCoverageS
     degraded: [],
   };
   const ajv = new Ajv({ allErrors: true, strict: false });
-  const transitions = model.derivable.transitions ?? [];
-  for (const t of transitions) {
+  // R1b：遍历统一接口视图（transitions ∪ operations）——六张清单操作 guard 同样统计覆盖率
+  const interfaces = collectInterfaces(model);
+  for (const t of interfaces) {
     const pre = resolveTransitionPreconditions(model, t);
     if (pre.length === 0) continue; // 无 guard → 不计入分母
     stats.total++;
@@ -678,6 +765,7 @@ export function computeGuardCoverage(model: SourceProtocolModel): GuardCoverageS
       stats.degraded.push({
         transitionId: t.id,
         action: t.action,
+        source: t.source,
         reason: `guard preconditions 含 ${bad?.kind ?? 'invalid'} 表达式「${bad?.description ?? ''}」未机械结构化（未按受限谓词语法书写，显式降级不静默，R2-1）`,
       });
       continue;
@@ -692,6 +780,7 @@ export function computeGuardCoverage(model: SourceProtocolModel): GuardCoverageS
         stats.degraded.push({
           transitionId: t.id,
           action: t.action,
+          source: t.source,
           reason: `guard preconditions 的 JSON Schema 不可被 ajv 编译：${err instanceof Error ? err.message : String(err)}`,
         });
         break;
@@ -717,10 +806,10 @@ export const ruleRKind9GuardExecutableCoverage: KindRule = {
     for (const d of stats.degraded) {
       issues.push(
         kindWarning(
-          `转移 "${d.transitionId}"（action=${d.action}）的 guard 未可执行化（X17）：${d.reason}` +
+          `${d.source === 'operation' ? '操作' : '转移'} "${d.transitionId}"（action=${d.action}）的 guard 未可执行化（X17）：${d.reason}` +
             `；spec 层 schemaDegradedReasons 已同步记录，人工只填谓词落地实现，路径/校验/编排由模型生成（P1-9 诚实天花板）[R-KIND-9/X17]`,
           d.transitionId,
-          'derivable.transitions.guard'
+          d.source === 'operation' ? 'derivable.operations.guard' : 'derivable.transitions.guard'
         )
       );
     }
@@ -745,12 +834,16 @@ export const ruleRKind9GuardExecutableCoverage: KindRule = {
 // - B（warning，不阻断）：IR 中未被映射者显式列出（不静默遗漏，进入报告输出）。
 //   段已启用但仍有接口 / 维度未进映射表 → 一条汇总 warning 逐一列出。
 
-/** 收集 IR 接口命名空间：transitions[].action ∪ transitions[].id ∪ contracts[].interface */
+/** 收集 IR 接口命名空间：transitions[].action ∪ transitions[].id ∪ operations[].name ∪ operations[].id ∪ contracts[].interface（R1b 扩展） */
 export function collectInterfaceUniverse(model: SourceProtocolModel): Set<string> {
   const names = new Set<string>();
   for (const t of model.derivable.transitions ?? []) {
     if (t.id) names.add(t.id);
     if (t.action) names.add(t.action);
+  }
+  for (const op of model.derivable.operations ?? []) {
+    if (op.id) names.add(op.id);
+    if (op.name) names.add(op.name);
   }
   for (const c of model.contractInput?.contracts ?? []) {
     if (c.interface) names.add(c.interface);
@@ -851,7 +944,8 @@ export const ruleRKind10ComponentMappingConsistency: KindRule = {
     // （如映射 place_order，则其对应 transition 的 id T1 不重复报未映射）。
     const mappedInterfaces = new Set(view.interfaceRows.map((r) => r.interface));
     const coveredInterfaces = new Set(mappedInterfaces);
-    for (const t of ctx.model.derivable.transitions ?? []) {
+    // R1b：统一接口视图（transitions ∪ operations）——六张清单操作映射同样视为已覆盖
+    for (const t of collectInterfaces(ctx.model)) {
       if (mappedInterfaces.has(t.action) || mappedInterfaces.has(t.id)) {
         if (t.action) coveredInterfaces.add(t.action);
         if (t.id) coveredInterfaces.add(t.id);

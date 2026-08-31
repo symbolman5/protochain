@@ -21,8 +21,10 @@
  *
  * source 指回联动（J2 判据核心）：点对抗用例的 source → 解析 source 文本与 interfaceId：
  *  - 命中接口 action（interfaces[].name/id 子串，长词优先）→ 高亮协议层对应操作行（.proto-op-row.hl-case）；
- *  - 命中维度名（dimensions[].dimension）→ 高亮协议层维度卡片行（.proto-dim-row.hl-case）；
- *  - 命中不变量 ID（invariants[].id）→ 高亮协议层不变量列 + 其约束的操作行 + 涉及的维度（.hl-case）。
+ *  - 命中维度名（dimensions[].dimension）→ 高亮协议层维度卡片行（.proto-dim-row.hl-case）
+ *    与组件层存储落点（.comp-storage-row.hl-case，同一维度名查表——R2b 三视图互通，§11.4「落在哪个存储」）；
+ *  - 命中不变量 ID（invariants[].id）→ 高亮协议层不变量列 + 其约束的操作行 + 涉及的维度（.hl-case），
+ *    维度同时带出组件层存储落点。
  * 高亮用独立类名 .hl-case，不与协议层自身联动（active/hl-guard/hl-inv）与组件层（hl-comp）互踩；
  * document 级事件委托实现（同 interface-jump-bridge / component-panel 模式），不改动协议层面板。
  *
@@ -347,6 +349,8 @@
     document.querySelectorAll('.proto-op-row.hl-case').forEach((x) => x.classList.remove('hl-case'));
     document.querySelectorAll('.proto-dim-row.hl-case').forEach((x) => x.classList.remove('hl-case'));
     document.querySelectorAll('.proto-inv-col.hl-case').forEach((x) => x.classList.remove('hl-case'));
+    // R2b 三视图互通：组件层存储落点随 source 指回一起高亮/清除
+    document.querySelectorAll('.comp-storage-row.hl-case').forEach((x) => x.classList.remove('hl-case'));
   }
 
   /** source 文本 + interfaceId → 目标集合（接口 action → 操作行 / 维度名 → 维度卡片 / 不变量 ID → 不变量列） */
@@ -394,9 +398,10 @@
     for (const id of opIds) {
       document.querySelectorAll(`.proto-op-row[data-interface-id="${id}"]`).forEach((r) => r.classList.add('hl-case'));
     }
-    // 维度名 → 协议层维度卡片行
+    // 维度名 → 协议层维度卡片行 + 组件层存储落点（三视图互通 §11.4「落在哪个存储」）
     for (const d of dims) {
       document.querySelectorAll(`.proto-dim-row[data-dimension="${d}"]`).forEach((r) => r.classList.add('hl-case'));
+      document.querySelectorAll(`.comp-storage-row[data-dimension="${d}"]`).forEach((r) => r.classList.add('hl-case'));
     }
     // 不变量 ID → 不变量列 + 其约束的操作行 + 涉及的维度（与协议层 V4 点不变量同语义）
     for (const id of invIds) {
@@ -405,6 +410,7 @@
       if (inv) {
         for (const d of inv.dimensions || []) {
           document.querySelectorAll(`.proto-dim-row[data-dimension="${d}"]`).forEach((r) => r.classList.add('hl-case'));
+          document.querySelectorAll(`.comp-storage-row[data-dimension="${d}"]`).forEach((r) => r.classList.add('hl-case'));
         }
         for (const op of ctx.ifaces || []) {
           if (!op || !op.id) continue;

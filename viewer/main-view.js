@@ -1,5 +1,10 @@
 /**
- * viewer ① 生命周期主视图（W3-b / 05-execution-T1 TA4）
+ * viewer ① 生命周期主视图（W3-b / 05-execution-T1 TA4；R2a 降为兼容层）
+ *
+ * R2a（§11.3 推翻重构）：协议层视图（protocol-panel.js）成为默认主界面，
+ * 状态机转移图不再作为主展示形式。本文件保留对"声明状态机段"的老模型
+ * （stateMachine.nodes 非空）渲染转移图的能力（G3/T2/T3/T4 既有行为零回归）；
+ * 六张清单形态（无状态机轴，nodes/edges 为空）下不渲染转移图容器（R2a-4）。
  *
  * 布局 v2：终态节点（terminal / error）从主流程 level 摘出，统一放到主流程下方
  * 的"汇区"；到终态的边走正交折线（从源节点底部下行 → 汇区上方 y → 目标列 →
@@ -260,6 +265,17 @@
       const p = document.createElement('div');
       p.className = 'panel-empty';
       p.textContent = '① 主视图：请先导入 data.json（derive-web 产物，含 stateMachine.nodes/edges 契约）';
+      panels.innerHTML = '';
+      panels.appendChild(p);
+      return;
+    }
+    // R2a（§11.3）：六张清单形态（无状态机轴，nodes/edges 为空）→ 不渲染转移图容器；
+    // 协议层视图（protocol-panel.js）为默认主界面。老状态机模型（nodes 非空）走下方既有逻辑。
+    if (Array.isArray(sm.nodes) && sm.nodes.length === 0 && Array.isArray(sm.edges) && sm.edges.length === 0) {
+      const p = document.createElement('div');
+      p.className = 'panel-empty sm-empty';
+      p.textContent =
+        '① 主视图：当前模型为六张清单形态（无状态机轴，不渲染转移图）——协议层主视图（实体-维度卡片 / 操作×不变量交叉 / 时间语义摘要 / 关系网络）为默认主界面';
       panels.innerHTML = '';
       panels.appendChild(p);
       return;

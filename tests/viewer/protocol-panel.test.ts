@@ -1,15 +1,16 @@
 /**
- * viewer V4 协议层面板测试（§11.3 协议模型视图）
+ * viewer 协议层主视图测试（R2a · §11.3 协议模型视图；由 V4 协议层面板测试迁移升级）
  *
- * 机械判据（V4-3 / V4-4 / V4-5）：
- * V4-3 渲染：加载 anonymous-saas web/data.json →
+ * 机械判据（R2a-2 / R2a-3 / R2a-4 / R2a-5，对应 V4-3 / V4-4 / V4-5）：
+ * R2a-2 渲染：加载 anonymous-saas web/data.json →
  *   ① 实体-维度卡片区：17 维度行、kind 着色（declared 蓝 / observed 青，数量与 data.json 一致）；
  *   ② 操作×不变量交叉面板：行数=interfaces、列数=invariants、●=invariantIds 显式命中、跨实体行标注；
  *   ③ 时间语义摘要条：always/eventually_within 分布 + boundMs 一览（与 data.json 查表一致）；
  *   ④ 关系图：12 条 modelRelations 渲染（节点=实体、边带 type 标签）。
- * V4-4 交互：点维度 → 高亮引用它的 guard（interfaces[].precondition 含维度名）与不变量（invariants[].dimensions 含维度名）；
+ * R2a-3 交互：点维度 → 高亮引用它的 guard（interfaces[].precondition 含维度名）与不变量（invariants[].dimensions 含维度名）；
  *           点不变量 → 高亮它约束的操作（invariantIds 显式 ∪ 文本提及）与涉及的维度（DOM 断言）。
- * V4-5 老数据降级：无新字段的 data.json（food-delivery）→ 面板显示"无协议层数据"缺省，不抛错。
+ * R2a-4 旧转移图不渲染：协议层视图为默认主界面——DOM 中无转移图容器（.sm-svg / .sm-node-group）。
+ * R2a-5 老数据降级：无新字段的 data.json（food-delivery）→ 面板显示"无协议层数据"缺省，不抛错。
  *
  * 环境：jsdom（与 viewer-t2-panels.test.ts 同构）。
  */
@@ -95,6 +96,30 @@ function highlightedInvDims(dom: JSDOM): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// R2a 主界面语义（§11.3 推翻重构：协议层视图为默认主界面，无转移图）
+// ---------------------------------------------------------------------------
+
+describe('R2a 协议层主界面（推翻状态机转移图主展示）', () => {
+  test('R2a-2/4 加载 anonymous-saas data.json → 协议层四区块为 #panels 主体、旧转移图容器不渲染', () => {
+    const data = loadSaasData();
+    const { dom } = setupDom(data);
+    const panels = dom.window.document.querySelector('#panels')!;
+    // 主界面 = 协议层主视图（取代旧状态机转移图主展示）
+    expect(panels.querySelector('.protocol-panel')).not.toBeNull();
+    expect(panels.querySelector('.protocol-panel')!.textContent).toContain('协议层主视图');
+    // 协议层四区块齐备：实体-维度卡片 / 操作×不变量交叉 / 时间语义摘要 / 关系网络
+    expect(panels.querySelector('.proto-entity-section')).not.toBeNull();
+    expect(panels.querySelector('.proto-cross-section')).not.toBeNull();
+    expect(panels.querySelector('.proto-timing-section')).not.toBeNull();
+    expect(panels.querySelector('.proto-relation-section')).not.toBeNull();
+    // R2a-4：旧状态机转移图不渲染（DOM 无转移图容器 / 状态节点 / 主视图占位）
+    expect(panels.querySelector('.sm-svg')).toBeNull();
+    expect(panels.querySelector('.sm-node-group')).toBeNull();
+    expect(panels.querySelector('.sm-empty')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // V4-3 渲染
 // ---------------------------------------------------------------------------
 
@@ -126,7 +151,7 @@ describe('V4-3 协议层面板渲染（anonymous-saas）', () => {
     expect(firstRow?.textContent).toContain(first.kind);
   });
 
-  test('② 交叉面板：行=interfaces（40）、列=invariants（11）、●=invariantIds 显式命中、跨实体行标注', () => {
+  test('② 交叉面板：行=interfaces（35）、列=invariants（11）、●=invariantIds 显式命中、跨实体行标注', () => {
     const data = loadSaasData() as {
       interfaces: Array<{
         id: string;
@@ -168,12 +193,12 @@ describe('V4-3 协议层面板渲染（anonymous-saas）', () => {
     expect(renderedCross).toEqual(crossIds);
     // 跨实体行含「跨实体」徽章
     expect(dom.window.document.querySelectorAll('.proto-cross-tag').length).toBe(crossIds.length);
-    // 操作行展示角色 + 接口名 + guard + 作用实体
+    // 操作行展示角色 + 接口名 + guard + 作用实体（R3a：接口名=操作段 op 中文名，如 匿名发布资源）
     const opRow0 = dom.window.document.querySelector('.proto-op-row')!;
-    expect(opRow0.textContent).toContain('publish_resource');
+    expect(opRow0.textContent).toContain('匿名发布资源');
   });
 
-  test('③ 时间语义摘要条：always 4 / eventually_within 7 + boundMs 一览 + 时序约束', () => {
+  test('③ 时间语义摘要条：always 4 / eventually_within 7 + boundMs 一览（R3a 六张清单形态时序约束由 boundMs 承载）', () => {
     const data = loadSaasData() as {
       invariants: Array<{ id: string; timing: string; bound?: number }>;
     };
@@ -188,8 +213,8 @@ describe('V4-3 协议层面板渲染（anonymous-saas）', () => {
     // boundMs 一览（查表一致）
     const inv3 = data.invariants.find((i) => i.id === 'INV-3')!;
     expect(barText).toContain(`INV-3 ≤${inv3.bound}ms`);
-    // 时序约束（edges[].timing 去重）
-    expect(barText).toContain('时序约束');
+    // R3a 六张清单形态：时序约束由不变量 boundMs 一览承载（无状态机 timing edges，
+    // V4 旧「时序约束」块不渲染——待 R2a 新架构协议层视图重做摘要条）
   });
 
   test('④ 关系图：12 条 modelRelations、节点=实体、边带 type 标签', () => {

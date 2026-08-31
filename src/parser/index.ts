@@ -58,6 +58,11 @@ import type {
   ErrorResponseDef,
   RelationAssertion,
   RelationAssertionKind,
+  // R1a：六张清单 IR（操作段 / 实体维度段）
+  OperationDef,
+  OperationTriggerType,
+  DimensionChange,
+  EntityDimensionDef,
   // C-4（10 §4）：契约段分型声明取值类型（TI1 已在 types.ts 定义）
   InterfaceType,
 } from '../model/types.js';
@@ -445,6 +450,10 @@ function parseDerivableLayer(
   const transactionBoundaries = parseTransactionBoundaries(sections);
   const componentMapping = parseComponentMapping(sections);
   const relations = parseRelations(sections);
+  // R1a：六张清单段（可选段「操作」/「实体维度」；老模型不声明 → undefined，零回归）
+  const operations = parseOperations(sections);
+  const entityDimensions = parseEntityDimensions(sections);
+  const subsidiaryEntitiesFromLists = projectEntityDimensionSubsidiaries(entityDimensions);
 
   // 推断初始状态与终态
   const initialStateId = states.find((s) => s.type === 'initial')?.id;
@@ -467,13 +476,19 @@ function parseDerivableLayer(
     negativeAssurances:
       negativeAssurances.length > 0 ? negativeAssurances : undefined,
     subsidiaryEntities:
-      subsidiaryEntities.length > 0 ? subsidiaryEntities : undefined,
+      subsidiaryEntities.length > 0 || subsidiaryEntitiesFromLists.length > 0
+        ? [...subsidiaryEntities, ...subsidiaryEntitiesFromLists]
+        : undefined,
     guardTranslations:
       guardTranslations.length > 0 ? guardTranslations : undefined,
     transactionBoundaries:
       transactionBoundaries !== undefined ? transactionBoundaries : undefined,
     componentMapping: componentMapping !== undefined ? componentMapping : undefined,
     relations: relations !== undefined ? relations : undefined,
+    // R1a：六张清单段（可选；老模型不声明 → undefined，状态机兼容层零回归）
+    operations: operations.length > 0 ? operations : undefined,
+    entityDimensions:
+      entityDimensions.length > 0 ? entityDimensions : undefined,
   };
 
   // 契约层（可选，仅校验用）
@@ -1154,6 +1169,232 @@ function findRelationsSection(sections: Section[]): Section | null {
     }
   }
   return null;
+}
+
+// ----------------------------------------------------------------------------
+// R1a：六张清单段（language.md §3 表2 操作 / 表3 实体维度）
+// 范式：操作 = 改实体维度（不是状态间迁移）；系统无单一状态轴。状态机为兼容层。
+// ----------------------------------------------------------------------------
+
+const OPERATION_TRIGGER_TYPES: OperationTriggerType[] = [
+  'role',
+  'observed',
+  'scheduled',
+  'cross',
+];
+
+/**
+ * R1a：六张清单「操作」段 —— YAML 数组，每项 { role, op, target, guard, change, trigger }。
+ * - 段不存在 → []（老模型零回归；derivable.operations 保持 undefined）；
+ * - 段存在 → OperationDef[]（id 自动生成 OP1..OPn，按声明顺序）。
+ */
+function parseOperations(sections: Section[]): OperationDef[] {
+  const detection = detectExtensionSection(sections, ['操作', 'operations'], '操作');
+  if (!detection.enabled) return [];
+  const yaml = detection.yaml;
+  if (!Array.isArray(yaml)) {
+    throw new ParseError('扩展段"操作"的 YAML 内容必须是数组', '操作');
+  }
+  return yaml.map((item, idx) => parseOperationItem(item, idx));
+}
+
+function parseOperationItem(yaml: unknown, idx: number): OperationDef {
+  const path = `操作[${idx}]`;
+  const r = asRecord(yaml, path);
+  const triggerRaw = requireString(r, 'trigger', path).trim().toLowerCase();
+  if (!(OPERATION_TRIGGER_TYPES as string[]).includes(triggerRaw)) {
+    throw new ParseError(
+      `${path}.trigger 必须是 role / observed / scheduled / cross，实际为 ${triggerRaw}（六张清单表2 触发类型）`
+    );
+  }
+  const change = requireString(r, 'change', path);
+  const target = requireString(r, 'target', path);
+  const { changes, sideEffects } = parseChangeClauses(change);
+  return {
+    id: `OP${idx + 1}`,
+    name: requireString(r, 'op', path),
+    triggerRoleId: requireString(r, 'role', path),
+    target,
+    targetEntities: parseTargetEntities(target),
+    guard: optionalString(r, 'guard'),
+    change,
+    changes,
+    affectsDimensions: Array.from(
+      new Set(changes.map((c) => c.dimension).filter((d) => d.length > 0))
+    ),
+    sideEffects,
+    triggerType: triggerRaw as OperationTriggerType,
+  };
+}
+
+/**
+ * change 解析（表2「状态变更」列）：按分隔符（∧；;。换行）拆段；
+ * - 「实体.维度=值」（X.y=z）→ DimensionChange（entity 带实体名，实体进 target 语义）；
+ * - 「维度=值」（y=z，无实体前缀）→ DimensionChange（entity=''，维度仍进 affectsDimensions）；
+ * - 其余文本段（无「=」）→ sideEffects（描述性副作用，投影 sideEffects）。
+ */
+function parseChangeClauses(change: string): {
+  changes: DimensionChange[];
+  sideEffects: string[];
+} {
+  const clauses = change
+    .split(/[∧；;。\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const changes: DimensionChange[] = [];
+  const sideEffects: string[] = [];
+  for (const clause of clauses) {
+    // X.y=z：实体.维度=值（X 为非空实体名，y 为非空维度名）
+    const withEntity = clause.match(/^([^=]+?)\.([^=]+?)\s*=\s*(.+)$/);
+    if (withEntity) {
+      changes.push({
+        entity: withEntity[1].trim(),
+        dimension: withEntity[2].trim(),
+        value: withEntity[3].trim(),
+      });
+      continue;
+    }
+    // y=z：无实体前缀的维度=值（实体归属由 R1b/下游从 target 推断，此处不猜测）
+    const bareDim = clause.match(/^([^=]+?)\s*=\s*(.+)$/);
+    if (bareDim) {
+      changes.push({
+        entity: '',
+        dimension: bareDim[1].trim(),
+        value: bareDim[2].trim(),
+      });
+      continue;
+    }
+    sideEffects.push(clause);
+  }
+  return { changes, sideEffects };
+}
+
+/**
+ * target 解析（表2「作用实体」列）：
+ * - 「＋」连接多个实体（如「资源 ＋ 认领码」）；
+ * - 「｜」为分支（如「（文件对象 ｜ 短时映射实例）」）；
+ * - 括号整体或括号内为分支/补充说明；实体名去括号、去重、保序。
+ */
+function parseTargetEntities(target: string): string[] {
+  const parts = target
+    .split(/[＋+]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  const push = (t: string): void => {
+    const trimmed = t.trim();
+    if (trimmed) out.push(trimmed);
+  };
+  for (const part of parts) {
+    // 整体括号：如「（文件对象 ｜ 短时映射实例）」→ 括号内按 ｜ 分支
+    const wholeParen = part.match(/^[（(](.+)[)）]$/);
+    if (wholeParen) {
+      for (const sub of wholeParen[1].split(/[｜|]/)) push(sub);
+      continue;
+    }
+    // 部分括号：如「资源（文件对象｜短时映射实例）」→ 括号外 + 括号内分支
+    const innerParen = part.match(/^(.*?)[（(]([^()（）]*)[)）](.*)$/);
+    if (innerParen) {
+      push(innerParen[1]);
+      for (const sub of innerParen[2].split(/[｜|]/)) push(sub);
+      push(innerParen[3]);
+      continue;
+    }
+    push(part);
+  }
+  return Array.from(new Set(out));
+}
+
+/**
+ * R1a：六张清单「实体维度」段 —— YAML 数组，每项 { entity, etype, dim, kind, domain }
+ * （一行一个维度，language.md §3 表3）。
+ * - 段不存在 → []（老模型零回归；derivable.entityDimensions 保持 undefined）；
+ * - 段存在 → EntityDimensionDef[]（entity/etype/dim/kind/domain 原文保留，供存储推导/值域校验）。
+ */
+function parseEntityDimensions(sections: Section[]): EntityDimensionDef[] {
+  const detection = detectExtensionSection(
+    sections,
+    ['实体维度', 'entitydimensions'],
+    '实体维度'
+  );
+  if (!detection.enabled) return [];
+  const yaml = detection.yaml;
+  if (!Array.isArray(yaml)) {
+    throw new ParseError('扩展段"实体维度"的 YAML 内容必须是数组', '实体维度');
+  }
+  return yaml.map((item, idx) => {
+    const path = `实体维度[${idx}]`;
+    const r = asRecord(item, path);
+    const kind = requireString(r, 'kind', path);
+    if (kind !== 'declared' && kind !== 'observed') {
+      throw new ParseError(
+        `${path}.kind 必须是 declared / observed，实际为 ${kind}（六张清单表3 kind 断言）`
+      );
+    }
+    return {
+      entity: requireString(r, 'entity', path),
+      etype: requireString(r, 'etype', path),
+      dimension: requireString(r, 'dim', path),
+      kind,
+      domain: optionalString(r, 'domain') ?? '',
+    };
+  });
+}
+
+/**
+ * R1a：「实体维度」段 → 附属实体投影（每个实体一个 SubsidiaryEntityDef，
+ * stateSpace.dimensions 带 kind 断言，kindSource='asserted'）。
+ * 复用既有「附属实体维度」消费路径（buildDimensionKinds / R-KIND 组 / 存储推导 / 关系段端点）。
+ * cascadeRules 非空（checker R7b 硬要求）；belongsTo 填实体自身（无主实体，不含 P\d/括号，不误入跨协议引用）。
+ */
+function projectEntityDimensionSubsidiaries(
+  dims: EntityDimensionDef[]
+): SubsidiaryEntityDef[] {
+  const byEntity = new Map<string, EntityDimensionDef[]>();
+  for (const d of dims) {
+    const list = byEntity.get(d.entity) ?? [];
+    list.push(d);
+    byEntity.set(d.entity, list);
+  }
+  const out: SubsidiaryEntityDef[] = [];
+  for (const [entity, rows] of byEntity) {
+    const dimensions: StateDimension[] = rows.map((row) => ({
+      name: row.dimension,
+      type: domainToDimensionType(row.domain),
+      initial: '',
+      kind: row.kind,
+      kindSource: 'asserted',
+    }));
+    out.push({
+      id: entity,
+      name: entity,
+      belongsTo: entity,
+      instanceKey: `${entity}.id`,
+      lifecycleDependency: '六张清单形态：实体维度段声明的维度随实体自身生命周期',
+      cascadeRules: [
+        '六张清单形态：实体维度随实体生命周期变更，无级联关系（实体维度段声明）',
+      ],
+      stateSpace: { dimensions },
+      invariants: [],
+    });
+  }
+  return out;
+}
+
+/**
+ * 值域原文 → StateDimension.type（enum[...] 或 string 兜底）。
+ * 形如「{a, b}」的花括号部分转 enum 值列表，注释（。后）忽略。
+ */
+function domainToDimensionType(domain: string): string {
+  const m = domain.match(/^\s*\{([^}]*)\}/);
+  if (m) {
+    const values = m[1]
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (values.length > 0) return `enum[${values.join(', ')}]`;
+  }
+  return 'string';
 }
 
 /**

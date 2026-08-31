@@ -852,3 +852,5 @@ h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacin
 .proto-op-row.hl-case { background: #eef6ff; box-shadow: inset 0 0 0 1px #2f6fed; }
 .proto-dim-row.hl-case { background: #eef6ff; border-color: #2f6fed; box-shadow: 0 0 0 1px #2f6fed; }
 .proto-inv-col.hl-case { background: #eef6ff; }
+/* R2b 三视图互通：source 指回同步高亮组件层存储落点（§11.4「落在哪个存储」） */
+.comp-storage-row.hl-case { background: #eef6ff; }

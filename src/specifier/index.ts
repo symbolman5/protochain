@@ -22,6 +22,9 @@ import type {
   SchemaExpression,
   JSONSchema,
   ContractEntry,
+  // R1a：六张清单「操作」段 IR
+  OperationDef,
+  OperationTriggerType,
 } from '../model/types.js';
 import {
   fieldsToObjectSchema,
@@ -101,6 +104,12 @@ export function specify(
     // 1. 系统接口：从 transitions 推导（E2.1：合并契约层 contracts[] 字段）
     for (const t of derivable.transitions) {
       specs.push(deriveSystemInterface(t, derivable, contractMap));
+    }
+
+    // 1b. 系统接口：R1a 六张清单「操作」段（操作=改实体维度，无状态机轴；
+    //     状态机为兼容层——老模型无操作段 → 零新增接口，零回归）
+    for (const op of derivable.operations ?? []) {
+      specs.push(deriveOperationInterface(op, contractMap));
     }
 
     // 2. 观测接口：从 states 推导（状态观测）
@@ -462,6 +471,117 @@ function deriveSystemInterface(
         ? contract.errorResponses.slice()
         : undefined,
   };
+}
+
+// ============================================================================
+// R1a：六张清单「操作」段 → 系统接口（操作 = 改实体维度，无状态机轴）
+// ============================================================================
+
+/**
+ * R1a：六张清单「操作」段 → 系统接口。
+ * - 操作 → name/sourceId；role → IR 层 OperationDef.triggerRoleId（spec 投影 triggerType）；
+ * - guard → preconditions / precondition；change → affectsDimensions + sideEffects；
+ * - trigger 四值映射 InterfaceSpec.triggerType 三值：role→'role'、observed/scheduled→'system'、
+ *   cross→'external'（OperationDef.triggerType 保留四值原文，checker 判据 7 等在 IR 层消费）。
+ * - 不产生 currentState/nextState（六张清单形态无单一状态轴）。
+ */
+function deriveOperationInterface(
+  op: OperationDef,
+  contractMap?: Map<string, ContractEntry>
+): InterfaceSpec {
+  const contract = contractMap?.get(op.name) ?? contractMap?.get(op.id);
+
+  const inputs: FieldSpec[] = [];
+  const outputs: FieldSpec[] = [];
+  if (op.sideEffects.length > 0) {
+    outputs.push({
+      name: 'effects',
+      type: 'string[]',
+      description: `状态变更副作用：${op.sideEffects.join('; ')}`,
+    });
+  }
+
+  const requestSchema: JSONSchema = fieldsToObjectSchema(inputs, {});
+  const responseSchema: JSONSchema = fieldsToObjectSchema(outputs, {});
+
+  // guard → preconditions（契约层优先，与 deriveSystemInterface 同一口径）
+  let preconditions: SchemaExpression[] = [];
+  if (contract?.preconditions && contract.preconditions.length > 0) {
+    preconditions = contract.preconditions.slice();
+  } else {
+    const guardExpr = tryParseGuardSchema(op.guard);
+    if (guardExpr) preconditions.push(guardExpr);
+    else if (op.guard) preconditions.push({ kind: 'description-only', description: op.guard });
+  }
+  const postconditionExpressions: SchemaExpression[] =
+    contract?.postconditions && contract.postconditions.length > 0
+      ? contract.postconditions.slice()
+      : op.sideEffects.map((s) => ({ kind: 'description-only', description: s }));
+  const sideEffects: SchemaExpression[] =
+    contract?.sideEffects && contract.sideEffects.length > 0
+      ? contract.sideEffects.slice()
+      : op.sideEffects.map((s) => ({ kind: 'description-only', description: s }));
+
+  const schemaKind = classifySchemaKind({
+    requestSchema,
+    responseSchema,
+    preconditions,
+    postconditionExpressions,
+    sideEffects,
+  });
+  const schemaDegradedReasons: string[] = [];
+  if (
+    schemaKind !== 'structured' &&
+    !contract &&
+    op.guard &&
+    (tryParseGuardSchema(op.guard)?.kind ?? 'legacy-stub') !== 'json-schema'
+  ) {
+    schemaDegradedReasons.push(
+      `guard 表达式 "${op.guard}" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）`
+    );
+  }
+
+  return {
+    id: `IF_SYS_${op.id}`,
+    kind: 'system',
+    sourceId: op.name,
+    name: op.name,
+    inputs,
+    outputs,
+    precondition: op.guard,
+    postconditions: op.sideEffects.length > 0 ? op.sideEffects : undefined,
+    // R1a：六张清单操作 → 接口（写入方集合数据源，R-KIND 组 / R1b 消费）
+    affectsDimensions: op.affectsDimensions,
+    triggerType: mapOperationTriggerType(op.triggerType),
+    requestSchema,
+    responseSchema,
+    preconditions,
+    postconditionExpressions,
+    sideEffects,
+    schemaKind,
+    schemaDegradedReasons,
+    contractSource: contract?.interface,
+    declaredInterfaceType: contract?.interfaceType,
+    errorResponses:
+      contract?.errorResponses && contract.errorResponses.length > 0
+        ? contract.errorResponses.slice()
+        : undefined,
+  };
+}
+
+/** R1a：六张清单触发类型（四值）→ InterfaceSpec.triggerType（三值）映射 */
+function mapOperationTriggerType(
+  t: OperationTriggerType
+): 'role' | 'system' | 'external' {
+  switch (t) {
+    case 'role':
+      return 'role';
+    case 'observed':
+    case 'scheduled':
+      return 'system';
+    case 'cross':
+      return 'external';
+  }
 }
 
 // ============================================================================

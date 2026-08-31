@@ -1,5 +1,10 @@
 /**
- * viewer 协议层面板（G7-V4 · §11.3 协议模型视图）
+ * viewer 协议层主视图（R2a · §11.3 协议模型视图；由 V4 协议层面板迁移升级）
+ *
+ * R2a（推翻重构）：协议层视图作为 viewer 默认主界面——取代旧状态机转移图
+ * 主展示形式。凡 data.json 含协议层字段（dimensions / invariants /
+ * modelRelations / storage 任一）即清空 #panels 并以本视图为主体渲染；
+ * 无协议层字段的老数据 → 显式缺省提示（不白屏），主视图保留旧展示。
  *
  * 数据源（全部查表、端内零推导，数据来自 data.json 的 V3+/V4 字段）：
  *  - dimensions[]：{owner, dimension, kind, kindSource, writers}（S1 维度 kind 判定投影）；
@@ -7,9 +12,9 @@
  *  - modelRelations[]：{from, to, type, constraint, onGone}（V1 关系段投影）；
  *  - storage.entities[]：{entity, dimensionCount, dimensions[].{name,type,kind}}（S3 存储落点，实体卡片补充源）；
  *  - interfaces[]：{id, name, kind, triggerRoleId, precondition, invariantIds, sideEffects, postconditions}；
- *  - stateMachine.edges[].timing：时序约束（deadline 等，时间语义摘要条数据源）。
+ *  - stateMachine.edges[].timing：时序约束（deadline 等，时间语义摘要条数据源；仅老状态机模型）。
  *
- * 面板结构（§11.3 顺序）：
+ * 面板结构（§11.3 顺序，主界面四区块）：
  *  ① 实体-维度卡片区：每实体一张卡（dimensions 按 owner 分组 + storage.entities 补充），
  *     卡片列维度/kind（declared 蓝 / observed 青着色）/值域/初始值；
  *     点任意维度 → 高亮引用它的全部 guard（interfaces[].precondition 含维度名）与不变量（invariants[].dimensions 含维度名）。
@@ -22,7 +27,7 @@
  * 降级：无新字段（老模型 data.json）→ 面板显式提示"无协议层数据"，不白屏不报错；
  * 部分字段缺失 → 对应区块显示空态。
  *
- * 边界（§11.3）：不做状态机图形；不做组件模型视图（缺口 #10 数据源属组件层）；不做跨协议 diff。
+ * 边界（§11.3）：不做状态机图形；不做组件模型视图（缺口 #10 数据源属组件层，V5 承接）；不做跨协议 diff。
  */
 (function () {
   'use strict';
@@ -431,7 +436,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 面板渲染入口
+  // 主视图渲染入口（R2a：协议层视图为默认主界面）
   // ---------------------------------------------------------------------------
   function renderProtocolPanel(state, panels) {
     const data = state.dataJson;
@@ -443,15 +448,19 @@
     const rels = Array.isArray(data.modelRelations) ? data.modelRelations : undefined;
     const hasStorageEnts = data.storage && Array.isArray(data.storage.entities) && data.storage.entities.length > 0;
 
-    // 老模型（无任何协议层新字段）→ 显式缺省提示（不白屏不报错）
+    // 老模型（无任何协议层新字段）→ 显式缺省提示（不白屏不报错；不清空主视图，旧展示保留）
     if (!dims && !invs && !rels && !hasStorageEnts) {
       const p = document.createElement('div');
       p.className = 'panel-empty protocol-empty';
       p.textContent =
-        '协议层面板：当前 data.json 无协议层数据（dimensions / invariants / modelRelations / storage，V3+ derive-web 产物）——请重新运行 derive-web 或导入新版 data.json';
+        '协议层主视图：当前 data.json 无协议层数据（dimensions / invariants / modelRelations / storage，V3+ derive-web 产物）——请重新运行 derive-web 或导入新版 data.json';
       panels.appendChild(p);
       return;
     }
+
+    // R2a（§11.3）：凡含协议层字段 → 清空 #panels，协议层四区块作为默认主界面
+    // （取代旧状态机转移图主展示；组件层/用例层面板在链尾叠加）。
+    panels.innerHTML = '';
 
     const box = document.createElement('div');
     box.className = 'protocol-panel';
@@ -460,7 +469,7 @@
     const title = document.createElement('div');
     title.className = 'panel-subtitle';
     title.textContent =
-      `协议层面板（§11.3 · 实体 ${entityCount} · 维度 ${(dims || []).length} · 不变量 ${(invs || []).length} · 关系 ${(rels || []).length}）`;
+      `协议层主视图（§11.3 · 实体 ${entityCount} · 维度 ${(dims || []).length} · 不变量 ${(invs || []).length} · 关系 ${(rels || []).length}）`;
     box.appendChild(title);
 
     // ① 实体-维度卡片区

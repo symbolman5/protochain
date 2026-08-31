@@ -125,7 +125,8 @@ describe('WebDataJson.dimensions（S1 维度 kind 判定投影）', () => {
     expect(data.dimensions!.length).toBe(17);
     const first = data.dimensions![0];
     expect(first).toMatchObject({
-      owner: 'resource',
+      // R3a：六张清单形态附属实体 ID = 实体维度段 entity（中文实体名）
+      owner: '资源',
       dimension: '形态',
       kind: 'declared',
       kindSource: 'asserted',
@@ -154,8 +155,9 @@ describe('WebDataJson.modelRelations（V1 关系段投影）', () => {
     expect(data.modelRelations!.length).toBe(12);
     const first = data.modelRelations![0];
     expect(first).toMatchObject({
-      from: 'resource',
-      to: 'account',
+      // R3a：六张清单形态关系端点 = 实体维度段 entity（中文实体名）
+      from: '资源',
+      to: '账号',
       type: '绑定',
     });
     expect(typeof first.constraint).toBe('string');
@@ -184,7 +186,8 @@ describe('buildStorageView + WebDataJson.storage（S3 存储 schema 投影）', 
     expect(data.storage!.coveredDimensionCount).toBe(17);
     expect(data.storage!.coverageRate).toBe(1);
     const entity = data.storage!.entities[0];
-    expect(entity.entity).toBe('resource');
+    // R3a：六张清单形态存储实体名 = 实体维度段 entity（中文实体名）
+    expect(entity.entity).toBe('资源');
     expect(entity.dimensionCount).toBe(5);
     expect(entity.dimensions[0]).toEqual({ name: '形态', type: 'TODO', kind: 'declared' });
     // 每列归一投影：name=dimension、type=type、kind=kind
@@ -303,23 +306,23 @@ describe('buildComponentsView + WebDataJson.components（S5b X18 组件映射投
 // ---------------------------------------------------------------------------
 
 describe('WebDataJson.adversarialCases（G7-S4/S6 对抗性用例投影）', () => {
-  test('anonymous-saas：27 条 id/kind/source/interfaceId/body/expected* 原样投影', () => {
+  test('anonymous-saas：20 条 id/kind/source/interfaceId/body/expected* 原样投影', () => {
     const { specsEnvelope, model, storage, testCases } = loadAnonymousSaaSInputs();
     const data = buildWebData({ specsEnvelope, model, testCases, storage });
     expect(data.adversarialCases).toBeDefined();
-    expect(data.adversarialCases!.length).toBe(27);
+    expect(data.adversarialCases!.length).toBe(20);
     const kinds = new Set(data.adversarialCases!.map((c) => c.kind));
-    expect(kinds.has('observed-write')).toBe(true);
+    // R3a 六张清单形态：无 role 接口写 observed 维度 → X5 observed-write 载体缺失（R4 差额显式降级）
+    expect(kinds.has('observed-write')).toBe(false);
     expect(kinds.has('convergence')).toBe(true);
     expect(kinds.has('credential-expired')).toBe(true);
     expect(kinds.has('credential-revoked')).toBe(true);
     expect(kinds.has('credential-lookup')).toBe(true);
-    const x5: AdversarialCase = data.adversarialCases![0];
-    expect(x5.id).toMatch(/^X5_/);
-    expect(x5.source).toBeTruthy();
-    expect(x5.interfaceId).toBeTruthy();
-    expect(x5.expectFailure).toBe(true);
-    expect(typeof x5.body).toBe('string');
+    const x12: AdversarialCase = data.adversarialCases![0];
+    expect(x12.id).toMatch(/^X12_/);
+    expect(x12.source).toBeTruthy();
+    expect(x12.interfaceId).toBeTruthy();
+    expect(typeof x12.body).toBe('string');
     // 与 test-cases.json 一致（原样投影）
     expect(data.adversarialCases).toEqual(testCases.adversarialCases);
   });
@@ -347,12 +350,12 @@ describe('WebDataJson.invariants（G7-V4 不变量投影）', () => {
     expect(data.invariants).toBeDefined();
     expect(data.invariants!.length).toBe(11);
     const byId = new Map(data.invariants!.map((i) => [i.id, i]));
-    // INV-1：强一致 → always；subject=作用状态 S2；expression 涉及维度 访问策略/归属状态/处置状态
+    // INV-1：强一致 → always；subject=作用状态（R3a 六张清单形态无状态轴 → 空）；expression 涉及维度 访问策略/归属状态/处置状态
     const inv1 = byId.get('INV-1')!;
     expect(inv1).toMatchObject({
       name: '放行须已认领且正常',
       timing: 'always',
-      subject: ['S2'],
+      subject: [],
       level: 'state-machine',
     });
     expect(inv1.expression).toContain('访问策略');

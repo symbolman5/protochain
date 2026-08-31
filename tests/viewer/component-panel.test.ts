@@ -219,8 +219,9 @@ describe('V5-4 协议↔组件双向跳转（anonymous-saas）', () => {
   test('① 点组件层面板接口行 → 高亮实现组件行+拓扑节点与存储落点（接口文本提及的 dimensionStorage 维度）', () => {
     const data = loadSaasData() as SaasShape;
     const { dom } = setupDom(data);
-    const iface = data.interfaces.find((i) => i.name === 'publish_resource')!;
-    const row = dom.window.document.querySelector(`.comp-impl-row[data-interface-name="publish_resource"]`)!;
+    // R3a：接口名=操作段 op 中文名；认领资源 guard 提及 资源/认领码/账号/账号配额 多实体维度 → 存储落点断言非空
+    const iface = data.interfaces.find((i) => i.name === '认领资源')!;
+    const row = dom.window.document.querySelector(`.comp-impl-row[data-interface-name="认领资源"]`)!;
     click(dom, row);
     // 实现组件行 + 拓扑节点
     expect(row.classList.contains('hl')).toBe(true);
@@ -244,17 +245,17 @@ describe('V5-4 协议↔组件双向跳转（anonymous-saas）', () => {
   test('② 点协议层接口名 → 组件面板对应实现组件/存储落点高亮（协议→组件 跳转）', () => {
     const data = loadSaasData() as SaasShape;
     const { dom } = setupDom(data);
-    const iface = data.interfaces.find((i) => i.name === 'claim_resource')!;
+    const iface = data.interfaces.find((i) => i.name === '认领资源')!;
     const opName = dom.window.document.querySelector(
       `.proto-op-row[data-interface-id="${iface.id}"] .proto-op-name`
     )!;
     expect(opName).not.toBeNull();
     click(dom, opName);
     // 组件面板：实现行高亮 + 拓扑节点高亮
-    const implRow = dom.window.document.querySelector(`.comp-impl-row[data-interface-name="claim_resource"]`)!;
+    const implRow = dom.window.document.querySelector(`.comp-impl-row[data-interface-name="认领资源"]`)!;
     expect(implRow.classList.contains('hl')).toBe(true);
     expect(dom.window.document.querySelector(`.comp-topo-node[data-component="control-plane"]`)!.classList.contains('hl')).toBe(true);
-    // 存储落点：claim_resource 文本提及的维度
+    // 存储落点：认领资源 文本提及的维度
     const joined = ifaceTexts(iface).join('\n');
     const expectDims = data.components.dimensionStorage
       .filter((s) => joined.includes(s.dimension))

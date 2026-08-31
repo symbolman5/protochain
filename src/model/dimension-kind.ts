@@ -10,10 +10,14 @@
  * | 同时含 role 与非 role（混合）               | 硬失败（模型矛盾），不产出 kind，message 含 dimension-kind-conflict |
  * | 空集                                        | 不推导，schemaDegradedReasons 记 dimension-kind-undetermined |
  *
- * W(dim) 口径：遍历 DerivableLayer.transitions，凡 `affectsDimensions` 含该维度的转移，
- * 取其 `triggerType`（'role' | 'system' | 'external'）入集合（去重排序）。
+ * W(dim) 口径：遍历 DerivableLayer.transitions ∪ operations（R1b 扩展，六张清单形态
+ * 无 transitions，写入方来自「操作」段接口），凡 `affectsDimensions` 含该维度的
+ * 转移/操作，取其 triggerType 入集合（去重排序）。
+ * - 转移 triggerType：'role' | 'system' | 'external'；
+ * - 操作 triggerType（四值）：role→'role'、observed/scheduled→'system'、cross→'external'
+ *   （与 specifier mapOperationTriggerType 同一映射）。
  * 该口径与 P0-1「所有 affectsDimensions 含该维度的接口的 triggerType 集合」一致——
- * 系统接口由转移推导，specifier 未投影 triggerType 到 spec，故在 IR 层直接取转移来源。
+ * 系统接口由转移/操作推导，specifier 未投影 triggerType 到 spec，故在 IR 层直接取来源。
  *
  * 人写断言（kindSource='asserted'）：parser 解析 model.md 可选 kind 断言段后，
  * 维度对象自身带 kind + kindSource='asserted'。本模块对已断言维度保留断言值
@@ -23,7 +27,7 @@
  * 降级一律显式记录：空集维度进入 schemaDegradedReasons（dimension-kind-undetermined）。
  */
 
-import type { DerivableLayer, StateDimension } from './types.js';
+import type { DerivableLayer, OperationTriggerType, StateDimension } from './types.js';
 
 export type DimensionKind = 'declared' | 'observed';
 export type DimensionKindSource = 'derived' | 'asserted';
@@ -91,10 +95,16 @@ function deriveDimensionKind(
   ir: DerivableLayer
 ): DimensionKindEntry {
   // W(dim)：写入该维度的 triggerType 集合（去重排序）
+  // R1b：transitions ∪ operations（六张清单形态无 transitions，写入方来自操作段接口）
   const writerSet = new Set<string>();
   for (const t of ir.transitions) {
     if ((t.affectsDimensions ?? []).includes(dim.name)) {
       writerSet.add(t.triggerType);
+    }
+  }
+  for (const op of ir.operations ?? []) {
+    if ((op.affectsDimensions ?? []).includes(dim.name)) {
+      writerSet.add(mapOperationTriggerType(op.triggerType));
     }
   }
   const writers = Array.from(writerSet).sort();
@@ -124,4 +134,25 @@ function deriveDimensionKind(
   }
   // 空集：kind/kindSource 缺省，由调用方记降级
   return entry;
+}
+
+/**
+ * R1b：六张清单操作触发类型（四值）→ W(dim) 集合成员（三值）映射。
+ * 与 specifier 的 mapOperationTriggerType 保持同一映射（单一事实源，避免两处漂移）：
+ * - role → 'role'（角色意图可写 declared）
+ * - observed / scheduled → 'system'（系统观测到的事实）
+ * - cross → 'external'（跨域事件）
+ */
+export function mapOperationTriggerType(
+  t: OperationTriggerType
+): 'role' | 'system' | 'external' {
+  switch (t) {
+    case 'role':
+      return 'role';
+    case 'observed':
+    case 'scheduled':
+      return 'system';
+    case 'cross':
+      return 'external';
+  }
 }

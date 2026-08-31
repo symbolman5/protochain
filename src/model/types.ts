@@ -174,6 +174,20 @@ export interface DerivableLayer {
    *   R-KIND-15 依赖图无环（绑定/派生/组合/运行依赖）。
    */
   relations?: RelationDef[];
+  /**
+   * R1a：六张清单「操作」段（可选段「操作」解析产物，language.md §3 表2）。
+   * - undefined = 段不存在（老模型形态：状态机为兼容层，行为不变，零回归）；
+   * - 非 undefined = 已启用（六张清单形态：操作 = 改实体维度，系统无单一状态轴）。
+   * specifier 据此推导 InterfaceSpec（name/sourceId/preconditions/affectsDimensions/
+   * sideEffects/triggerType）；checker R-KIND 组（R1b）据此做机械检查。
+   */
+  operations?: OperationDef[];
+  /**
+   * R1a：六张清单「实体维度」段（可选段「实体维度」解析产物，language.md §3 表3，
+   * 一行一个维度）。同时按实体投影为 subsidiaryEntities（stateSpace.dimensions
+   * 带 kind 断言，kindSource='asserted'），供 specifier/checker 复用既有维度消费路径。
+   */
+  entityDimensions?: EntityDimensionDef[];
 }
 
 /**
@@ -258,6 +272,73 @@ export interface StateDef {
   roleIds?: string[];
   // 扩展：多维度状态
   dimensions?: StateDimension[];
+}
+
+// ============================================================================
+// R1a：六张清单 IR（language.md §3 表2 操作 / 表3 实体维度）
+// 范式：操作 = 改实体维度（不是状态间迁移）；系统无单一状态轴。状态机为兼容层。
+// ============================================================================
+
+/** 六张清单操作触发类型（表2 触发类型列：role|observed|scheduled|cross） */
+export type OperationTriggerType = 'role' | 'observed' | 'scheduled' | 'cross';
+
+/** change 中解析出的「实体.维度=值」单条变更（X.y=z 形如） */
+export interface DimensionChange {
+  /** 作用实体（X.y=z 的 X；change 无实体前缀时为空串，维度仍进 affectsDimensions） */
+  entity: string;
+  /** 维度名（X.y=z 的 y） */
+  dimension: string;
+  /** 变更值（X.y=z 的 z，原文保留） */
+  value: string;
+}
+
+/**
+ * 六张清单「操作」段（language.md §3 表2）—— parser 解析产物（IR 层）。
+ * 一行一个操作：role / 操作 / 作用实体(target) / 路径约束 guard / 状态变更(change) / 触发类型(trigger)。
+ * - role → triggerRoleId；操作 → name；guard → preconditions；change → affectsDimensions+sideEffects；
+ * - trigger → triggerType（role|observed|scheduled|cross 四值映射）。
+ */
+export interface OperationDef {
+  /** 操作 ID（自动生成 OP1..OPn，按声明顺序） */
+  id: string;
+  /** 操作名（表2「操作」列；投影 InterfaceSpec.name/sourceId） */
+  name: string;
+  /** 发起角色（表2「角色」列；投影 triggerRoleId） */
+  triggerRoleId?: string;
+  /** 作用实体（表2「作用实体」列原文，如「资源 ＋ 认领码」；实体进 target） */
+  target: string;
+  /** 作用实体列表（解析 target：＋ 连接、｜ 分支、去括号） */
+  targetEntities: string[];
+  /** 路径约束 guard（表2「路径约束 guard」列；投影 preconditions/precondition） */
+  guard?: string;
+  /** 状态变更（表2「状态变更」列原文；投影 postconditions/sideEffects） */
+  change: string;
+  /** 变更解析：X.y=z 形如的「实体.维度=值」列表 */
+  changes: DimensionChange[];
+  /** 影响维度列表（changes 的维度去重；投影 InterfaceSpec.affectsDimensions） */
+  affectsDimensions: string[];
+  /** 副作用（change 中非「X.y=z / y=z」的文本段；投影 sideEffects） */
+  sideEffects: string[];
+  /** 触发类型（表2「触发类型」列） */
+  triggerType: OperationTriggerType;
+}
+
+/**
+ * 六张清单「实体维度」段（language.md §3 表3）—— 一行一个维度。
+ * 保留 entity/etype/domain 原文（存储推导 / 值域校验 / 组件映射数据源），
+ * 并投影为附属实体 stateSpace.dimensions（kind 断言，kindSource='asserted'）。
+ */
+export interface EntityDimensionDef {
+  /** 实体名（如「资源」） */
+  entity: string;
+  /** 实体类型（记录 / 运行实例 / 凭证） */
+  etype: string;
+  /** 维度名（如「归属状态」） */
+  dimension: string;
+  /** 维度 kind 断言（declared = 角色意图可写；observed = 仅事实可写） */
+  kind: 'declared' | 'observed';
+  /** 值域（有限可枚举，原文保留） */
+  domain: string;
 }
 
 export interface StateDimension {

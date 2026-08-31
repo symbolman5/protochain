@@ -62,7 +62,7 @@
     <section class="view-panel">
       <h2>视图</h2>
       <div id="panels" class="panels">
-        <div class="panel-empty">导入 model.md 后渲染生命周期主视图（①）</div>
+        <div class="panel-empty">导入 data.json 后渲染协议层主视图（R2a：实体-维度卡片 / 操作×不变量交叉 / 时间语义摘要 / 关系网络）</div>
       </div>
     </section>
   </main>
@@ -75,7 +75,7 @@
   <script src="interface-view-utils.js"></script>
   <!-- viewer 应用逻辑（无框架，手写） -->
   <script src="app.js"></script>
-  <!-- ① 生命周期主视图（TA4；注册 ProtochainViewerHooks.renderAll） -->
+  <!-- ① 生命周期主视图（TA4；R2a 降为兼容层：仅对声明状态机段的老模型渲染转移图，六张清单形态不渲染） -->
   <script src="main-view.js"></script>
   <!-- ③ 接口↔状态联动 + ⑥ edgeCoverage 着色（TA5） -->
   <script src="link-coverage.js"></script>
@@ -97,7 +97,7 @@
   <script src="interface-catalog-panel.js"></script>
   <!-- G5 TI9 状态机→接口 跳转桥（document 级委托，不改动 main-view） -->
   <script src="interface-jump-bridge.js"></script>
-  <!-- V4 协议层面板（§11.3：实体-维度卡片区 / 操作×不变量交叉面板 / 时间语义摘要条 / 关系图） -->
+  <!-- R2a 协议层主视图（§11.3 主界面：实体-维度卡片区 / 操作×不变量交叉面板 / 时间语义摘要条 / 关系网络；取代旧状态机转移图主展示） -->
   <script src="protocol-panel.js"></script>
   <!-- V5 组件层面板（§11.3：接口→实现组件 / 实体维度→存储 / 组件→组件传输 / 架构总览拓扑 / 协议↔组件双向跳转） -->
   <script src="component-panel.js"></script>
