@@ -44,6 +44,7 @@ import type {
   SchemaExpression,
   CheckIssue,
   ComponentMappingDef,
+  ComponentModel,
 } from '../model/types.js';
 import type { DimensionKind, DimensionKindSource } from '../model/dimension-kind.js';
 import { mapOperationTriggerType } from '../model/dimension-kind.js';
@@ -74,6 +75,12 @@ export type KindRuleId =
 export interface KindRuleContext {
   /** 当前模型 */
   model: SourceProtocolModel;
+  /**
+   * T1a：组件模型（components.md 独立文档解析产物，可选）。
+   * 提供时 R-KIND-10 延伸校验接口契约引用（interface 存在性 / authorization 凭证存在性 /
+   * 组件定义 auth 降级记录）；缺省（老路径，仅 model.md 内嵌映射段）→ 零回归。
+   */
+  componentModel?: ComponentModel;
 }
 
 export interface KindRule {
@@ -206,10 +213,13 @@ export function resolveDimensionKinds(model: SourceProtocolModel): DimensionKind
         : undefined;
 
     // 人写断言优先；断言 vs 推导不一致 → 冲突（M10 子句2）
+    // T2b 豁免：断言 computed vs 机械推导 observed → 不冲突（computed ⊂ observed——
+    // 重算型写入是事实侧（system）写入的强化断言，机械无法区分「重算」与「观测」，由人细化）。
     if (dim.kind && dim.kindSource === 'asserted') {
       view.kind = dim.kind;
       view.kindSource = 'asserted';
-      if (derived && dim.kind !== derived) {
+      const computedObservedRefine = dim.kind === 'computed' && derived === 'observed';
+      if (derived && dim.kind !== derived && !computedObservedRefine) {
         view.mismatch = { asserted: dim.kind, derived };
       }
     } else if (derived) {
@@ -263,31 +273,34 @@ function locateDimensionPath(
 }
 
 // ---------------------------------------------------------------------------
-// R-KIND-1（X2）：kind='observed'（含人写断言）⇒ 不得有任何 triggerType='role' 的接口写入
+// R-KIND-1（X2 + T2b）：kind='observed' 或 'computed'（含人写断言）⇒ 不得有任何
+// triggerType='role' 的接口写入
 // ---------------------------------------------------------------------------
 //
 // 判定主体 = kind（含人写断言），检查范围 = 接口层 affectsDimensions（R9 口径：
 // sideEffects 无法静态判定写入维度，显式降级）。R1b：接口层 = transitions ∪ operations。
-// 正向命中即硬失败。
+// T2b：computed（系统重算得出）与 observed 同口径——角色不能凭意图制造事实或触发重算结果。
+// 正向命中即硬失败（M4 正反向）。
 
 export const ruleRKind1ObservedNoRoleWriters: KindRule = {
   ruleId: 'R-KIND-1',
   description:
-    'kind=observed 的维度（含人写断言）不得有任何 triggerType=role 的接口写入（X2，P0-1）',
+    'kind=observed/computed 的维度（含人写断言）不得有任何 triggerType=role 的接口写入（X2，P0-1；T2b 扩 computed）',
   check(ctx: KindRuleContext): CheckIssue[] {
     const issues: CheckIssue[] = [];
     const views = resolveDimensionKinds(ctx.model);
     // R1b：遍历统一接口视图（transitions ∪ operations）——六张清单形态写入方来自操作段
     const interfaces = collectInterfaces(ctx.model);
     for (const v of views) {
-      if (v.kind !== 'observed') continue;
+      if (v.kind !== 'observed' && v.kind !== 'computed') continue;
       for (const t of interfaces) {
         if (t.triggerType === 'role' && (t.affectsDimensions ?? []).includes(v.dimension)) {
           const sourceLabel = v.kindSource === 'asserted' ? '人写断言' : '机械推导';
+          const kindLabel = v.kind === 'computed' ? 'computed（系统重算得出）' : 'observed';
           issues.push(
             kindError(
-              `维度 "${v.dimension}"（${v.owner}）kind='observed'（${sourceLabel}），但${interfaceLabel(t)} "${t.id}"（action=${t.action}）以 triggerType='role' 写入它；` +
-                `observed 维度只能由事实侧（system/external）写入，角色不能凭意图制造事实 [R-KIND-1/X2]`,
+              `维度 "${v.dimension}"（${v.owner}）kind='${v.kind}'（${sourceLabel}，${kindLabel}），但${interfaceLabel(t)} "${t.id}"（action=${t.action}）以 triggerType='role' 写入它；` +
+                `observed/computed 维度只能由事实/重算侧（system/external）写入，角色不能凭意图制造事实或触发重算结果 [R-KIND-1/X2]`,
               v.dimension,
               locateDimensionPath(ctx.model, v.owner, v.dimension)
             )
@@ -374,23 +387,38 @@ function expressionContainsDimension(expr: string, dimension: string): boolean {
 export const ruleRKind3ObservedInvariantNeedsBoundMs: KindRule = {
   ruleId: 'R-KIND-3',
   description:
-    '不变量涉及 observed 维度却标 always（或缺 boundMs）⇒ 硬失败，须改为 eventually_within 并给出 boundMs（X3，P0-2 判据12）',
+    '不变量涉及 observed/computed 维度却标 always（或缺 boundMs）⇒ 硬失败（X3 判据12 / T2b 判据11：observed 须 eventually_within+boundMs；computed 同事务声明可 always，否则同样须 boundMs）',
   check(ctx: KindRuleContext): CheckIssue[] {
     const issues: CheckIssue[] = [];
     const views = resolveDimensionKinds(ctx.model);
     const observedNames = new Set<string>();
     const observedByOwner = new Map<string, string[]>();
+    const computedNames = new Set<string>();
     for (const v of views) {
-      if (v.kind !== 'observed') continue;
-      observedNames.add(v.dimension);
-      const list = observedByOwner.get(v.owner) ?? [];
-      list.push(v.dimension);
-      observedByOwner.set(v.owner, list);
+      if (v.kind === 'observed') {
+        observedNames.add(v.dimension);
+        const list = observedByOwner.get(v.owner) ?? [];
+        list.push(v.dimension);
+        observedByOwner.set(v.owner, list);
+      } else if (v.kind === 'computed') {
+        computedNames.add(v.dimension);
+      }
     }
-    if (observedNames.size === 0) return issues;
+    if (observedNames.size === 0 && computedNames.size === 0) return issues;
 
     const invs = ctx.model.derivable.invariants ?? [];
     const timings = ctx.model.derivable.timing ?? [];
+    // T2b 判据 11：同事务声明（transactionBoundaries.same_transaction 覆盖 computed 维度写入接口）
+    const interfaces = collectInterfaces(ctx.model);
+    const sameTxComputed = new Set<string>();
+    for (const dim of computedNames) {
+      const writesSameTx = (ctx.model.derivable.transactionBoundaries ?? []).some(
+        (b) =>
+          b.boundaryType === 'same_transaction' &&
+          interfaces.some((t) => (t.action === b.interface || t.id === b.interface) && (t.affectsDimensions ?? []).includes(dim))
+      );
+      if (writesSameTx) sameTxComputed.add(dim);
+    }
     for (let i = 0; i < invs.length; i++) {
       const inv = invs[i];
       const expr = inv.expression ?? '';
@@ -400,8 +428,20 @@ export const ruleRKind3ObservedInvariantNeedsBoundMs: KindRule = {
       const viaScope = (inv.scopeStateIds ?? [])
         .flatMap((sid) => observedByOwner.get(sid) ?? [])
         .filter((n, idx, arr) => arr.indexOf(n) === idx);
-      const involved = [...viaExpr, ...viaScope];
+      const viaComputedExpr = Array.from(computedNames).filter((n) =>
+        expressionContainsDimension(expr, n)
+      );
+      const involved = [...viaExpr, ...viaScope, ...viaComputedExpr];
       if (involved.length === 0) continue;
+
+      // T2b 判据 11 豁免：涉及 computed 维度且该维度写入接口声明了同事务 → 可 always
+      const involvedComputedSameTx = viaComputedExpr.filter((n) => sameTxComputed.has(n));
+      const fullySameTx =
+        viaComputedExpr.length > 0 &&
+        viaComputedExpr.every((n) => sameTxComputed.has(n)) &&
+        viaExpr.length === 0 &&
+        viaScope.length === 0;
+      if (fullySameTx) continue;
 
       // timing 判定：存在关联 timing（source/target === inv.id）且至少一条带 boundMs → 合规
       const related = timings.filter((t) => t.source === inv.id || t.target === inv.id);
@@ -411,10 +451,16 @@ export const ruleRKind3ObservedInvariantNeedsBoundMs: KindRule = {
         related.length === 0
           ? '未关联任何时序约束（timing.source/target 未指向该不变量），等价于声明为 always'
           : `关联的时序约束（${related.map((r) => r.id).join(', ')}）均未声明 boundMs`;
+      const mixedLabel =
+        involvedComputedSameTx.length > 0
+          ? `（其中 computed 维度 ${involvedComputedSameTx.join(', ')} 有同事务声明但还有其他涉及维度）`
+          : '';
+      const criterion = viaComputedExpr.length > 0 ? '判据11' : '判据12';
       issues.push(
         kindError(
-          `不变量 "${inv.id}" 涉及 observed 维度（${involved.join(', ')}），但${reason}；` +
-            `依赖 observed 维度的不变量必然 eventually_within，须给出 boundMs（P0-2 判据12）[R-KIND-3/X3]`,
+          `不变量 "${inv.id}" 涉及 observed/computed 维度（${involved.join(', ')}），但${reason}；` +
+            `依赖 observed 维度的不变量必然 eventually_within（判据12）；依赖 computed 维度的不变量` +
+            `同事务（same_transaction 声明）可 always，异步重算须 eventually_within + boundMs（判据11）${mixedLabel}[R-KIND-3/X3:${criterion}]`,
           inv.id,
           `derivable.invariants[${i}].expression`
         )
@@ -901,8 +947,12 @@ export const ruleRKind10ComponentMappingConsistency: KindRule = {
     '组件映射段交叉一致：映射表出现的 interface/dimension 必须在 IR 存在（error）；IR 未被映射者显式列出不静默（warning）（X18，P1-10）',
   check(ctx: KindRuleContext): CheckIssue[] {
     const issues: CheckIssue[] = [];
-    const mapping = ctx.model.derivable.componentMapping;
-    // 老模型形态（组件映射段不存在 → undefined）：零输出（老模型零回归）
+    // T1a：组件模型来源二选一——model.md 内嵌组件映射段（老路径）或 components.md
+    // 独立文档（componentModel.mapping）。两源并存由 steps/check.ts loadComponentModel
+    // 硬失败拦截（提示迁移），此处用「内嵌段 ?? 组件模型映射」取权威源。
+    const cm = ctx.componentModel;
+    const mapping = ctx.model.derivable.componentMapping ?? cm?.mapping;
+    // 两源均缺（老模型形态，无组件归属数据）：零输出（老模型零回归）
     if (mapping === undefined) return issues;
 
     const view = flattenComponentMapping(mapping);
@@ -973,6 +1023,78 @@ export const ruleRKind10ComponentMappingConsistency: KindRule = {
           'derivable.componentMapping'
         )
       );
+    }
+
+    // ── C/D：T1a 组件模型（components.md）接口契约引用校验 ──
+    // 触发条件：checkCompleteness 提供了 componentModel（components.md 已解析）。
+    // - C（error，硬失败）：接口契约的 interface 必须在 IR 存在（引用闭合）——
+    //   契约建立在悬空接口上 = 服务划分/契约详情推导建立在不存在对象上；
+    // - D（error，硬失败）：authorization 为凭证引用（非鉴权类型枚举）时，
+    //   引用的凭证必须在 metadata.credentials 段存在；凭证悬空 → 鉴权语义无法兑现；
+    // - E（warning，降级记录）：组件定义未声明 auth → 显式降级记录（接口 authorization
+    //   显示 none + 组件模型未声明，不静默，T1a-3）。
+    if (cm) {
+      // C：接口契约 interface 存在性（正反向：悬空 error + 未契约接口列示）
+      const contracted = new Set<string>();
+      for (let i = 0; i < (cm.contracts ?? []).length; i++) {
+        const c = cm.contracts![i];
+        contracted.add(c.interface);
+        if (!interfaceUniverse.has(c.interface)) {
+          issues.push(
+            kindError(
+              `组件模型接口契约 contracts[${i}] 引用的接口 "${c.interface}" 在 IR 中不存在` +
+                `（接口命名空间 = 转移 action/id ∪ 契约 contracts[].interface）；` +
+                `接口契约推导不能建立在悬空接口上（T1a，R-KIND-10 延伸）[R-KIND-10/T1a]`,
+              c.interface,
+              `componentModel.contracts[${i}].interface`
+            )
+          );
+        }
+      }
+      const withoutContract = Array.from(interfaceUniverse)
+        .filter((n) => !contracted.has(n))
+        .sort();
+      if (withoutContract.length > 0) {
+        issues.push(
+          kindWarning(
+            `组件模型接口契约未覆盖全部接口（不静默遗漏，请审视是否补齐）：${withoutContract.join(', ')}` +
+              `（T1a：契约详情是 viewer 组件层 apifox 式卡片数据源）[R-KIND-10/T1a]`,
+            'componentModel.contracts'
+          )
+        );
+      }
+      // D：authorization 凭证引用存在性（鉴权类型枚举跳过）
+      const credentialNames = new Set((ctx.model.metadata.credentials ?? []).map((c) => c.name));
+      const authTypeSet = new Set(['none', 'bearer', 'oauth', 'api-key']);
+      for (let i = 0; i < (cm.contracts ?? []).length; i++) {
+        const c = cm.contracts![i];
+        if (!c.authorization || authTypeSet.has(c.authorization)) continue;
+        if (!credentialNames.has(c.authorization)) {
+          issues.push(
+            kindError(
+              `组件模型接口契约 contracts[${i}]（interface=${c.interface}）的 authorization 引用凭证` +
+                `"${c.authorization}" 在 metadata.credentials 段中不存在（鉴权类型枚举：none|bearer|oauth|api-key）；` +
+                `凭证悬空 → 鉴权语义无法兑现（T1a，R-KIND-10 延伸）[R-KIND-10/T1a]`,
+              c.authorization,
+              `componentModel.contracts[${i}].authorization`
+            )
+          );
+        }
+      }
+      // E：组件定义 auth 降级记录（warning；组件级未声明 → 接口契约鉴权降级 none）
+      for (let i = 0; i < (cm.components ?? []).length; i++) {
+        const d = cm.components![i];
+        if (d.auth === undefined) {
+          issues.push(
+            kindWarning(
+              `组件定义 components[${i}]（${d.name}）未声明 auth（none|bearer|oauth|api-key）` +
+                `→ 其接口契约 authorization 显示 none + 组件模型未声明降级（显式记录，T1a-3）[R-KIND-10/T1a]`,
+              d.name,
+              `componentModel.components[${i}].auth`
+            )
+          );
+        }
+      }
     }
 
     return issues;

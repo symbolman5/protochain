@@ -32,6 +32,9 @@
 (function () {
   'use strict';
 
+  // 分层视图目标解析（R2b+）：view-tabs.js 加载且非项目模式 → 渲染进 #view-protocol；否则原 #panels（零回归）
+  const viewBox = (window.ProtochainViewerTabs && window.ProtochainViewerTabs.viewBox) || ((p) => p);
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -441,6 +444,7 @@
   function renderProtocolPanel(state, panels) {
     const data = state.dataJson;
     if (!data) return; // 未导入：主视图已有提示，协议层不重复
+    panels = viewBox(panels, 'view-protocol');
     if (panels.querySelector('.protocol-panel') || panels.querySelector('.protocol-empty')) return;
 
     const dims = Array.isArray(data.dimensions) ? data.dimensions : undefined;

@@ -19,6 +19,9 @@
 (function () {
   'use strict';
 
+  // 分层视图目标解析（R2b+）：view-tabs.js 加载且非项目模式 → 渲染进 #view-protocol；否则原 #panels（零回归）
+  const viewBox = (window.ProtochainViewerTabs && window.ProtochainViewerTabs.viewBox) || ((p) => p);
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -145,19 +148,98 @@
     if (Array.isArray(data.invariantSpans) && data.invariantSpans.length > 0) {
       const invTitle = document.createElement('div');
       invTitle.className = 'compo-block-title';
-      invTitle.textContent = `跨协议不变量覆盖（invariantSpans，${data.invariantSpans.length}）`;
+      invTitle.textContent = `跨协议不变量（invariantSpans，${data.invariantSpans.length}）—— 点击条目高亮关联子协议`;
       box.appendChild(invTitle);
       const invBox = document.createElement('div');
       invBox.className = 'compo-inv-list';
       for (const s of data.invariantSpans) {
         const row = document.createElement('div');
         row.className = 'inv-span-row';
+        row.setAttribute('data-inv-id', s.id);
+        row.setAttribute('data-span', (s.protocols || []).join(','));
         row.innerHTML =
           `<span class="inv-span-id"><b>${esc(s.id)}</b> ${esc(s.name)}</span>` +
-          `<span class="inv-span-protos">覆盖：${(s.protocols || []).map((x) => esc(x)).join(', ')}</span>`;
+          `<span class="inv-span-protos">覆盖：${(s.protocols || []).map((x) => esc(x)).join(', ')}</span>` +
+          (s.span && s.span.length > 0
+            ? `<span class="inv-span-span">span=[${s.span.map((x) => esc(x)).join(', ')}]</span>`
+            : '') +
+          (s.checkMethod ? `<span class="inv-span-check" title="${esc(s.checkMethod)}">检测方式：${esc(s.checkMethod)}</span>` : '') +
+          (s.expression ? `<details class="inv-span-expr"><summary>表达式</summary><div>${esc(s.expression)}</div></details>` : '');
+        row.addEventListener('click', () => {
+          invBox.querySelectorAll('.inv-span-row').forEach((x) => x.classList.remove('hl'));
+          row.classList.add('hl');
+          // T5b：组合层不变量 → 关联子协议协议层高亮（复用 .proto-node.hl 机制）
+          const span = (s.span && s.span.length > 0 ? s.span : s.protocols) || [];
+          clearProtoHighlights(box);
+          box.querySelectorAll('.proto-node').forEach((chip) => {
+            if (span.includes(chip.getAttribute('data-protocol-id'))) chip.classList.add('hl');
+          });
+        });
         invBox.appendChild(row);
       }
       box.appendChild(invBox);
+    }
+
+    // ── T5b：组合层组件映射（跨协议组件归属）──
+    if (data.crossProtocolComponents) {
+      const cmp = data.crossProtocolComponents;
+      const compTitle = document.createElement('div');
+      compTitle.className = 'compo-block-title';
+      compTitle.textContent =
+        `组合层组件映射（跨协议组件归属，${(cmp.components || []).length} 组件 · ${(cmp.interfaceImplementations || []).length} 接口）`;
+      box.appendChild(compTitle);
+      // 组件定义
+      if (Array.isArray(cmp.components) && cmp.components.length > 0) {
+        const compBox = document.createElement('div');
+        compBox.className = 'compo-comp-list';
+        for (const c of cmp.components) {
+          const chip = document.createElement('span');
+          chip.className = 'compo-comp-chip';
+          chip.innerHTML =
+            `<b>${esc(c.name)}</b>` +
+            (c.auth ? `<span class="compo-comp-auth compo-comp-auth-${esc(c.auth)}">${esc(c.auth)}</span>` : '') +
+            (c.baseUrl ? `<span class="compo-comp-url" title="${esc(c.baseUrl)}">${esc(c.baseUrl)}</span>` : '');
+          if (c.description) chip.title = c.description;
+          compBox.appendChild(chip);
+        }
+        box.appendChild(compBox);
+      }
+      // 接口归属（interface → component + protocolId）
+      if (Array.isArray(cmp.interfaceImplementations) && cmp.interfaceImplementations.length > 0) {
+        const iiBox = document.createElement('div');
+        iiBox.className = 'compo-comp-ii-list';
+        for (const m of cmp.interfaceImplementations) {
+          const row = document.createElement('div');
+          row.className = 'compo-comp-ii-row';
+          row.innerHTML =
+            `<span class="compo-comp-iface"><b>${esc(m.interface)}</b></span>` +
+            `<span class="compo-comp-proto">${esc(m.protocolId)}</span>` +
+            `<span class="compo-comp-owner">→ ${esc(m.component)}</span>` +
+            (m.description ? `<span class="compo-comp-desc">${esc(m.description)}</span>` : '');
+          iiBox.appendChild(row);
+        }
+        box.appendChild(iiBox);
+      }
+    }
+
+    // ── T5b：事件契约（dependencyType=event 的依赖边）──
+    const eventEdges = (data.dependencyGraph.edges || []).filter((e) => e.dependencyType === 'event');
+    if (eventEdges.length > 0) {
+      const evTitle = document.createElement('div');
+      evTitle.className = 'compo-block-title';
+      evTitle.textContent = `事件契约（dependencyType=event 边，${eventEdges.length}）—— 跨协议事件（如访问策略副本推送）`;
+      box.appendChild(evTitle);
+      const evBox = document.createElement('div');
+      evBox.className = 'compo-ev-list';
+      for (const e of eventEdges) {
+        const row = document.createElement('div');
+        row.className = 'ev-row';
+        row.innerHTML =
+          `<span class="ev-pair"><b>${esc(e.from)}</b> ⇢ <b>${esc(e.to)}</b></span>` +
+          `<span class="ev-desc" title="${esc(e.description)}">${esc(e.description)}</span>`;
+        evBox.appendChild(row);
+      }
+      box.appendChild(evBox);
     }
 
     panels.appendChild(box);
@@ -169,6 +251,7 @@
   const hooks = window.ProtochainViewerHooks || {};
   const prevRenderAll = hooks.renderAll;
   hooks.renderAll = function (state, panels) {
+    panels = viewBox(panels, 'view-protocol');
     if (prevRenderAll) prevRenderAll(state, panels);
     renderCompositionPanel(state, panels);
   };

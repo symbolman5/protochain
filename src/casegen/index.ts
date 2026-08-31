@@ -1399,6 +1399,9 @@ function generateConvergenceCases(
   degradedReasons: string[]
 ): void {
   const timings = ir.timing ?? [];
+  // R5（T3a）：冻结边界声明——带 scheduled 重算任务的模型，X12 用例 body 须声明 mock 掉
+  // 调度器/定时器（收敛等待期间不能有真实调度干扰，测试确定性）。
+  const hasScheduled = (ir.operations ?? []).some((op) => op.triggerType === 'scheduled');
   for (const inv of ir.invariants ?? []) {
     const remedy = inv.remedy;
     // 未声明 remedy：X12 不适用（不生成也不降级——不是缺口）
@@ -1431,7 +1434,7 @@ function generateConvergenceCases(
       violation: inv.expression,
       ...(boundMs !== undefined ? { boundMs } : {}),
       detection: detectionText,
-      body: buildX12Body(inv.id, inv.name, inv.expression, detectionText, boundMs),
+      body: buildX12Body(inv.id, inv.name, inv.expression, detectionText, boundMs, hasScheduled),
     });
   }
 }
@@ -1441,7 +1444,8 @@ function buildX12Body(
   invName: string,
   expression: string,
   detection: string,
-  boundMs?: number
+  boundMs?: number,
+  hasScheduled?: boolean
 ): string {
   const boundLine =
     boundMs === undefined
@@ -1451,6 +1455,12 @@ function buildX12Body(
     boundMs === undefined
       ? `    expect(elapsed()).toBeGreaterThanOrEqual(0); // 无 boundMs：仅验证收敛发生`
       : `    expect(elapsed()).toBeLessThanOrEqual(${boundMs});`;
+  const frozenLine = hasScheduled
+    ? [
+        `    // 冻结边界声明（R5/T3a）：本模型含 scheduled 重算任务，收敛等待期间 mock 掉调度器/定时器`,
+        `    mockSchedulerAndTimers();`,
+      ].join('\n')
+    : `    // 本模型无 scheduled 重算任务（无需冻结调度器）`;
   return [
     `/**`,
     ` * X12 收敛断言（G7-S4）`,
@@ -1463,6 +1473,7 @@ function buildX12Body(
     `  it('制造违约后收敛（${boundMs === undefined ? 'boundMs 未声明' : `boundMs=${boundMs}`}）', async () => {`,
     `    // 制造违约：违反不变量表达式「${expression}」`,
     `    makeViolation('${expression}');`,
+    frozenLine,
     boundLine,
     `    // 收敛断言：检测方式「${detection}」`,
     `    await expect(converged('${detection}')).resolves.toBe(true);`,

@@ -23,6 +23,9 @@
 (function () {
   'use strict';
 
+  // 分层视图目标解析（R2b+）：view-tabs.js 加载且非项目模式 → 渲染进 #view-protocol；否则原 #panels（零回归）
+  const viewBox = (window.ProtochainViewerTabs && window.ProtochainViewerTabs.viewBox) || ((p) => p);
+
   const NS = 'http://www.w3.org/2000/svg';
   const SVG_MARGIN = { top: 30, left: 60, right: 60, bottom: 30 };
   const LEVEL_GAP = 170;
@@ -395,6 +398,7 @@
 
   window.ProtochainViewerHooks = {
     renderAll(state, panels) {
+      panels = viewBox(panels, 'view-protocol');
       renderMain(state, panels);
       renderLinks(state, panels);
       renderCoverage(state, panels);

@@ -335,8 +335,8 @@ export interface EntityDimensionDef {
   etype: string;
   /** 维度名（如「归属状态」） */
   dimension: string;
-  /** 维度 kind 断言（declared = 角色意图可写；observed = 仅事实可写） */
-  kind: 'declared' | 'observed';
+  /** 维度 kind 断言（declared = 角色意图可写；observed = 仅事实可写；computed = 系统重算得出，T2b） */
+  kind: 'declared' | 'observed' | 'computed';
   /** 值域（有限可枚举，原文保留） */
   domain: string;
 }
@@ -348,10 +348,12 @@ export interface StateDimension {
   /** 声明该维度在何条件下有意义（与不变量联动） */
   validWhen?: string;
   /**
-   * X1（P0-1）：维度 kind——declared=角色意图可写；observed=仅事实（system/external）可写。
+   * X1（P0-1）+ T2b（决策 1 修订）：维度 kind 三值——
+   * declared=角色意图可写；observed=仅事实（system/external）可写；computed=系统重算得出
+   * （只能经人写断言进入，kindSource='asserted'；机械推导只产两值）。
    * 缺省 = 未标注，由 buildDimensionKinds 机械推导或走降级（dimension-kind-undetermined）。
    */
-  kind?: 'declared' | 'observed';
+  kind?: 'declared' | 'observed' | 'computed';
   /** kind 来源：derived=机械推导（W(dim) 写入方集合）；asserted=人写断言（model.md 显式声明） */
   kindSource?: 'derived' | 'asserted';
 }
@@ -610,6 +612,65 @@ export interface ComponentTransferMapping {
 }
 
 // ============================================================================
+// T1a 组件模型（独立 components.md）
+// ============================================================================
+
+/**
+ * T1a（§1.4 定案）：组件模型从 model.md 内嵌映射段升级为独立 components.md（单协议）/
+ * composition.md 体系（多协议）。本组类型为组件模型 IR：
+ * - 组件定义：name / 职责(description) / baseUrl / auth（鉴权方式）；
+ * - 三张映射表（ComponentMappingDef，从 model.md 组件映射段迁移，语义不变）；
+ * - 接口契约：interface → { path, method, authorization(凭证引用或鉴权类型), requestSchema,
+ *   responseSchema, errorResponses }——schema 引用协议层契约（可选；缺省降级）。
+ */
+export interface ComponentModel {
+  /** 组件模型名（components.md front matter name；缺省） */
+  name?: string;
+  /** 所属协议 ID（多协议项目中的 protocolId；缺省） */
+  protocolId?: string;
+  /** 组件定义（components[].name 为映射表组件引用的权威命名空间） */
+  components?: ComponentDef[];
+  /** 接口契约（apifox 式五要素子集；authorization 引用 credentials 段凭证或鉴权类型） */
+  contracts?: ComponentContractDef[];
+  /** 三张映射表（从 model.md 组件映射段迁移） */
+  mapping: ComponentMappingDef;
+  sourcePath?: string;
+}
+
+/** 组件定义（components.md「组件定义」段单项） */
+export interface ComponentDef {
+  /** 组件名（英文 ID；映射表 component/from/to 引用） */
+  name: string;
+  /** 职责（人读） */
+  description?: string;
+  /** 组件对外 baseUrl（人填；缺省 → viewer 用组件名占位 + 降级） */
+  baseUrl?: string;
+  /** 组件级鉴权方式（缺省 → 接口 authorization 显示 none + 降级记录） */
+  auth?: 'none' | 'bearer' | 'oauth' | 'api-key';
+}
+
+/** 接口契约（components.md「接口契约」段单项） */
+export interface ComponentContractDef {
+  /** 接口名（IR 引用，checker 校验存在性） */
+  interface: string;
+  /** 契约 path（缺省 → viewer 用协议层 bindings transport 投影或占位） */
+  path?: string;
+  /** 契约 method（缺省 → 默认 POST / bindings 投影） */
+  method?: string;
+  /**
+   * authorization：凭证引用（credentials 段凭证名，checker 校验存在性）或
+   * 鉴权类型枚举（none | bearer | oauth | api-key）。缺省 → none + 降级记录。
+   */
+  authorization?: string;
+  /** requestSchema 引用协议层契约 schema（如 契约.requestSchema；可选，缺省降级） */
+  requestSchema?: string;
+  /** responseSchema 引用协议层契约 schema（可选，缺省降级） */
+  responseSchema?: string;
+  /** errorResponses 引用协议层错误码（可选，缺省降级） */
+  errorResponses?: string[];
+}
+
+// ============================================================================
 // V1 关系段（model.md 新增可选段「关系」，language.md §2 五种关系）
 // ============================================================================
 
@@ -747,8 +808,43 @@ export interface CompositionModel {
   securityAssumptions: SecurityAssumptionDef[];
   /** 引用的子协议清单与版本 */
   subProtocols: SubProtocolRef[];
+  /**
+   * T5b：组合层「组件映射」段（跨协议组件归属）——组件可横跨多子协议
+   * （interface → component + 所属 protocolId）。缺省（老组合层无此段）→ 零回归。
+   */
+  crossProtocolComponents?: CrossProtocolComponentMapping;
   sourcePath?: string;
   parsedAt?: string;
+}
+
+/**
+ * T5b：组合层组件映射（跨协议组件归属）。
+ * 与 T1a 组件定义同构（name/职责/baseUrl/auth），接口实现条目带所属子协议 protocolId。
+ */
+export interface CrossProtocolComponentMapping {
+  /** 跨协议组件定义（components[].name 为 interfaceImplementations[].component 引用命名空间） */
+  components?: CrossProtocolComponentDef[];
+  /** 接口 → 组件 + 所属子协议（跨协议组件承载的接口归属） */
+  interfaceImplementations?: CrossProtocolInterfaceMapping[];
+}
+
+/** 跨协议组件定义（与 ComponentDef 同构） */
+export interface CrossProtocolComponentDef {
+  name: string;
+  description?: string;
+  baseUrl?: string;
+  auth?: 'none' | 'bearer' | 'oauth' | 'api-key';
+}
+
+/** 跨协议接口归属：interface 属于 protocolId 子协议、由 component 承载 */
+export interface CrossProtocolInterfaceMapping {
+  /** 接口名（对应子协议 operations[].name / transitions action，checker 校验存在性） */
+  interface: string;
+  /** 所属子协议 ID（必须 ∈ composition.subProtocols，checker 校验） */
+  protocolId: string;
+  /** 承载组件（跨协议组件名，checker 校验存在性） */
+  component: string;
+  description?: string;
 }
 
 export interface CompositionMetadata {

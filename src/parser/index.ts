@@ -1037,7 +1037,7 @@ function parseTransactionBoundaries(sections: Section[]): TransactionBoundaryDef
  * - 段不存在 → undefined（老模型形态：组件归属层数据源缺失，checker 跳过 R-KIND-10）；
  * - 段存在 → ComponentMappingDef（新模型形态：checker 做交叉一致性检查 R-KIND-10）。
  */
-function parseComponentMapping(sections: Section[]): ComponentMappingDef | undefined {
+export function parseComponentMapping(sections: Section[]): ComponentMappingDef | undefined {
   const detection = detectExtensionSection(sections, ['组件映射', 'componentmapping'], '组件映射');
   if (!detection.enabled) return undefined;
   const yaml = detection.yaml;
@@ -1326,9 +1326,9 @@ function parseEntityDimensions(sections: Section[]): EntityDimensionDef[] {
     const path = `实体维度[${idx}]`;
     const r = asRecord(item, path);
     const kind = requireString(r, 'kind', path);
-    if (kind !== 'declared' && kind !== 'observed') {
+    if (kind !== 'declared' && kind !== 'observed' && kind !== 'computed') {
       throw new ParseError(
-        `${path}.kind 必须是 declared / observed，实际为 ${kind}（六张清单表3 kind 断言）`
+        `${path}.kind 必须是 declared / observed / computed，实际为 ${kind}（六张清单表3 kind 断言）`
       );
     }
     return {
@@ -1508,12 +1508,12 @@ function parseDimensions(yaml: unknown, fieldPath: string): StateDimension[] {
     // 缺省 → 不填（老模型零回归），kind 由 buildDimensionKinds 机械推导或走降级。
     const kindRaw = optionalString(r, 'kind');
     if (kindRaw !== undefined) {
-      if (kindRaw === 'declared' || kindRaw === 'observed') {
+      if (kindRaw === 'declared' || kindRaw === 'observed' || kindRaw === 'computed') {
         dim.kind = kindRaw;
         dim.kindSource = 'asserted';
       } else {
         throw new ParseError(
-          `${fieldPath}[${idx}].kind 必须是 declared / observed，实际为 ${kindRaw}（X1：人写 kind 断言仅支持两值）`
+          `${fieldPath}[${idx}].kind 必须是 declared / observed / computed，实际为 ${kindRaw}（X1 + T2b：人写 kind 断言支持三值）`
         );
       }
     }
@@ -1831,7 +1831,7 @@ function parseExpressionArray(raw: unknown, path: string): SchemaExpression[] {
 // 工具函数
 // ----------------------------------------------------------------------------
 
-function requireString(
+export function requireString(
   obj: Record<string, unknown>,
   key: string,
   section: string
@@ -1843,7 +1843,7 @@ function requireString(
   return v.trim();
 }
 
-function optionalString(
+export function optionalString(
   obj: Record<string, unknown>,
   key: string
 ): string | undefined {
@@ -1863,14 +1863,14 @@ function requireRowField(
   return v.trim();
 }
 
-function asRecord(yaml: unknown, section: string): Record<string, unknown> {
+export function asRecord(yaml: unknown, section: string): Record<string, unknown> {
   if (!yaml || typeof yaml !== 'object' || Array.isArray(yaml)) {
     throw new ParseError(`${section} 的 YAML 必须是对象`);
   }
   return yaml as Record<string, unknown>;
 }
 
-function asStringArray(yaml: unknown, fieldPath: string): string[] {
+export function asStringArray(yaml: unknown, fieldPath: string): string[] {
   if (yaml === undefined || yaml === null) return [];
   if (!Array.isArray(yaml)) {
     throw new ParseError(`${fieldPath} 必须是字符串数组`);
@@ -1883,7 +1883,7 @@ function asStringArray(yaml: unknown, fieldPath: string): string[] {
   });
 }
 
-function asRecordArray(yaml: unknown, fieldPath: string): Record<string, unknown>[] {
+export function asRecordArray(yaml: unknown, fieldPath: string): Record<string, unknown>[] {
   if (yaml === undefined || yaml === null) return [];
   if (!Array.isArray(yaml)) {
     throw new ParseError(`${fieldPath} 必须是对象数组`);

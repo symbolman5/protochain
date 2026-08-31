@@ -115,6 +115,33 @@ h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacin
 /* ---------- 面板容器（TA4/TA5 挂载） ---------- */
 .panels { min-height: 360px; }
 
+/* ---------- 分层视图（R2b+：协议层 / 组件层 / 用例层 独立容器） ---------- */
+.view-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.view-tab {
+  padding: 5px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px 6px 0 0;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+.view-tab.active {
+  background: var(--panel);
+  border-bottom-color: var(--panel);
+  color: var(--accent);
+  font-weight: 600;
+}
+.view-container { display: none; }
+.view-container.active { display: block; }
+
 /* ---------- 图例 / 面板通用 ---------- */
 .panel-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .legend { display: flex; gap: 12px; font-size: 12px; align-items: center; }
@@ -426,6 +453,46 @@ h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacin
 .ref-kind-field { color: #2f6fed; border: 1px solid #c3d8fb; border-radius: 999px; padding: 0 6px; background: #f2f6fe; }
 .ref-kind-invariant { color: #1a7f37; border: 1px solid #bbe3c3; border-radius: 999px; padding: 0 6px; background: #f0fbf2; }
 .ref-kind-shared { color: #7d4bb4; border: 1px solid #d6c3ee; border-radius: 999px; padding: 0 6px; background: #f8f4fd; }
+
+/* T5b：组合层组件映射（跨协议组件归属） + 事件契约 + 不变量详情 */
+.inv-span-row { cursor: pointer; }
+.inv-span-row:hover { border-color: #d4a72c; }
+.inv-span-row.hl { background: #fff8e6; border-color: #d4a72c; }
+.inv-span-id { font-weight: 600; }
+.inv-span-protos, .inv-span-span { font-size: 11px; color: var(--muted); }
+.inv-span-check { font-size: 11px; color: #1a7f37; }
+.inv-span-expr { font-size: 11px; color: #666; width: 100%; }
+.inv-span-expr summary { cursor: pointer; color: #2f6fed; }
+.inv-span-expr div { margin-top: 4px; background: #f7f7f7; border: 1px solid #eee; border-radius: 4px; padding: 4px 6px; }
+.compo-comp-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.compo-comp-chip {
+  border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px;
+  font-size: 12px; background: #fff; display: inline-flex; align-items: center; gap: 6px;
+}
+.compo-comp-auth { font-size: 10px; border-radius: 999px; padding: 0 6px; border: 1px solid; font-weight: 600; }
+.compo-comp-auth-bearer { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.compo-comp-auth-oauth { color: #8250df; border-color: #d0bdf2; background: #f7f3ff; }
+.compo-comp-auth-api-key { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.compo-comp-auth-none { color: #6e7781; border-color: #d4d9e0; background: #f6f8fa; }
+.compo-comp-url { font-size: 10px; color: var(--muted); font-family: ui-monospace, monospace; }
+.compo-comp-ii-list { display: flex; flex-direction: column; gap: 3px; margin: 4px 0; }
+.compo-comp-ii-row {
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+  font-size: 12px; background: #fff; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.compo-comp-iface { font-weight: 600; }
+.compo-comp-proto {
+  font-size: 11px; color: #2f6fed; border: 1px solid #c3d8fb; border-radius: 999px; padding: 0 6px; background: #f2f6fe;
+}
+.compo-comp-owner { font-size: 11px; color: var(--muted); }
+.compo-comp-desc { font-size: 11px; color: var(--muted); }
+.compo-ev-list { display: flex; flex-direction: column; gap: 4px; }
+.ev-row {
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px;
+  font-size: 12px; background: #fff; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.ev-pair { font-weight: 600; }
+.ev-desc { font-size: 11px; color: var(--muted); }
 .ref-ctx { color: var(--muted); font-size: 11px; }
 .dep-desc { color: var(--muted); font-size: 11px; }
 .inv-span-id { font-weight: 600; }
@@ -744,6 +811,50 @@ h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacin
 }
 .comp-topo-arrow { font-weight: 600; }
 .comp-topo-channel { font-size: 11px; color: var(--muted); }
+
+/* T5a · ⑤ 接口契约详情（apifox 式卡片：url/method/authorization/参数/响应/错误） */
+.comp-ctl-group { margin-bottom: 6px; }
+.comp-ctl-group-name { font-size: 12px; font-weight: 700; margin: 8px 0 4px; color: #1f2733; }
+.comp-ctl-card {
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 6px 0;
+  background: #fbfcfe; cursor: pointer;
+}
+.comp-ctl-card.hl { background: #ffe9a8; border-color: #d4a72c; }
+.comp-ctl-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.comp-ctl-method {
+  font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 6px; color: #fff; background: #d6336c;
+}
+.comp-ctl-method.get { background: #1a7f37; }
+.comp-ctl-method.post { background: #d6336c; }
+.comp-ctl-method.put { background: #9a6700; }
+.comp-ctl-method.delete { background: #d1242f; }
+.comp-ctl-method.patch { background: #8250df; }
+.comp-ctl-name { font-weight: 600; font-size: 13px; }
+.comp-ctl-id { color: var(--muted); font-size: 11px; }
+.comp-ctl-url { font-family: ui-monospace, monospace; font-size: 12px; color: #1f2733; margin: 4px 0; word-break: break-all; }
+.comp-ctl-baseurl-degraded { color: #9a6700; font-size: 11px; margin-left: 4px; }
+.comp-ctl-auth { font-size: 12px; margin: 2px 0; }
+.comp-ctl-auth-badge {
+  display: inline-block; border-radius: 999px; padding: 0 8px; border: 1px solid; font-size: 11px; font-weight: 600;
+}
+.comp-ctl-auth-bearer { color: #1a7f37; border-color: #bbe3c3; background: #f0fbf2; }
+.comp-ctl-auth-oauth { color: #8250df; border-color: #d0bdf2; background: #f7f3ff; }
+.comp-ctl-auth-token { color: #9a6700; border-color: #eedc9a; background: #fff8e6; }
+.comp-ctl-auth-none { color: #6e7781; border-color: #d4d9e0; background: #f6f8fa; }
+.comp-ctl-auth-degraded { color: #d6336c; font-size: 11px; margin-left: 6px; }
+.comp-ctl-block { margin: 6px 0; }
+.comp-ctl-block-title { font-size: 12px; font-weight: 600; color: #444; margin: 6px 0 2px; }
+.comp-ctl-empty { color: #9a6700; font-size: 12px; padding: 2px 0; }
+.comp-ctl-schema-tree { list-style: none; margin: 2px 0; padding-left: 14px; border-left: 1px dashed #ccc; }
+.comp-ctl-schema-tree li { margin: 2px 0; font-size: 12px; }
+.comp-ctl-schema-tree code { font-weight: 600; color: #1f2733; }
+.comp-ctl-schema-type { color: #2f6fed; font-family: ui-monospace, monospace; }
+.comp-ctl-req { color: #d6336c; font-size: 11px; margin-left: 6px; }
+.comp-ctl-schema-desc { color: #666; margin-left: 6px; font-size: 11px; }
+.comp-ctl-schema-enum { color: #e8590c; font-size: 11px; margin-left: 6px; }
+.comp-ctl-errtable { width: 100%; border-collapse: collapse; margin: 2px 0; font-size: 12px; }
+.comp-ctl-errtable th, .comp-ctl-errtable td { border: 1px solid #e0e0e0; padding: 2px 6px; text-align: left; }
+.comp-ctl-errtable th { background: #f3f5f8; }
 
 /* 双向跳转：协议层跨面板高亮（独立类名，不与协议层自身联动互踩） */
 .proto-op-row.hl-comp { background: #ffe9a8; box-shadow: inset 0 0 0 1px #d4a72c; }

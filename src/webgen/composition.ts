@@ -68,6 +68,7 @@ import type {
   ImplCheckReport,
   ModelDiff,
   ImpactAnalysis,
+  CrossProtocolComponentMapping,
 } from '../model/types.js';
 import type { StorageSchema } from '../storagegen/index.js';
 import {
@@ -79,6 +80,7 @@ import {
   readOptionalJson,
   buildBindingView,
   buildWebData,
+  buildSkeletonTransportFallback,
   renderTestCasesPage,
   renderVerificationPage,
   renderDiffPage,
@@ -785,6 +787,9 @@ export function buildCompositionWebData(
     },
     crossRefs,
     invariantSpans,
+    ...(composition.crossProtocolComponents !== undefined
+      ? { crossProtocolComponents: composition.crossProtocolComponents }
+      : {}),
     sharedMatrix,
     warnings,
   };
@@ -1752,6 +1757,8 @@ export async function deriveProjectWeb(
           bindings: bindingView?.hasBindings
             ? (redactSensitiveFields(bindingsRaw ?? {}) as BindingConfig)
             : undefined,
+          // T5a：bindings.yaml 缺失 → 回退子协议 derived/bindings.skeleton.yaml 投影接口 transport
+          transportFallback: buildSkeletonTransportFallback(join(subRoot, 'derived', 'bindings.skeleton.yaml')),
           // B6.3：组合层 errorMap 为全量，传全项目错误码并集，跨协议共享码不误报"残留"
           allProjectErrorCodes: collectProjectErrorCodes(allSpecs),
         });

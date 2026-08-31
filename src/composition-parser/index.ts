@@ -34,6 +34,8 @@ import type {
   ObservationInterfaceDef,
   ObjectStateFacetDef,
   SecurityAssumptionDef,
+  CrossProtocolComponentMapping,
+  CrossProtocolComponentDef,
 } from '../model/types.js';
 import {
   parseMarkdownAst,
@@ -75,6 +77,8 @@ export function parseCompositionContent(
   const observationInterfaces = parseObservationInterfaces(sections);
   const objectStateFacets = parseObjectStateFacets(sections);
   const securityAssumptions = parseSecurityAssumptions(sections);
+  // T5b：组合层「组件映射」段（跨协议组件归属，可选；老组合层无此段 → undefined，零回归）
+  const crossProtocolComponents = parseCrossProtocolComponents(sections);
 
   return {
     metadata,
@@ -86,6 +90,7 @@ export function parseCompositionContent(
     observationInterfaces,
     objectStateFacets,
     securityAssumptions,
+    crossProtocolComponents,
     sourcePath,
     parsedAt: new Date().toISOString(),
   };
@@ -594,6 +599,71 @@ function requireString(
     throw new ParseError(`${section} 缺少必填字段 "${key}" 或字段非字符串`);
   }
   return v.trim();
+}
+
+/**
+ * T5b：组合层「组件映射」段（跨协议组件归属，可选段）。
+ * YAML 形态（与 T1a 组件模型同构 + protocolId）：
+ *   components: [{ name, description?, baseUrl?, auth? }]
+ *   interfaceImplementations: [{ interface, protocolId, component, description? }]
+ * 段不存在 → undefined（老组合层零回归）；声明存在但缺 YAML → ParseError。
+ */
+function parseCrossProtocolComponents(
+  sections: Section[]
+): CrossProtocolComponentMapping | undefined {
+  const section = findSectionByKeywords(sections, ['组件映射', 'componentmapping']);
+  if (!section) return undefined;
+  const codeBlock = findFirstCodeBlock(section.children, 'yaml');
+  if (!codeBlock || !codeBlock.value) {
+    throw new ParseError('组合层「组件映射」段声明存在，但其下缺少 YAML 代码块', '组件映射');
+  }
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(codeBlock.value);
+  } catch (err) {
+    throw new ParseError(
+      `组合层「组件映射」段 YAML 解析失败：${err instanceof Error ? err.message : String(err)}`,
+      '组件映射'
+    );
+  }
+  const r = asRecord(parsed, '组件映射');
+  const components = Array.isArray(r.components)
+    ? (r.components as unknown[]).map((item, idx) => {
+        const o = asRecord(item, `组件映射.components[${idx}]`);
+        const def: CrossProtocolComponentDef = {
+          name: requireString(o, 'name', `组件映射.components[${idx}]`),
+        };
+        const description = optionalString(o, 'description');
+        if (description !== undefined) def.description = description;
+        const baseUrl = optionalString(o, 'baseUrl');
+        if (baseUrl !== undefined) def.baseUrl = baseUrl;
+        const auth = optionalString(o, 'auth');
+        if (auth !== undefined) {
+          if (!['none', 'bearer', 'oauth', 'api-key'].includes(auth)) {
+            throw new ParseError(
+              `组件映射.components[${idx}].auth 必须是 none | bearer | oauth | api-key，实际为 ${auth}`,
+              '组件映射'
+            );
+          }
+          def.auth = auth as 'none' | 'bearer' | 'oauth' | 'api-key';
+        }
+        return def;
+      })
+    : undefined;
+  const interfaceImplementations = Array.isArray(r.interfaceImplementations)
+    ? (r.interfaceImplementations as unknown[]).map((item, idx) => {
+        const o = asRecord(item, `组件映射.interfaceImplementations[${idx}]`);
+        const m = {
+          interface: requireString(o, 'interface', `组件映射.interfaceImplementations[${idx}]`),
+          protocolId: requireString(o, 'protocolId', `组件映射.interfaceImplementations[${idx}]`),
+          component: requireString(o, 'component', `组件映射.interfaceImplementations[${idx}]`),
+        };
+        const description = optionalString(o, 'description');
+        if (description !== undefined) (m as { description?: string }).description = description;
+        return m;
+      })
+    : undefined;
+  return { components: components ?? [], interfaceImplementations: interfaceImplementations ?? [] };
 }
 
 function optionalString(

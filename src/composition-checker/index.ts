@@ -71,6 +71,9 @@ export function checkCompositionCompleteness(
   // 3. 切面约束追溯
   checkFacetConstraintsTraceability(composition, referenceIssues);
 
+  // 3b. T5b：组合层组件映射段交叉校验（跨协议组件归属；老组合层无此段 → 零回归）
+  checkCrossProtocolComponentMapping(composition, options.subProtocolModels ?? [], referenceIssues);
+
   // 4. 安全前提声明完整性
   checkSecurityAssumptionCompleteness(composition, fieldIssues);
 
@@ -488,4 +491,68 @@ function errorIssue(
   elementId?: string
 ): CheckIssue {
   return { severity: 'error', category: 'mechanical', message, elementPath, elementId };
+}
+
+/**
+ * T5b：组合层组件映射段交叉校验（跨协议组件归属）。
+ * - protocolId 必须 ∈ composition.subProtocols（error：跨协议引用悬空）；
+ * - component 必须 ∈ 组件定义 components[].name（error）；
+ * - interface 必须存在于对应子协议模型（subProtocolModels 提供时校验；缺省 → 跳过，不误报）。
+ * 段不存在（老组合层）→ 零输出（零回归）。
+ */
+function checkCrossProtocolComponentMapping(
+  composition: CompositionModel,
+  subProtocolModels: SourceProtocolModel[],
+  issues: CheckIssue[]
+): void {
+  const cm = composition.crossProtocolComponents;
+  if (!cm) return;
+  const subIds = new Set(composition.subProtocols.map((s) => s.protocolId));
+  const compNames = new Set((cm.components ?? []).map((c) => c.name));
+  const modelByProto = new Map<string, SourceProtocolModel>();
+  for (const sp of composition.subProtocols) {
+    const model = subProtocolModels.find((m) => m.metadata.name === sp.name || m.sourcePath?.includes(sp.protocolId));
+    if (model) modelByProto.set(sp.protocolId, model);
+  }
+  for (let i = 0; i < (cm.interfaceImplementations ?? []).length; i++) {
+    const m = cm.interfaceImplementations![i];
+    const path = `composition.crossProtocolComponents.interfaceImplementations[${i}]`;
+    if (!subIds.has(m.protocolId)) {
+      issues.push(
+        errorIssue(
+          `组合层组件映射 ${path} 引用子协议 "${m.protocolId}" 不在 composition.subProtocols 清单中（T5b 跨协议引用悬空）`,
+          `${path}.protocolId`,
+          m.protocolId
+        )
+      );
+    }
+    if (!compNames.has(m.component)) {
+      issues.push(
+        errorIssue(
+          `组合层组件映射 ${path} 引用组件 "${m.component}" 不在「组件映射」段 components[].name 中（T5b 组件定义悬空）`,
+          `${path}.component`,
+          m.component
+        )
+      );
+    }
+    // interface 存在性（子协议模型可用时校验；缺省跳过——避免无模型时误报）
+    const model = modelByProto.get(m.protocolId);
+    if (model) {
+      const ifaces = new Set<string>();
+      for (const op of model.derivable.operations ?? []) ifaces.add(op.name);
+      for (const t of model.derivable.transitions ?? []) {
+        if (t.action) ifaces.add(t.action);
+        if (t.id) ifaces.add(t.id);
+      }
+      if (!ifaces.has(m.interface)) {
+        issues.push(
+          errorIssue(
+            `组合层组件映射 ${path} 引用接口 "${m.interface}" 在子协议 ${m.protocolId} 中不存在（T5b 接口引用悬空）`,
+            `${path}.interface`,
+            m.interface
+          )
+        );
+      }
+    }
+  }
 }

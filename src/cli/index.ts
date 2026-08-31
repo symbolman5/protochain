@@ -96,6 +96,9 @@ import {
 } from '../binder/index.js';
 import { deriveBindings, isSkeletonBindings, SKELETON_MARKER, type SkeletonBindings } from '../bindgen/index.js';
 import { deriveStorage } from '../storagegen/index.js';
+import { deriveDomainTypes } from '../domain-types/index.js';
+import { deriveComponents, deriveComponentsSkeleton } from '../derive-components/index.js';
+import { diffComponentSkeletons, formatComponentDiffSummary } from '../derive-components/diff.js';
 import { deriveWeb, WEB_DATA_SCHEMA_VERSION } from '../webgen/index.js';
 import { startServe } from '../webgen/serve.js';
 import { deriveProjectWeb } from '../webgen/composition.js';
@@ -106,6 +109,8 @@ import { writeEnvDepsReport, formatEnvDepsWarnings } from '../verifier/env-deps.
 import { loadTestTool } from '../testtool/loader.js';
 import { runMCheck, formatMCheckReport, mCheckCli } from '../mcheck/index.js';
 import { runTestCasesWithTestTool } from '../testtool/runner.js';
+import { collectAdversarialRuntimeDeps, configureCredentialMocks } from '../testtool/adversarial-runtime.js';
+import { generateCases } from '../casegen/index.js';
 import { buildVerificationReportFromTestTool } from '../verifier/index.js';
 import { readReport, writeReport } from '../orchestrator/index.js';
 import type { StepId, AIAdapter, InterfaceSpec, TestCaseSet, CompositionCompletenessReport, SourceProtocolModel, BindingConfig } from '../model/types.js';
@@ -1523,6 +1528,80 @@ testToolCmd
     }
   });
 
+testToolCmd
+  .command('adversarial')
+  .description('T4a（X20）：对抗用例执行闭环验证——mock 边界依赖闭合（可执行或显式降级记录）+ 确定性翻译确认（同一用例两次生成逐字节一致）')
+  .option('-d, --dir <目录>', '项目根目录', process.cwd())
+  .option('--out <文件>', '把验证报告写到指定 JSON 路径')
+  .action(async (opts) => {
+    const ctx = resolveCtx(opts);
+    const rootDir = ctx.protocolRoot;
+    try {
+      const model = parseProtocolFile(ctx.modelPath);
+      const testCases = readReport<TestCaseSet>(rootDir, 'derived/test-cases.json');
+      if (!testCases) {
+        console.error(`缺少 test-cases.json: ${join(rootDir, 'derived/test-cases.json')}`);
+        process.exit(2);
+      }
+      const adversarial = testCases.adversarialCases ?? [];
+      const bodies = adversarial.map((c) => c.body ?? '');
+      // 1. 确定性翻译确认（T4a-2）：同一模型两次生成 body 逐字节一致
+      //   （以当前代码两次生成为准；已落盘 test-cases.json 可能是旧 casegen 产物）
+      const set2 = generateCases(model);
+      const set3 = generateCases(model);
+      const bodies2 = (set2.adversarialCases ?? []).map((c) => c.body ?? '');
+      const bodies3 = (set3.adversarialCases ?? []).map((c) => c.body ?? '');
+      let deterministic = bodies2.length === bodies3.length;
+      if (deterministic) {
+        for (let i = 0; i < bodies2.length; i++) {
+          if (bodies2[i] !== bodies3[i]) {
+            deterministic = false;
+            break;
+          }
+        }
+      }
+      // 2. mock 依赖闭合（T4a-3）——以当前代码生成的 body 为准（落盘产物可能为旧 casegen 输出）
+      const deps = collectAdversarialRuntimeDeps(bodies2);
+      const report = {
+        adversarialCount: adversarial.length,
+        deterministic,
+        executable: deps.executable,
+        missingDeps: deps.missing,
+        deps: deps.deps,
+        provided: deps.provided,
+        degradedReasons: [
+          ...(!deterministic
+            ? ['确定性翻译失败：两次生成 body 不一致（T4a-2），执行闭环不可验证']
+            : []),
+          ...(deps.missing.length > 0
+            ? [`mock 边界依赖缺失（body 引用但 runtime 未提供）：${deps.missing.join(', ')}（T4a-3 显式降级）`]
+            : []),
+        ],
+      };
+      console.log('=== test-tool adversarial（T4a 执行闭环验证）===');
+      console.log(`  对抗用例数: ${adversarial.length}`);
+      console.log(`  确定性翻译（两次逐字节一致）: ${deterministic ? '✓' : '✗'}`);
+      console.log(`  mock 边界可执行: ${deps.executable ? '✓' : '✗'}（缺失 ${deps.missing.length}）`);
+      console.log(`  body 依赖函数: ${deps.deps.join(', ') || '（无）'}`);
+      if (deps.missing.length > 0) {
+        console.log(`  缺失（显式降级）: ${deps.missing.join(', ')}`);
+      }
+      if (opts.out) {
+        if (opts.out.startsWith('/')) {
+          mkdirSync(dirname(opts.out), { recursive: true });
+          writeFileSync(opts.out, JSON.stringify(report, null, 2) + '\n', 'utf8');
+        } else {
+          writeReport(rootDir, opts.out, report);
+        }
+        console.log(`验证报告已写入: ${opts.out}`);
+      }
+      process.exit(deterministic && deps.executable ? 0 : 1);
+    } catch (err) {
+      console.error(`错误：${err instanceof Error ? err.message : err}`);
+      process.exit(2);
+    }
+  });
+
 // ==========================================================================
 // diff（差分引擎：比较两个版本的协议模型）
 // ==========================================================================
@@ -1643,7 +1722,8 @@ program
   .option('-d, --dir <目录>', '项目根目录', process.cwd())
   .option('--clean', '清理已 stale 的产物文件')
   .action((opts) => {
-    const rootDir = resolveCtx(opts).protocolRoot;
+    const ctx = resolveCtx(opts);
+    const rootDir = ctx.protocolRoot;
     try {
       const impact = readReport<import('../model/types.js').ImpactAnalysis>(
         rootDir,
@@ -1656,6 +1736,34 @@ program
       const result = propagate(impact, rootDir);
       writeReport(rootDir, 'diff/propagate-plan.json', result);
       console.log(formatPropagateSummary(result));
+
+      // T1c：组件模型同步——协议版本变更 → 重推候选骨架 → 与旧版本骨架差分
+      // derived（新增接口/维度/关系）→ 机械覆盖候选；asserted（引用失效）→ 仲裁清单；
+      // 未变项不动。产物：derived/components-diff.json（R-KIND-10 双向失配信号沿用既有）。
+      try {
+        const versions = listVersions(rootDir, ctx.versionsDir);
+        if (versions.length === 0) {
+          console.log('\n组件模型同步：未找到版本快照（先运行 protochain version save 保存基线）→ 跳过组件差分');
+        } else {
+          const latest = versions[versions.length - 1];
+          const oldModel = loadVersion(rootDir, latest.version, ctx.versionsDir);
+          if (!oldModel) {
+            console.warn(`组件模型同步：版本 ${latest.version} 加载失败 → 跳过组件差分`);
+          } else {
+            const currentModel = parseProtocolFile(ctx.modelPath);
+            const oldSkeleton = deriveComponentsSkeleton(oldModel);
+            const newSkeleton = deriveComponentsSkeleton(currentModel);
+            const compDiff = diffComponentSkeletons(oldSkeleton, newSkeleton);
+            const compDiffPath = writeReport(rootDir, 'components-diff.json', compDiff);
+            console.log('\n组件模型差异（T1c）：');
+            console.log(formatComponentDiffSummary(compDiff));
+            console.log(`  组件差异清单: ${compDiffPath}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`组件差分失败（不阻断 propagate）：${err instanceof Error ? err.message : err}`);
+      }
+
       if (opts.clean) {
         console.log('\n清理 stale 产物：');
         for (const artifact of result.staleArtifacts) {
@@ -2027,21 +2135,41 @@ program
 
 program
   .command('derive-storage')
-  .description('G7/S3：从 specs.json 维度清单 (S1 产物) 机械推导存储 schema 骨架（实体维度 → 持久化 schema，覆盖率 100%）')
+  .description('G7/S3：从 specs.json 维度清单 (S1 产物) 机械推导存储 schema 骨架（实体维度 → 持久化 schema，覆盖率 100%）；T2c：列 type 由 domain 推导（enum/number/string，判据 D1）+ 产出 derived/types.ts')
   .option('-d, --dir <目录>', '项目根目录', process.cwd())
   .option('--specs <路径>', 'specs.json 路径（默认 <dir>/derived/specs.json）')
   .option('-o, --output <路径>', 'schema 输出路径（默认 <dir>/derived/storage.schema.json）')
+  .option('--types <路径>', '类型定义产物路径（默认 <dir>/derived/types.ts，T2c）')
+  .option('--dict <JSON>', '维度/实体 → 英文类型名转写字典（JSON 对象，如 {"兑付状态":"ClaimStatus"}，T2c）')
   .option('-f, --force', '覆盖已存在 schema')
   .action(async (opts) => {
     const ctx = resolveCtx(opts);
     const rootDir = ctx.protocolRoot;
     try {
+      // T2c：读协议模型实体维度 domain → 类型定义（storage 列 type + types.ts 产物）
+      const model = parseProtocolFile(ctx.modelPath);
+      let dict: Record<string, string> | undefined;
+      if (opts.dict) {
+        try {
+          dict = JSON.parse(opts.dict);
+        } catch {
+          console.error('错误：--dict 必须是 JSON 对象（如 {"兑付状态":"ClaimStatus"}）');
+          process.exit(2);
+        }
+      }
+      const dtResult = deriveDomainTypes(model.derivable.entityDimensions, { dict });
+      const domainTypes = new Map(dtResult.defs.map((d) => [d.dimension, d]));
+      const typesOutputPath = opts.types
+        ? resolveRelative(opts.types, rootDir)
+        : join(rootDir, 'derived', 'types.ts');
       const result = await deriveStorage({
         rootDir,
         // 相对路径参数统一相对 rootDir 解析（与 derive-bindings 的 E3-I2 修复同口径）
         specsPath: opts.specs ? resolveRelative(opts.specs, rootDir) : undefined,
         outputPath: opts.output ? resolveRelative(opts.output, rootDir) : undefined,
         force: opts.force,
+        domainTypes,
+        typesOutputPath,
       });
 
       const s = result.schema;
@@ -2051,9 +2179,10 @@ program
       console.log(`  覆盖率: ${(s.coverageRate * 100).toFixed(1)}%（对应 G8 D3）`);
       console.log(`  实体数: ${s.entities.length}`);
       for (const e of s.entities) {
-        console.log(`    - ${e.entity}（维度 × ${e.dimensionCount}）：${e.columns.map((c) => c.dimension).join(', ')}`);
+        console.log(`    - ${e.entity}（维度 × ${e.dimensionCount}）：${e.columns.map((c) => `${c.dimension}:${c.type}`).join(', ')}`);
       }
       console.log(`\n  schema 产物: ${result.schemaPath}`);
+      console.log(`  类型定义产物: ${typesOutputPath}（T2c · D1：enum/number/string ${dtResult.defs.filter((d) => d.kind === 'enum').length} enum / ${dtResult.defs.filter((d) => d.kind === 'number').length} number / ${dtResult.defs.filter((d) => d.kind === 'string').length} string缺省）`);
       if (s.warnings.length > 0) {
         console.log('\n警告：');
         for (const w of s.warnings) console.log(`  - ${w}`);
@@ -2063,6 +2192,61 @@ program
       console.error(
         `错误：${err instanceof Error ? err.message : err}`
       );
+      process.exit(2);
+    }
+  });
+
+// ==========================================================================
+// derive-components（T1b）：协议 IR → components.md 候选骨架（角色聚簇/实体簇/传输推断）
+// ==========================================================================
+
+program
+  .command('derive-components')
+  .description('T1b：协议模型 → components.md 候选骨架（组件定义/三表/接口契约，kindSource=derived + 待确认；产物 derived/components.skeleton.md，不写回 components.md）')
+  .option('-d, --dir <目录>', '项目根目录', process.cwd())
+  .option('-o, --output <路径>', '骨架输出路径（默认 <dir>/derived/components.skeleton.md）')
+  .option('--dict <JSON>', '中文 action → 英文 path 转写字典（JSON 对象，如 {"认领":"claim"}）')
+  .option('-f, --force', '覆盖已存在骨架')
+  .action(async (opts) => {
+    const ctx = resolveCtx(opts);
+    const rootDir = ctx.protocolRoot;
+    try {
+      const modelPath = ctx.modelPath;
+      const model = parseProtocolFile(modelPath);
+      let dict: Record<string, string> | undefined;
+      if (opts.dict) {
+        try {
+          dict = JSON.parse(opts.dict);
+        } catch {
+          console.error('错误：--dict 必须是 JSON 对象（如 {"认领":"claim"}）');
+          process.exit(2);
+        }
+      }
+      const skeletonPath = opts.output ? resolveRelative(opts.output, rootDir) : undefined;
+      const out = deriveComponents(rootDir, model, { dict, outputPath: skeletonPath, force: opts.force });
+      const s = out.skeleton;
+      const c = s.coverage;
+      console.log('=== derive-components 组件模型候选骨架报告 ===');
+      console.log(`  源 model.md version: ${s.sourceModelVersion ?? model.metadata.version}`);
+      console.log(`  候选组件: ${s.components.length}`);
+      for (const d of s.components) {
+        console.log(`    - ${d.name}（auth=${d.auth} · ${d.cluster}）`);
+      }
+      console.log(`  接口→组件: ${s.mapping.interfaceImplementations?.length ?? 0} / ${c.interfaceTotal}`);
+      console.log(`  维度→存储: ${c.dimensionCovered} / ${c.dimensionTotal}`);
+      console.log(`  组件→传输: ${s.mapping.componentTransfers?.length ?? 0}（关系候选 ${c.relationCovered}/${c.relationTotal}）`);
+      console.log(`  接口契约: ${s.contracts.length}`);
+      if (c.unmappedInterfaces.length > 0) console.log(`  未覆盖接口: ${c.unmappedInterfaces.join(', ')}`);
+      if (c.unmappedDimensions.length > 0) console.log(`  未覆盖维度: ${c.unmappedDimensions.join(', ')}`);
+      if (c.unmappedRelations.length > 0) console.log(`  未覆盖关系: ${c.unmappedRelations.join(', ')}`);
+      console.log(`\n  骨架产物: ${out.skeletonPath}（kindSource=derived · confirmed=false · 人工确认后写回 components.md）`);
+      if (s.warnings.length > 0) {
+        console.log('\n降级记录：');
+        for (const w of s.warnings) console.log(`  - ${w}`);
+      }
+      process.exit(0);
+    } catch (err) {
+      console.error(`错误：${err instanceof Error ? err.message : err}`);
       process.exit(2);
     }
   });

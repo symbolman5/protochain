@@ -1,7 +1,7 @@
 /**
- * X1（P0-1）：StateDimension kind 机械推导 —— 由「写入方集合」推导，不经由人手。
+ * X1（P0-1）+ T2b（决策 1 修订）：StateDimension kind 机械推导 —— 由「写入方集合」推导。
  *
- * 推导表（决策 D-1，维持两类不引入 computed）：
+ * 推导表（机械只产两值；computed 只能经人写断言进入，kindSource='asserted'）：
  *
  * | W(dim) = 写入该维度的 triggerType 集合       | 结果                              |
  * |---------------------------------------------|-----------------------------------|
@@ -9,6 +9,11 @@
  * | 只含非 role（system / external）            | kind='observed', kindSource='derived' |
  * | 同时含 role 与非 role（混合）               | 硬失败（模型矛盾），不产出 kind，message 含 dimension-kind-conflict |
  * | 空集                                        | 不推导，schemaDegradedReasons 记 dimension-kind-undetermined |
+ *
+ * T2b：computed（系统重算得出）只能经人写断言进入——断言 computed 的维度其写入方必须
+ * 全部是 scheduled/system 重算型接口（W(dim) 不含 role；R-KIND 组校验）。机械推导仍只产
+ * declared/observed 两值（scheduled 归 system 口径，重算型与观测事实同为系统侧写入，
+ * 机械无法区分「重算得出」与「事实采集」，由人断言细化）。
  *
  * W(dim) 口径：遍历 DerivableLayer.transitions ∪ operations（R1b 扩展，六张清单形态
  * 无 transitions，写入方来自「操作」段接口），凡 `affectsDimensions` 含该维度的
@@ -29,7 +34,7 @@
 
 import type { DerivableLayer, OperationTriggerType, StateDimension } from './types.js';
 
-export type DimensionKind = 'declared' | 'observed';
+export type DimensionKind = 'declared' | 'observed' | 'computed';
 export type DimensionKindSource = 'derived' | 'asserted';
 
 /** 单个维度的 kind 判定结果（维度级记录，供 specs.json 带出） */

@@ -282,6 +282,33 @@ export interface WebInterfaceView {
    * 让读者区分"状态机系统接口"与"契约投影载体"。
    */
   isContractCarrier?: boolean;
+  /**
+   * T5a：接口契约最小投影（apifox 式）——transport 由 bindings（或 bindings.skeleton.yaml
+   * 回退）按 action 名查表投影 method/path；无数据 → 字段缺省，viewer 显示缺省占位不推导。
+   */
+  transport?: { method?: string; path?: string };
+  /**
+   * T5a：接口契约鉴权（apifox 式 authorization）——由 credentials 段按调用角色 ↔ redeemer
+   * 推断（selfContained=local-verify → bearer/票据；needs-lookup → oauth）；无匹配凭证 →
+   * type='none' + degraded 显式标注「组件模型未声明」（viewer 端零推导，仅查表）。
+   */
+  authorization?: WebContractAuthView;
+}
+
+/**
+ * T5a：接口契约鉴权视图（credentials 段推断的中间输出，viewer 仅查表展示）。
+ * - type：bearer（local-verify）/ oauth（needs-lookup）/ token（其他自包含性）/ none（未关联凭证）
+ * - degraded=true：组件模型未声明接口级鉴权 → 显式标注，不静默。
+ */
+export interface WebContractAuthView {
+  type: 'bearer' | 'oauth' | 'token' | 'none';
+  /** 关联凭证名（credentials 段查表；无匹配 → 缺省） */
+  credential?: string;
+  /** 凭证自包含性原文（local-verify / needs-lookup） */
+  selfContained?: string;
+  /** 降级标记：组件模型未声明 → 显式标注（viewer 显示"组件模型未声明"） */
+  degraded?: boolean;
+  reason?: string;
 }
 
 /** 测试用例浏览器视图 */
@@ -857,6 +884,91 @@ export function buildInterfaceViews(specs: InterfaceSpec[]): WebInterfaceView[] 
 }
 
 /**
+ * T5a：接口契约鉴权推断（apifox 式 authorization 中间输出，pure function）。
+ * 规则（零端内推导，仅机械查表）：
+ * - 组件模型接口级鉴权声明（declaredAuth）存在 → 原样透传（未来 components.md 声明形态）；
+ * - 否则按 credentials 段推断：接口调用角色（triggerRoleId）↔ 凭证 redeemer 匹配——
+ *   selfContained=local-verify → bearer（Bearer/票据）；needs-lookup → oauth；其他 → token；
+ * - 无角色信息 / 无匹配凭证 → type='none' + degraded（显式标注"组件模型未声明"，不静默）。
+ * @param roleId 接口调用角色（WebInterfaceView.triggerRoleId；缺失 → 无法关联凭证）
+ * @param creds 模型 credentials 段（缺省 → undefined，viewer 端显示"组件模型未声明"降级占位）
+ */
+export function buildContractAuthView(
+  roleId: string | undefined,
+  creds: CredentialDeclaration[] | undefined,
+  declaredAuth?: { type?: string; credential?: string }
+): WebContractAuthView | undefined {
+  if (declaredAuth && declaredAuth.type) {
+    const t = declaredAuth.type.toLowerCase();
+    const type = t === 'bearer' || t === 'oauth' || t === 'token' || t === 'none' ? t : 'token';
+    const o: WebContractAuthView = { type };
+    if (declaredAuth.credential) o.credential = declaredAuth.credential;
+    return o;
+  }
+  if (!creds || creds.length === 0) {
+    return { type: 'none', degraded: true, reason: '组件模型未声明（无 credentials 段可推断）' };
+  }
+  if (!roleId) {
+    return { type: 'none', degraded: true, reason: '组件模型未声明（接口未关联调用角色，无法推断凭证）' };
+  }
+  const hit = creds.find((c) => c.redeemer === roleId);
+  if (!hit) {
+    return { type: 'none', degraded: true, reason: `组件模型未声明（接口调用角色 ${roleId} 未持有任何凭证）` };
+  }
+  const type = hit.selfContained === 'local-verify' ? 'bearer' : hit.selfContained === 'needs-lookup' ? 'oauth' : 'token';
+  return { type, credential: hit.name, selfContained: hit.selfContained };
+}
+
+/** T5a：按 action 名构建 transport 查表（bindings.interfaces ∪ transportFallback，bindings 优先） */
+export function buildTransportLookup(
+  bindings: BindingConfig | undefined,
+  transportFallback?: Array<{ action: string; method?: string; path?: string }>
+): Map<string, { method?: string; path?: string }> {
+  const m = new Map<string, { method?: string; path?: string }>();
+  for (const b of bindings?.interfaces ?? []) {
+    const t = b.transport;
+    if (b.action && t && t.type === 'http') {
+      m.set(b.action, { method: t.method, path: t.path });
+    }
+  }
+  for (const t of transportFallback ?? []) {
+    if (t.action && !m.has(t.action)) m.set(t.action, { method: t.method, path: t.path });
+  }
+  return m;
+}
+
+/**
+ * T5a：从 bindings.skeleton.yaml 提取 transport 最小投影（action → method/path）。
+ * 仅 http 传输参与（method/path 仅 http 语义）；无文件 / 解析失败 / 非 http → 空数组。
+ * deriveWeb 与 deriveProjectWeb（composition.ts）共用，避免重复 YAML 解析逻辑。
+ */
+export function buildSkeletonTransportFallback(
+  skeletonPath: string
+): Array<{ action: string; method?: string; path?: string }> {
+  if (!existsSync(skeletonPath)) return [];
+  try {
+    const raw = readFileSync(skeletonPath, 'utf-8');
+    const { parseYaml } = requireYaml();
+    const obj = parseYaml(raw);
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return [];
+    const ifaces = (obj as { interfaces?: unknown }).interfaces;
+    if (!Array.isArray(ifaces)) return [];
+    const out: Array<{ action: string; method?: string; path?: string }> = [];
+    for (const x of ifaces as Array<{
+      action?: string;
+      transport?: { type?: string; method?: string; path?: string };
+    }>) {
+      if (x.action && x.transport && x.transport.type === 'http') {
+        out.push({ action: x.action, method: x.transport.method, path: x.transport.path });
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * E11：从 BindingConfig 构造 WebBindingView（非敏感投影子集）。
  * - roles：仅 baseUrl / headers / auth（kind）；authConfig 整块不读取
  * - interfaces：仅 action / roleId / protocol / transport.{type,method,path}
@@ -1337,6 +1449,12 @@ export interface DeriveWebInputs {
    * 各自 warnings 数组即可复用既有报告通道。
    */
   warnings?: string[];
+  /**
+   * T5a：接口契约最小投影回退源（可选）——bindings.yaml 缺失时，调用方可从
+   * derived/bindings.skeleton.yaml 提取 {action, method, path} 传入，仅用于 interfaces
+   * 视图的 transport 投影（method/path）；不涉及 binding 视图主体（零回归）。
+   */
+  transportFallback?: Array<{ action: string; method?: string; path?: string }>;
 }
 
 /** 由 inputs 构造 WebDataJson（pure function） */
@@ -1354,6 +1472,19 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
   } = inputs;
   const specs = specsEnvelope.specs;
   const interfaces = buildInterfaceViews(specs);
+  // T5a：接口契约最小投影（apifox 式五要素：url/method/authorization/parameters/response）
+  // - transport：bindings.interfaces（或 transportFallback 回退）按 action 名查表投影 method/path；
+  // - authorization：credentials 段按 triggerRoleId ↔ redeemer 推断；无匹配 → none + 显式降级。
+  {
+    const transportLookup = buildTransportLookup(bindings, inputs.transportFallback);
+    const creds = model.metadata.credentials;
+    for (const iface of interfaces) {
+      const t = transportLookup.get(iface.name);
+      if (t) iface.transport = t;
+      const auth = buildContractAuthView(iface.triggerRoleId, creds);
+      if (auth) iface.authorization = auth;
+    }
+  }
   const testCaseViews = buildTestCaseViews(testCases, verification);
   const verificationView = buildVerificationView(verification);
   const diffView = buildDiffView(diff);
@@ -2309,6 +2440,15 @@ export async function deriveWeb(
     bindingsConfig = redactSensitiveFields(bindingsRaw) as BindingConfig;
     if (bindingsConfig) warnings.push('bindings.yaml 已读取（仅非敏感投影子集）');
   }
+  // T5a：bindings.yaml 缺失 → 回退 derived/bindings.skeleton.yaml，仅提取 transport 最小投影
+  // （method/path 供接口契约详情展示；不涉及 binding 视图主体，零回归）
+  let transportFallback: Array<{ action: string; method?: string; path?: string }> | undefined;
+  if (!bindingsConfig) {
+    transportFallback = buildSkeletonTransportFallback(join(rootDir, 'derived', 'bindings.skeleton.yaml'));
+    if (transportFallback.length > 0) {
+      warnings.push('bindings.yaml 缺失，已从 bindings.skeleton.yaml 回退投影接口 transport（T5a）');
+    }
+  }
 
   // 4. 构造 WebDataJson
   let data = buildWebData({
@@ -2321,6 +2461,7 @@ export async function deriveWeb(
     impact,
     bindings: bindingsConfig,
     storage,
+    transportFallback,
   });
 
   // 5. 防御性：redact sensitive fields（即使上游不慎写入）

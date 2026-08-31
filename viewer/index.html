@@ -61,8 +61,22 @@
     <!-- 面板容器：TA4 主视图 / TA5 ③⑥ 面板在此挂载 -->
     <section class="view-panel">
       <h2>视图</h2>
+      <!-- R2b+ 分层视图：协议层 / 组件层 / 用例层 独立容器（view-tabs.js 切换；单协议浏览模式生效，项目模式零变化） -->
+      <div id="view-tabs" class="view-tabs" role="tablist">
+        <button type="button" class="view-tab active" data-view="protocol" role="tab" aria-selected="true">协议层</button>
+        <button type="button" class="view-tab" data-view="component" role="tab" aria-selected="false">组件层</button>
+        <button type="button" class="view-tab" data-view="cases" role="tab" aria-selected="false">用例层</button>
+      </div>
       <div id="panels" class="panels">
-        <div class="panel-empty">导入 data.json 后渲染协议层主视图（R2a：实体-维度卡片 / 操作×不变量交叉 / 时间语义摘要 / 关系网络）</div>
+        <div id="view-protocol" class="view-container active" role="tabpanel">
+          <div class="panel-empty">导入 data.json 后渲染协议层主视图（R2a：实体-维度卡片 / 操作×不变量交叉 / 时间语义摘要 / 关系网络）</div>
+        </div>
+        <div id="view-component" class="view-container" role="tabpanel">
+          <div class="panel-empty">导入 data.json 后渲染组件层视图（§11.3：接口→实现组件 / 实体维度→存储 / 组件→组件传输 / 架构拓扑）</div>
+        </div>
+        <div id="view-cases" class="view-container" role="tabpanel">
+          <div class="panel-empty">导入 data.json 后渲染用例层视图（§11.4：路径用例 / 对抗用例按 kind 分组 / source 指回联动）</div>
+        </div>
       </div>
     </section>
   </main>
@@ -75,6 +89,8 @@
   <script src="interface-view-utils.js"></script>
   <!-- viewer 应用逻辑（无框架，手写） -->
   <script src="app.js"></script>
+  <!-- 分层视图切换（R2b+：协议层/组件层/用例层分离；未加载时各 panel 退回原 #panels 堆叠，零回归） -->
+  <script src="view-tabs.js"></script>
   <!-- ① 生命周期主视图（TA4；R2a 降为兼容层：仅对声明状态机段的老模型渲染转移图，六张清单形态不渲染） -->
   <script src="main-view.js"></script>
   <!-- ③ 接口↔状态联动 + ⑥ edgeCoverage 着色（TA5） -->

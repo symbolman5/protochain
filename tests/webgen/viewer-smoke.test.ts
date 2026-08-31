@@ -153,11 +153,13 @@ describe('viewer 静态资产冒烟（W3-a / TA3）', () => {
     // V4 在 G5 骨架之上新增 protocol-panel.js（协议层面板，§11.3）。
     // V5 在其后新增 component-panel.js（组件层面板，§11.3 组件模型视图）。
     // V6 在其后新增 cases-panel.js（用例层面板，§11.4 用例视图）。
+    // R2b+ 在其后新增 view-tabs.js（分层视图切换：协议层/组件层/用例层分离容器）。
     expect(scripts).toEqual([
       'assets/parser.js',
       'n1-guard.js',
       'interface-view-utils.js',
       'app.js',
+      'view-tabs.js',
       'main-view.js',
       'link-coverage.js',
       'swimlanes.js',

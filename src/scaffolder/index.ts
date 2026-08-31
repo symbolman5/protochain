@@ -13,6 +13,7 @@
 import { copyFileSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep, dirname } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
+import Ajv from 'ajv';
 import type { InterfaceSpec, ProtochainConfig, BindingConfig } from '../model/types.js';
 
 // ============================================================================
@@ -592,10 +593,42 @@ function generateInterfaceTypes(specs: InterfaceSpec[]): string {
     '',
   ];
 
+  // T2a（X17/P1-9，判据 M11）：guard 可执行化——受限谓词（json-schema + ajv 可编译）
+  // 命中 → 标注校验调用可生成 + 谓词体待填；未命中 → 显式降级标注（不静默）。
+  const ajv = new Ajv({ allErrors: true, strict: false });
   for (const spec of specs) {
     lines.push(`// ${spec.kind === 'system' ? '系统接口' : '观测接口'}: ${spec.name}`);
     if (spec.precondition) {
       lines.push(`// 前置条件: ${spec.precondition}`);
+    }
+    const pre = spec.preconditions ?? [];
+    if (pre.length > 0) {
+      const allStructured = pre.every((p) => p.kind === 'json-schema' && p.schema != null);
+      if (allStructured) {
+        let compileOk = true;
+        for (const p of pre) {
+          try {
+            ajv.compile(p.schema as object);
+          } catch {
+            compileOk = false;
+            break;
+          }
+        }
+        if (compileOk) {
+          lines.push(
+            `// [T2a] guard 可执行化（M11 命中）：${pre.length} 条 json-schema 谓词全部可被 ajv 编译 → 校验调用可生成，谓词体待填实现`
+          );
+        } else {
+          lines.push(
+            `// [T2a] guard 部分谓词不可被 ajv 编译（M11 未命中）→ 显式降级：校验调用不可机械生成，谓词体留 TODO（schemaDegradedReasons 已记录）`
+          );
+        }
+      } else {
+        const bad = pre.find((p) => p.kind !== 'json-schema' || p.schema == null);
+        lines.push(
+          `// [T2a] guard 未可执行化（M11 未命中，显式降级）：谓词 ${bad?.kind ?? 'invalid'}「${bad?.description ?? ''}」未按受限谓词语法书写，不可机械校验；谓词体留 TODO（schemaDegradedReasons 已记录）`
+        );
+      }
     }
     if (spec.postconditions && spec.postconditions.length > 0) {
       lines.push(`// 后置条件:`);

@@ -31,6 +31,9 @@
 (function () {
   'use strict';
 
+  // 分层视图目标解析（R2b+）：view-tabs.js 加载且非项目模式 → 渲染进 #view-component；否则原 #panels（零回归）
+  const viewBox = (window.ProtochainViewerTabs && window.ProtochainViewerTabs.viewBox) || ((p) => p);
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -87,7 +90,7 @@
   function clearCompHighlights(box) {
     if (!box) return;
     box.querySelectorAll(
-      '.comp-impl-row.hl, .comp-storage-row.hl, .comp-topo-node.hl, .comp-transfer-row.hl, .comp-impl-component.hl'
+      '.comp-impl-row.hl, .comp-storage-row.hl, .comp-topo-node.hl, .comp-transfer-row.hl, .comp-impl-component.hl, .comp-ctl-card.hl'
     ).forEach((x) => x.classList.remove('hl'));
     // 协议层跨面板高亮：独立类名，不与协议层自身联动（active/hl-guard/hl-inv）互踩
     if (typeof document !== 'undefined') {
@@ -106,6 +109,9 @@
     // 实现组件行 + 拓扑节点
     const row = box.querySelector(`.comp-impl-row[data-interface-name="${name}"]`);
     if (row) row.classList.add('hl');
+    // T5a：接口契约卡片同步高亮
+    const ctlCard = box.querySelector(`.comp-ctl-card[data-interface-name="${name}"]`);
+    if (ctlCard) ctlCard.classList.add('hl');
     const comp = row && row.getAttribute('data-component');
     if (comp) {
       const node = box.querySelector(`.comp-topo-node[data-component="${comp}"]`);
@@ -386,11 +392,176 @@
   }
 
   // ---------------------------------------------------------------------------
+  // T5a · ⑤ 接口契约详情（apifox 式卡片：url/method/authorization/参数/响应/错误）
+  // 数据源全部查表（interfaces[].transport/authorization/requestSchema/responseSchema/
+  // errorResponses 由 webgen 投影），端内零推导；缺失字段显示缺省占位不崩。
+  // ---------------------------------------------------------------------------
+
+  /** schema 树节点 → <li>（含嵌套；与 interface-detail-panel schemaNodeHtml 同构的轻量实现） */
+  function ctlSchemaNodeHtml(node, requiredSet) {
+    const req = requiredSet && requiredSet.indexOf(node.name) !== -1 ? ' <span class="comp-ctl-req">必填</span>' : '';
+    const desc = node.description ? ` <span class="comp-ctl-schema-desc">${esc(node.description)}</span>` : '';
+    const en = node.enum ? ` <span class="comp-ctl-schema-enum">enum: ${esc(node.enum.join(', '))}</span>` : '';
+    let html =
+      `<li><code>${esc(node.name)}</code> : <span class="comp-ctl-schema-type">${esc(node.type)}</span>${req}${desc}${en}</li>`;
+    if (node.children && node.children.length) {
+      html += '<ul class="comp-ctl-schema-tree">' +
+        node.children.map((c) => ctlSchemaNodeHtml(c, node.required)).join('') +
+        '</ul>';
+    }
+    return html;
+  }
+
+  /** schema → 字段树 HTML（复用 InterfaceViewUtils.buildSchemaTree；U 缺失 → 降级占位） */
+  function ctlSchemaTreeHtml(schema, name) {
+    if (!schema) {
+      return '<div class="comp-ctl-empty">（接口契约未声明 ' + esc(name) + '）</div>';
+    }
+    const U = window.InterfaceViewUtils;
+    if (!U || typeof U.buildSchemaTree !== 'function') {
+      return '<div class="comp-ctl-empty">（schema 渲染工具未加载）</div>';
+    }
+    const tree = U.buildSchemaTree(schema, name, '');
+    if (!tree || !tree.children || !tree.children.length) {
+      return '<div class="comp-ctl-empty">（无 schema 字段）</div>';
+    }
+    return '<ul class="comp-ctl-schema-tree">' +
+      tree.children.map((c) => ctlSchemaNodeHtml(c, tree.required)).join('') +
+      '</ul>';
+  }
+
+  /** 错误码表 HTML（复用 InterfaceViewUtils.buildErrorTable；无 → 占位） */
+  function ctlErrorTableHtml(iface) {
+    const U = window.InterfaceViewUtils;
+    let rows = [];
+    if (U && typeof U.buildErrorTable === 'function') {
+      rows = U.buildErrorTable({ interface: iface, binding: {} }) || [];
+    } else if (Array.isArray(iface.errorResponses)) {
+      rows = iface.errorResponses.map((e) => ({
+        errorCode: e.errorCode,
+        httpStatus: e.httpStatus,
+        description: e.description || '',
+        unmapped: false,
+      }));
+    }
+    if (!rows.length) {
+      return '<div class="comp-ctl-empty">（无错误响应定义）</div>';
+    }
+    let html =
+      '<table class="comp-ctl-errtable"><thead><tr><th>错误码</th><th>HTTP</th><th>说明</th></tr></thead><tbody>';
+    for (const r of rows) {
+      html +=
+        `<tr><td>${esc(r.errorCode)}</td>` +
+        `<td>${r.httpStatus !== null && r.httpStatus !== undefined ? esc(String(r.httpStatus)) : '—'}</td>` +
+        `<td>${esc(r.description || '')}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    return html;
+  }
+
+  /** 授权行 HTML（interfaces[].authorization 查表；缺失 → 组件模型未声明降级） */
+  function ctlAuthHtml(iface) {
+    const a = iface && iface.authorization;
+    if (!a) {
+      return (
+        '<div class="comp-ctl-auth">' +
+        '<span class="comp-ctl-auth-badge comp-ctl-auth-none">none</span>' +
+        '<span class="comp-ctl-auth-degraded">组件模型未声明（接口未绑定凭证）</span>' +
+        '</div>'
+      );
+    }
+    const cls = a.type === 'bearer' ? 'bearer' : a.type === 'oauth' ? 'oauth' : a.type === 'token' ? 'token' : 'none';
+    const cred = a.credential
+      ? ` · 凭证 ${esc(a.credential)}${a.selfContained ? `（${esc(a.selfContained)}）` : ''}`
+      : '';
+    const degraded = a.degraded
+      ? `<span class="comp-ctl-auth-degraded">${esc(a.reason || '组件模型未声明')}</span>`
+      : '';
+    return `<div class="comp-ctl-auth"><span class="comp-ctl-auth-badge comp-ctl-auth-${cls}">${esc(a.type)}</span>${cred}${degraded}</div>`;
+  }
+
+  /**
+   * ⑤ 接口契约详情（apifox 式卡片，按组件分组）。
+   * url：path 原文 + baseUrl 缺省用组件名占位（组件模型未声明 baseUrl，显式标注）；
+   * method：interfaces[].transport.method（webgen 从 bindings/skeleton 投影）；缺失 → '—' 占位。
+   */
+  function renderContractDetails(box, impls) {
+    const section = document.createElement('div');
+    section.className = 'comp-section comp-ctl-section';
+
+    const sub = document.createElement('div');
+    sub.className = 'comp-section-title';
+    sub.textContent = `⑤ 接口契约详情（${impls.length} 接口 · url/method/authorization/参数/响应/错误 · 点卡片高亮协议层落点）`;
+    section.appendChild(sub);
+
+    if (impls.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'comp-ctl-empty';
+      empty.textContent = '（无接口实现映射，无契约详情可展示）';
+      section.appendChild(empty);
+      box.appendChild(section);
+      return;
+    }
+
+    // 按组件分组（与①同构：组件名排序）
+    const groups = new Map();
+    for (const im of impls) {
+      const c = im.component || '（未命名组件）';
+      if (!groups.has(c)) groups.set(c, []);
+      groups.get(c).push(im);
+    }
+    for (const [comp, items] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const g = document.createElement('div');
+      g.className = 'comp-ctl-group';
+      const gname = document.createElement('div');
+      gname.className = 'comp-ctl-group-name';
+      gname.textContent = `组件 ${comp}（${items.length} 接口）`;
+      g.appendChild(gname);
+      for (const im of items) {
+        const iface = ctx.ifaceIndex.byName.get(im.interface);
+        const t = (iface && iface.transport) || {};
+        const method = (t.method || '—').toUpperCase();
+        const path = t.path || '';
+        const urlText = path ? path : '（path 未声明）';
+        const m = method.toLowerCase();
+        const methodCls = m === 'get' || m === 'put' || m === 'delete' || m === 'patch' ? m : 'post';
+        const card = document.createElement('div');
+        card.className = 'comp-ctl-card';
+        card.setAttribute('data-interface-name', im.interface || '');
+        card.setAttribute('data-interface-id', iface ? iface.id : '');
+        card.title = `点击高亮接口 ${im.interface} 在组件层/协议层的既有落点`;
+        card.innerHTML =
+          `<div class="comp-ctl-head">` +
+          `<span class="comp-ctl-method ${methodCls}">${esc(method)}</span>` +
+          `<span class="comp-ctl-name">${esc(im.interface || '—')}</span>` +
+          (iface ? `<span class="comp-ctl-id">${esc(iface.id)}</span>` : '') +
+          `<span class="comp-ctl-id">→ ${esc(im.component || '—')}</span>` +
+          `</div>` +
+          `<div class="comp-ctl-url" title="baseUrl 组件模型未声明，缺省用组件名占位">${esc(urlText)}${t.path ? '<span class="comp-ctl-baseurl-degraded">（baseUrl 未声明 · 组件名占位）</span>' : ''}</div>` +
+          ctlAuthHtml(iface) +
+          `<div class="comp-ctl-block"><div class="comp-ctl-block-title">参数（requestSchema）</div>` +
+          ctlSchemaTreeHtml(iface && iface.requestSchema, 'requestSchema') +
+          `</div>` +
+          `<div class="comp-ctl-block"><div class="comp-ctl-block-title">响应（responseSchema）</div>` +
+          ctlSchemaTreeHtml(iface && iface.responseSchema, 'responseSchema') +
+          `</div>` +
+          `<div class="comp-ctl-block"><div class="comp-ctl-block-title">错误码表（errorResponses）</div>` +
+          ctlErrorTableHtml(iface || {}) +
+          `</div>`;
+        g.appendChild(card);
+      }
+      section.appendChild(g);
+    }
+    box.appendChild(section);
+  }
+
+  // ---------------------------------------------------------------------------
   // 面板渲染入口
   // ---------------------------------------------------------------------------
   function renderComponentPanel(state, panels) {
     const data = state.dataJson;
     if (!data) return; // 未导入：主视图已有提示，组件层不重复
+    panels = viewBox(panels, 'view-component');
     if (panels.querySelector('.component-panel') || panels.querySelector('.component-empty')) return;
 
     const comp = data.components && typeof data.components === 'object' ? data.components : null;
@@ -439,6 +610,8 @@
     renderTransfers(box, transfers);
     // ④ 架构总览拓扑
     renderTopology(box, impls, transfers);
+    // ⑤ 接口契约详情（T5a：apifox 式，按组件分组）
+    renderContractDetails(box, impls);
 
     panels.appendChild(box);
   }
@@ -482,6 +655,15 @@
       if (topoNode) {
         const box = topoNode.closest('.component-panel');
         if (box) highlightComponent(box, topoNode.getAttribute('data-component'));
+        return;
+      }
+      // 组件层：点接口契约卡片 → 接口→实现组件+存储落点+协议层高亮（T5a）
+      const ctlCard = t.closest('.comp-ctl-card');
+      if (ctlCard) {
+        const box = ctlCard.closest('.component-panel');
+        if (box) {
+          highlightInterface(box, ctlCard.getAttribute('data-interface-id'), ctlCard.getAttribute('data-interface-name'));
+        }
         return;
       }
       // 协议层：点接口名 → 跳组件层（实现组件 + 存储落点）

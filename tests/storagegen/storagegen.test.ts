@@ -54,7 +54,7 @@ describe('deriveStorageSchema（纯机械）', () => {
     for (const col of refund.columns) {
       expect(col.column).toBe(col.dimension); // 列名 = 维度名
       expect(col.kind).toBe('undetermined'); // 显式降级标注
-      expect(col.type).toBe('TODO');
+      expect(col.type).toBe('string'); // T2c：无 domain → string 缺省 + 显式降级（不再 TODO）
     }
 
     const rider = schema.entities.find((e) => e.entity === 'rider_assignment')!;
@@ -78,8 +78,8 @@ describe('deriveStorageSchema（纯机械）', () => {
     expect(schema.dimensionCount).toBe(2);
     expect(schema.coverageRate).toBe(1);
     const cols = schema.entities[0].columns;
-    expect(cols.find((c) => c.dimension === 'dimA')).toMatchObject({ kind: 'declared', type: 'TODO' });
-    expect(cols.find((c) => c.dimension === 'dimB')).toMatchObject({ kind: 'observed', type: 'TODO' });
+    expect(cols.find((c) => c.dimension === 'dimA')).toMatchObject({ kind: 'declared', type: 'string' });
+    expect(cols.find((c) => c.dimension === 'dimB')).toMatchObject({ kind: 'observed', type: 'string' });
   });
 
   test('无维度声明（dimensions 空/缺省）→ 空 entities + 显式 warning（空集真空覆盖）', () => {

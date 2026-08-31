@@ -11,15 +11,37 @@
  */
 
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import type {
   SourceProtocolModel,
   CompletenessReport,
   AIAdapter,
+  ComponentModel,
 } from '../model/types.js';
 import { checkCompleteness } from '../checker/index.js';
 import { checkSemanticCompleteness } from '../checker-ai/index.js';
+import { parseComponentsFile } from '../parser/components.js';
 import type { StepExecutor } from '../orchestrator/index.js';
 import { writeReport } from '../orchestrator/index.js';
+
+/**
+ * T1a：读取协议根 components.md（组件模型独立文档，可选）。
+ * - components.md 存在且 model.md 仍内嵌「组件映射」段 → 硬失败提示迁移（两源冲突）；
+ * - components.md 存在 → 解析为 ComponentModel，checker R-KIND-10 延伸校验接口契约。
+ */
+export function loadComponentModel(rootDir: string, model: SourceProtocolModel): ComponentModel | undefined {
+  const componentsPath = join(rootDir, 'protocol', 'components.md');
+  if (!existsSync(componentsPath)) return undefined;
+  // 冲突检测：model.md 内嵌组件映射段与 components.md 并存 → 硬失败（提示迁移，不静默）
+  if (model.derivable.componentMapping !== undefined) {
+    throw new Error(
+      `组件模型两源冲突：model.md 内嵌「组件映射」段与 ${componentsPath} 并存——` +
+        `请将组件映射（interfaceImplementations/dimensionStorage/componentTransfers）迁移至 components.md 后` +
+        `删除 model.md 内嵌段（T1a 迁移规则，两源冲突时硬失败）`
+    );
+  }
+  return parseComponentsFile(componentsPath);
+}
 
 export function createCheckExecutor(
   aiAdapter?: AIAdapter
@@ -29,8 +51,11 @@ export function createCheckExecutor(
       const { model, rootDir } = ctx;
       const now = new Date().toISOString();
 
+      // T1a：组件模型（components.md）读取 + 冲突检测
+      const componentModel = loadComponentModel(rootDir, model);
+
       // 1. 机械层
-      let report = checkCompleteness(model);
+      let report = checkCompleteness(model, componentModel ? { componentModel } : undefined);
 
       // 机械层未通过则直接返回，不调用 AI
       if (!report.mechanical.passed) {

@@ -30,6 +30,8 @@ import {
   isSpecsEnvelope,
   envelopeMigrate,
 } from '../specifier/envelope.js';
+import type { DomainTypeDef } from '../domain-types/index.js';
+import { renderTypesFile } from '../domain-types/index.js';
 
 // ============================================================================
 // 类型定义
@@ -50,8 +52,11 @@ export interface StorageColumn {
   kind: DimensionKind | 'undetermined';
   /** 来源：derived / asserted；kind=undetermined 时缺省 */
   kindSource?: DimensionKindSource;
-  /** 纯机械骨架：维度清单不含类型，列类型留 TODO（人工按目标存储确认） */
-  type: 'TODO';
+  /**
+   * T2c（判据 D1）：列类型——实体维度 domain（值域/档位）机械推导：
+   * enum → 类型名（types.ts 定义）；number → 'number'；无 domain → 'string' + 显式降级记录。
+   */
+  type: string;
 }
 
 /** 实体（维度 owner）存储骨架 */
@@ -99,6 +104,16 @@ export interface DeriveStorageOptions {
   outputPath?: string;
   /** 强制覆盖已存在 schema */
   force?: boolean;
+  /**
+   * T2c（判据 D1）：维度 → domain 类型定义（deriveDomainTypes 产物）。
+   * 传入后 storage.schema.json 列 type 由 domain 推导（enum → 类型名 / number / string），
+   * 不再留 TODO。
+   */
+  domainTypes?: Map<string, DomainTypeDef>;
+  /**
+   * T2c：types.ts 产物路径（默认 <rootDir>/derived/types.ts）；与 domainTypes 同传时写实体维度类型定义。
+   */
+  typesOutputPath?: string;
 }
 
 /** derive-storage 执行结果 */
@@ -123,10 +138,16 @@ export function deriveStorageSchema(opts: {
   dimensions: DimensionKindEntry[] | undefined;
   sourceModelVersion: string;
   schemaDegradedReasons: string[] | undefined;
+  /**
+   * T2c（判据 D1）：维度 → domain 类型定义查表（deriveDomainTypes 产物）。
+   * 命中 enum → 列 type = 类型名；number → 'number'；未命中（无 domain）→ 'string' + 显式降级。
+   */
+  domainTypes?: Map<string, DomainTypeDef>;
 }): StorageSchema {
   const dimensions = opts.dimensions ?? [];
   const warnings: string[] = [];
   const schemaDegradedReasons = opts.schemaDegradedReasons ?? [];
+  const domainTypes = opts.domainTypes;
 
   // 显式记录 specs.json 已声明降级（搬运，不静默）
   warnings.push(...schemaDegradedReasons);
@@ -148,17 +169,29 @@ export function deriveStorageSchema(opts: {
   const entities: StorageEntity[] = [];
   for (const [owner, dims] of byOwner) {
     const columns: StorageColumn[] = dims.map((d) => {
+      // T2c：列类型由 domain 推导（enum → 类型名；number → 'number'；无 domain → 'string' + 降级）
+      const dt = domainTypes?.get(d.dimension);
+      let type = 'string';
+      if (dt && dt.kind === 'enum') {
+        type = dt.typeName;
+      } else if (dt && dt.kind === 'number') {
+        type = 'number';
+      } else if (!domainTypes?.has(d.dimension)) {
+        warnings.push(
+          `维度 ${d.dimension}（${owner}）无 domain 声明（值域/档位缺省），列 type 缺省 string（T2c 显式降级）`
+        );
+      }
       const col: StorageColumn = {
         dimension: d.dimension,
         column: d.dimension,
         kind: d.kind ?? 'undetermined',
-        type: 'TODO',
+        type,
       };
       if (d.kindSource) col.kindSource = d.kindSource;
       if (!d.kind) {
         // kind 缺省：列照常生成（存储与 kind 无关），显式降级标注（B-1 分流）
         warnings.push(
-          `维度 ${d.dimension}（${owner}）kind 缺省（dimension-kind-undetermined），存储列已生成（type=TODO），kind 标 undetermined 待人工确认`
+          `维度 ${d.dimension}（${owner}）kind 缺省（dimension-kind-undetermined），存储列已生成（type=${type}），kind 标 undetermined 待人工确认`
         );
       }
       return col;
@@ -236,7 +269,18 @@ export async function deriveStorage(
     dimensions,
     sourceModelVersion,
     schemaDegradedReasons,
+    domainTypes: options.domainTypes,
   });
+
+  // T2c：实体维度类型定义产物（derived/types.ts，判据 D1）
+  if (options.domainTypes && options.typesOutputPath) {
+    const defs = Array.from(options.domainTypes.values());
+    writeFileSync(
+      options.typesOutputPath,
+      renderTypesFile(defs, { sourceModelVersion }),
+      'utf-8'
+    );
+  }
 
   if (existsSync(outputPath) && !options.force) {
     throw new Error(

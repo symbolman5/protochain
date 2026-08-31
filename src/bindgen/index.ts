@@ -382,8 +382,8 @@ function toAccessorSuffix(name: string): string {
 /**
  * 从 specs.json 的维度清单（DimensionKindEntry[]，S1 产物）推导访问器骨架。
  *
- * 规则（X4/X19）：observed 维度（含 computed 同口径；本方案无 computed，仅 observed）
- * 不生成 setter 只生成 reader；declared 维度 reader + setter 都生成；
+ * 规则（X4/X19 + T2b）：observed/computed 维度同口径——不生成 setter 只生成 reader
+ * （角色不能凭意图制造事实或触发重算结果）；declared 维度 reader + setter 都生成；
  * kind 缺省（dimension-kind-undetermined）→ 只生成 reader + 显式降级 warning（B-1 分流）。
  *
  * 纯函数：不写文件；返回条目 + 降级 warning（并入 skeleton.warnings）。
@@ -415,10 +415,10 @@ export function deriveDimensionAccessors(
     if (d.kind === 'declared') {
       // 正向对照（S3-3）：declared 维度仍正常生成 setter（角色可凭意图写入）
       base.setter = `set${suffix}`;
-    } else if (d.kind === 'observed') {
-      // S3-2：observed 维度不生成 setter，只生成 reader
+    } else if (d.kind === 'observed' || d.kind === 'computed') {
+      // S3-2 + T2b：observed/computed 维度不生成 setter，只生成 reader（同口径）
       warnings.push(
-        `维度 ${d.dimension}（${d.owner}）kind='observed'，只生成 reader（${reader}），不生成 setter：角色不能凭意图制造事实 [X4/X19]`
+        `维度 ${d.dimension}（${d.owner}）kind='${d.kind}'，只生成 reader（${reader}），不生成 setter：角色不能凭意图制造事实或触发重算结果 [X4/X19]`
       );
     } else {
       // kind 缺省（dimension-kind-undetermined）：显式降级，只生成 reader

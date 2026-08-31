@@ -34,6 +34,9 @@
 (function () {
   'use strict';
 
+  // 分层视图目标解析（R2b+）：view-tabs.js 加载且非项目模式 → 渲染进 #view-cases；否则原 #panels（零回归）
+  const viewBox = (window.ProtochainViewerTabs && window.ProtochainViewerTabs.viewBox) || ((p) => p);
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -430,6 +433,7 @@
   function renderCasesPanel(state, panels) {
     const data = state.dataJson;
     if (!data) return; // 未导入：主视图已有提示，用例层不重复
+    panels = viewBox(panels, 'view-cases');
     if (panels.querySelector('.cases-panel') || panels.querySelector('.cases-empty')) return;
 
     const paths = extractPaths(data);

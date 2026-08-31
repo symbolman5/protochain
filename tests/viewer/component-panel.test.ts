@@ -51,6 +51,8 @@ function setupDom(dataJson: unknown): { dom: JSDOM; win: V5Window } {
   const ctx = dom.getInternalVMContext();
   runInContext(readViewerFile('assets/parser.js'), ctx);
   runInContext(readViewerFile('n1-guard.js'), ctx);
+  // T5a：接口契约详情复用 InterfaceViewUtils（buildSchemaTree/buildErrorTable）
+  runInContext(readViewerFile('interface-view-utils.js'), ctx);
   runInContext(readViewerFile('app.js'), ctx);
   runInContext(readViewerFile('main-view.js'), ctx);
   runInContext(readViewerFile('protocol-panel.js'), ctx);
@@ -342,7 +344,7 @@ describe('V5-5 老数据降级（无 components 字段 / 部分缺失）', () =>
     expect(dom.window.document.querySelector('.component-panel')).toBeNull();
   });
 
-  test('部分缺失（仅 interfaceImplementations）→ ① 渲染、②③④ 区块级空态，整体不崩', () => {
+  test('部分缺失（仅 interfaceImplementations）→ ① 渲染、②③ 区块级空态，整体不崩', () => {
     const legacy = loadLegacyData() as Record<string, unknown>;
     const partial = {
       ...legacy,
@@ -363,5 +365,94 @@ describe('V5-5 老数据降级（无 components 字段 / 部分缺失）', () =>
     // 拓扑：有组件节点但无边（节点 1 · 边 0）
     expect(dom.window.document.querySelectorAll('.comp-topo-node').length).toBe(1);
     expect(dom.window.document.querySelectorAll('.comp-topo-edge').length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T5a 接口契约详情（apifox 式：url/method/authorization/参数/响应/错误）
+// ---------------------------------------------------------------------------
+
+interface SaasContractShape {
+  interfaces: Array<{
+    id: string;
+    name: string;
+    requestSchema?: unknown;
+    responseSchema?: unknown;
+    errorResponses?: Array<{ errorCode: string; httpStatus?: number; description?: string }>;
+    transport?: { method?: string; path?: string };
+    authorization?: {
+      type: string;
+      credential?: string;
+      selfContained?: string;
+      degraded?: boolean;
+      reason?: string;
+    };
+  }>;
+  components: {
+    interfaceImplementations: Array<{ interface: string; component: string; description?: string }>;
+  };
+}
+
+describe('T5a 接口契约详情（anonymous-saas，apifox 式）', () => {
+  test('⑤ 区块渲染：按组件分组卡片，含 method/url/authorization/参数/响应/错误码表', () => {
+    const data = loadSaasData() as unknown as SaasContractShape;
+    const { dom } = setupDom(data);
+    const section = dom.window.document.querySelector('.comp-ctl-section');
+    expect(section).not.toBeNull();
+    // 卡片数 = interfaceImplementations 条数（24）
+    const cards = [...dom.window.document.querySelectorAll('.comp-ctl-card')];
+    expect(cards.length).toBe(data.components.interfaceImplementations.length);
+    // 分组：control-plane 18 / data-plane 6（与①同构的组件名排序）
+    expect(dom.window.document.querySelectorAll('.comp-ctl-card[data-interface-id]').length).toBe(24);
+    const groups = [...dom.window.document.querySelectorAll('.comp-ctl-group-name')].map((g) => g.textContent);
+    expect(groups[0]).toContain('control-plane');
+    expect(groups[1]).toContain('data-plane');
+    // 卡片：POST 徽章 + url（path 原文，transport 由 webgen 从 bindings.skeleton.yaml 投影）
+    const card = cards[0];
+    expect(card.querySelector('.comp-ctl-method')!.textContent).toBe('POST');
+    const iface = data.interfaces.find((i) => i.name === card.querySelector('.comp-ctl-name')!.textContent)!;
+    expect(card.querySelector('.comp-ctl-url')!.textContent).toContain(iface.transport?.path ?? '');
+    // authorization：webgen 投影（接口无 triggerRoleId → none + 组件模型未声明降级）
+    expect(card.querySelector('.comp-ctl-auth-badge')!.textContent).toBe('none');
+    expect(card.textContent).toContain('组件模型未声明');
+    // 参数/响应：requestSchema/responseSchema 字段树（复用 InterfaceViewUtils）
+    expect(card.querySelectorAll('.comp-ctl-schema-tree').length).toBe(2);
+    // 错误码表：实例无 errorResponses → 占位不崩
+    expect(card.textContent).toContain('无错误响应定义');
+  });
+
+  test('点接口契约卡片 → 高亮实现组件行 + 拓扑节点（协议→组件既有联动）', () => {
+    const data = loadSaasData() as unknown as SaasContractShape;
+    const { dom } = setupDom(data);
+    const card = dom.window.document.querySelector(
+      `.comp-ctl-card[data-interface-name="认领资源"]`
+    )!;
+    expect(card).not.toBeNull();
+    click(dom, card);
+    expect(card.classList.contains('hl')).toBe(true);
+    expect(
+      dom.window.document.querySelector(`.comp-topo-node[data-component="control-plane"]`)!.classList.contains('hl')
+    ).toBe(true);
+    // 实现组件行同步高亮
+    expect(
+      dom.window.document.querySelector(`.comp-impl-row[data-interface-name="认领资源"]`)!.classList.contains('hl')
+    ).toBe(true);
+  });
+
+  test('降级：接口契约缺 transport/authorization（老数据形态）→ 占位显示不崩', () => {
+    // 去掉 interfaces[].transport/authorization（模拟 webgen 投影前形态）
+    const data = loadSaasData() as unknown as SaasContractShape & { [k: string]: unknown };
+    const stripped = JSON.parse(JSON.stringify(data));
+    for (const i of stripped.interfaces) {
+      delete i.transport;
+      delete i.authorization;
+    }
+    expect(() => setupDom(stripped)).not.toThrow();
+    const { dom } = setupDom(stripped);
+    const card = dom.window.document.querySelector('.comp-ctl-card')!;
+    // method/url 占位 + authorization 降级标注（组件模型未声明）
+    expect(card.querySelector('.comp-ctl-method')!.textContent).toBe('—');
+    expect(card.textContent).toContain('path 未声明');
+    expect(card.textContent).toContain('组件模型未声明');
   });
 });

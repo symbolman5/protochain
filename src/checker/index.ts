@@ -32,6 +32,7 @@ import type {
   InterfaceSpec,
   InterfaceType,
   ProjectInterfaceDetailData,
+  ComponentModel,
 } from '../model/types.js';
 import { decomposeStateMachines } from '../model/state-machines.js';
 import { KIND_RULES } from './kind-rules.js';
@@ -42,7 +43,8 @@ import { specify } from '../specifier/index.js';
 import Ajv from 'ajv';
 
 export function checkCompleteness(
-  model: SourceProtocolModel
+  model: SourceProtocolModel,
+  options?: { componentModel?: ComponentModel }
 ): CompletenessReport {
   const structuralIssues: CheckIssue[] = [];
   const fieldIssues: CheckIssue[] = [];
@@ -118,7 +120,7 @@ export function checkCompleteness(
   //   R-KIND-12~15 为 error 级（机械 passed=false）；R-KIND-4~7、R-KIND-8（老模型口径）、
   //   R-KIND-9、R-KIND-10（未映射列出侧）为 warning（不阻断）。
   // ----------------------------------------------------------------------
-  checkKindRules(model, referenceIssues);
+  checkKindRules(model, referenceIssues, options?.componentModel);
 
   // ----------------------------------------------------------------------
   // 5. 跨协议引用收集（① 阶段标记，①-C 阶段在 composition-checker 校验）
@@ -1614,10 +1616,11 @@ function collectPendingCrossProtocolRefs(
  */
 export function checkKindRules(
   model: SourceProtocolModel,
-  issues: CheckIssue[]
+  issues: CheckIssue[],
+  componentModel?: ComponentModel
 ): void {
   for (const rule of KIND_RULES) {
-    issues.push(...rule.check({ model }));
+    issues.push(...rule.check({ model, componentModel }));
   }
 }
 

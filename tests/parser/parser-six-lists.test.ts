@@ -122,7 +122,8 @@ describe('R1a 六张清单 DSL 解析层', () => {
     });
 
     test('kind 非法值 → ParseError', () => {
-      const bad = content.replace('kind: observed', 'kind: computed');
+      // T2b：computed 已合法（三值 declared/observed/computed）；非法值改用未知枚举
+      const bad = content.replace('kind: observed', 'kind: invalid-kind');
       expect(() => parseProtocolContent(bad, 'bad.md')).toThrow(ParseError);
     });
   });

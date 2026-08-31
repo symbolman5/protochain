@@ -20,6 +20,9 @@
 (function () {
   'use strict';
 
+  // 分层视图目标解析（R2b+）：view-tabs.js 加载且非项目模式 → 渲染进 #view-protocol；否则原 #panels（零回归）
+  const viewBox = (window.ProtochainViewerTabs && window.ProtochainViewerTabs.viewBox) || ((p) => p);
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -247,6 +250,7 @@
   const hooks = window.ProtochainViewerHooks || {};
   const prevRenderAll = hooks.renderAll;
   hooks.renderAll = function (state, panels) {
+    panels = viewBox(panels, 'view-protocol');
     if (prevRenderAll) prevRenderAll(state, panels);
     renderReplay(state, panels);
   };
