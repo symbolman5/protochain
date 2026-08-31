@@ -156,12 +156,12 @@ describe('V5-3 组件层面板渲染（anonymous-saas）', () => {
     expect(tables.size).toBe(10);
   });
 
-  test('③ 组件→组件传输表：2 行，from→to / channel / mode 徽章（sync 绿 · async 琥珀）', () => {
+  test('③ 组件→组件传输表：5 行（子协议并集），from→to / channel / mode 徽章（sync 绿 · async 琥珀）', () => {
     const data = loadSaasData() as SaasShape;
     const { dom } = setupDom(data);
     const rows = [...dom.window.document.querySelectorAll('.comp-transfer-row')];
     expect(rows.length).toBe(data.components.componentTransfers.length);
-    expect(rows.length).toBe(2);
+    expect(rows.length).toBe(5);
     for (const t of data.components.componentTransfers) {
       const row = dom.window.document.querySelector(
         `.comp-transfer-row[data-from="${t.from}"][data-to="${t.to}"]`
@@ -173,13 +173,13 @@ describe('V5-3 组件层面板渲染（anonymous-saas）', () => {
       // mode 徽章类名
       expect(row.querySelector(`.comp-mode-${t.mode}`)).not.toBeNull();
     }
-    // async 徽章：传输表 2 个 + 拓扑边 2 个（本数据无 sync）
-    expect(dom.window.document.querySelectorAll('.comp-transfer-row .comp-mode-async').length).toBe(2);
-    expect(dom.window.document.querySelectorAll('.comp-mode-async').length).toBe(4);
+    // async 徽章：传输表 5 个 + 拓扑边 5 个（本数据无 sync）
+    expect(dom.window.document.querySelectorAll('.comp-transfer-row .comp-mode-async').length).toBe(5);
+    expect(dom.window.document.querySelectorAll('.comp-mode-async').length).toBe(10);
     expect(dom.window.document.querySelectorAll('.comp-mode-sync').length).toBe(0);
   });
 
-  test('④ 架构总览：节点=去重组件集（2，带承载接口数）、边=2 带 mode 徽章', () => {
+  test('④ 架构总览：节点=去重组件集（2，带承载接口数）、边=5 带 mode 徽章', () => {
     const data = loadSaasData() as SaasShape;
     const { dom } = setupDom(data);
     // 节点 = interfaceImplementations 组件 ∪ 传输 from/to 去重
@@ -399,7 +399,7 @@ describe('T5a 接口契约详情（anonymous-saas，apifox 式）', () => {
     const { dom } = setupDom(data);
     const section = dom.window.document.querySelector('.comp-ctl-section');
     expect(section).not.toBeNull();
-    // 卡片数 = interfaceImplementations 条数（24）
+    // 卡片数 = interfaceImplementations 条数（24，子协议 components.md 并集）
     const cards = [...dom.window.document.querySelectorAll('.comp-ctl-card')];
     expect(cards.length).toBe(data.components.interfaceImplementations.length);
     // 分组：control-plane 18 / data-plane 6（与①同构的组件名排序）
@@ -407,14 +407,16 @@ describe('T5a 接口契约详情（anonymous-saas，apifox 式）', () => {
     const groups = [...dom.window.document.querySelectorAll('.comp-ctl-group-name')].map((g) => g.textContent);
     expect(groups[0]).toContain('control-plane');
     expect(groups[1]).toContain('data-plane');
-    // 卡片：POST 徽章 + url（path 原文，transport 由 webgen 从 bindings.skeleton.yaml 投影）
+    // 卡片：method + url（transport 由 webgen 从 components.md contracts 投影，bindings/skeleton 回退）
     const card = cards[0];
     expect(card.querySelector('.comp-ctl-method')!.textContent).toBe('POST');
     const iface = data.interfaces.find((i) => i.name === card.querySelector('.comp-ctl-name')!.textContent)!;
     expect(card.querySelector('.comp-ctl-url')!.textContent).toContain(iface.transport?.path ?? '');
-    // authorization：webgen 投影（接口无 triggerRoleId → none + 组件模型未声明降级）
-    expect(card.querySelector('.comp-ctl-auth-badge')!.textContent).toBe('none');
-    expect(card.textContent).toContain('组件模型未声明');
+    // authorization：webgen 从 components.md contracts 投影（凭证引用 → 类型 + 凭证名，非降级）
+    expect(card.querySelector('.comp-ctl-auth-badge')!.textContent).toBe(iface.authorization?.type ?? 'none');
+    if (iface.authorization?.credential) {
+      expect(card.textContent).toContain(iface.authorization.credential);
+    }
     // 参数/响应：requestSchema/responseSchema 字段树（复用 InterfaceViewUtils）
     expect(card.querySelectorAll('.comp-ctl-schema-tree').length).toBe(2);
     // 错误码表：实例无 errorResponses → 占位不崩

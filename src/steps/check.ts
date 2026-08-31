@@ -30,8 +30,11 @@ import { writeReport } from '../orchestrator/index.js';
  * - components.md 存在 → 解析为 ComponentModel，checker R-KIND-10 延伸校验接口契约。
  */
 export function loadComponentModel(rootDir: string, model: SourceProtocolModel): ComponentModel | undefined {
-  const componentsPath = join(rootDir, 'protocol', 'components.md');
-  if (!existsSync(componentsPath)) return undefined;
+  // T1d：components.md 位置二选一——<rootDir>/components.md（多协议子协议根 protocol/<Pn>/components.md）
+  // 优先，<rootDir>/protocol/components.md（单协议项目 T1a 原约定）回退。
+  const candidates = [join(rootDir, 'components.md'), join(rootDir, 'protocol', 'components.md')];
+  const componentsPath = candidates.find((p) => existsSync(p));
+  if (!componentsPath) return undefined;
   // 冲突检测：model.md 内嵌组件映射段与 components.md 并存 → 硬失败（提示迁移，不静默）
   if (model.derivable.componentMapping !== undefined) {
     throw new Error(

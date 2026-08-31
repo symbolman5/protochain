@@ -258,7 +258,7 @@ describe('R2b 组件层 + 用例层整合（anonymous-saas）', () => {
     expect(dom.window.document.querySelector('.protocol-panel')).not.toBeNull();
     expect(dom.window.document.querySelector('.component-panel')).not.toBeNull();
     expect(dom.window.document.querySelector('.cases-panel')).not.toBeNull();
-    // 组件层三表（24/17/2）+ 拓扑节点/边（R2b-2）
+    // 组件层三表（24/17/5 子协议并集）+ 拓扑节点/边（R2b-2）
     const implRows = dom.window.document.querySelectorAll('.comp-impl-row').length;
     expect(implRows).toBe(data.components.interfaceImplementations.length);
     expect(implRows).toBe(24);
@@ -268,9 +268,9 @@ describe('R2b 组件层 + 用例层整合（anonymous-saas）', () => {
     expect(dom.window.document.querySelectorAll('.comp-transfer-row').length).toBe(
       data.components.componentTransfers.length
     );
-    expect(dom.window.document.querySelectorAll('.comp-transfer-row').length).toBe(2);
+    expect(dom.window.document.querySelectorAll('.comp-transfer-row').length).toBe(5);
     expect(dom.window.document.querySelectorAll('.comp-topo-node').length).toBeGreaterThan(0);
-    expect(dom.window.document.querySelectorAll('.comp-topo-edge').length).toBe(2);
+    expect(dom.window.document.querySelectorAll('.comp-topo-edge').length).toBe(5);
     // 用例层（R3a 六张清单形态：0 路径 + 20 对抗按 kind 分组）
     expect(dom.window.document.querySelectorAll('.case-path-row').length).toBe(data.testCases.length);
     expect(dom.window.document.querySelectorAll('.case-adv-row').length).toBe(data.adversarialCases.length);

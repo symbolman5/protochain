@@ -81,6 +81,7 @@ import {
   buildBindingView,
   buildWebData,
   buildSkeletonTransportFallback,
+  loadWebComponentModel,
   renderTestCasesPage,
   renderVerificationPage,
   renderDiffPage,
@@ -1759,6 +1760,8 @@ export async function deriveProjectWeb(
             : undefined,
           // T5a：bindings.yaml 缺失 → 回退子协议 derived/bindings.skeleton.yaml 投影接口 transport
           transportFallback: buildSkeletonTransportFallback(join(subRoot, 'derived', 'bindings.skeleton.yaml')),
+          // T1d：子协议 components.md（存在时）作为组件视图/接口契约优先源；缺省 → 内嵌段回退（老实例零回归）
+          componentModel: loadWebComponentModel(subRoot),
           // B6.3：组合层 errorMap 为全量，传全项目错误码并集，跨协议共享码不误报"残留"
           allProjectErrorCodes: collectProjectErrorCodes(allSpecs),
         });

@@ -21,6 +21,7 @@ import {
   type WebDataJson,
 } from '../../src/webgen/index.js';
 import { parseProtocolFile } from '../../src/parser/index.js';
+import { parseComponentsFile } from '../../src/parser/components.js';
 import type {
   SourceProtocolModel,
   TestCaseSet,
@@ -270,13 +271,19 @@ describe('WebDataJson.credentials（G7-S6 凭证声明投影）', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildComponentsView + WebDataJson.components（S5b X18 组件映射投影）', () => {
-  test('anonymous-saas：三张表投影（interfaceImplementations/dimensionStorage/componentTransfers）', () => {
-    const { specsEnvelope, model, storage, testCases } = loadAnonymousSaaSInputs();
-    const data = buildWebData({ specsEnvelope, model, testCases, storage });
+  test('T1d 新形态：P2 components.md（componentModel）→ 三表 + 组件定义 + 接口契约优先源', () => {
+    // 合并模型（protocol/model.md）内嵌段已迁移至子协议 components.md → 用 P2 子协议 + componentModel
+    const p2Model = parseProtocolFile(join(EXAMPLE_DIR, 'protocol/P2/model.md'));
+    const p2Specs = JSON.parse(
+      readFileSync(join(EXAMPLE_DIR, 'protocol/P2/derived/specs.json'), 'utf-8')
+    ) as SpecsEnvelope;
+    const componentModel = parseComponentsFile(join(EXAMPLE_DIR, 'protocol/P2/components.md'));
+    const data = buildWebData({ specsEnvelope: p2Specs, model: p2Model, componentModel });
     expect(data.components).toBeDefined();
-    expect(data.components!.interfaceImplementations.length).toBeGreaterThan(0);
-    expect(data.components!.dimensionStorage.length).toBe(17);
-    expect(data.components!.componentTransfers.length).toBe(2);
+    // 三张映射表（components.md 原样迁移，语义不变）
+    expect(data.components!.interfaceImplementations).toHaveLength(13);
+    expect(data.components!.dimensionStorage).toHaveLength(9);
+    expect(data.components!.componentTransfers).toHaveLength(2);
     const ii = data.components!.interfaceImplementations[0];
     expect(ii.interface).toBeTruthy();
     expect(ii.component).toBeTruthy();
@@ -288,13 +295,69 @@ describe('buildComponentsView + WebDataJson.components（S5b X18 组件映射投
     expect(ct.to).toBe('data-plane');
     expect(ct.channel).toBe('event');
     expect(['sync', 'async']).toContain(ct.mode);
+    // 组件定义（components.md「组件定义」段投影；老实例内嵌段无此字段）
+    expect(data.components!.components).toHaveLength(2);
+    expect(data.components!.components![0]).toMatchObject({
+      name: 'control-plane',
+      auth: 'bearer',
+      baseUrl: 'https://control.example.com',
+    });
+    expect(data.components!.components![1]).toMatchObject({ name: 'data-plane', auth: 'none' });
+    // 接口契约优先源：transport/authorization 来自 components.md contracts（非 bindings/skeleton 降级）
+    const pub = data.interfaces.find((i) => i.name === '匿名发布资源')!;
+    expect(pub.transport).toEqual({ method: 'POST', path: '/publish-anonymous-resource' });
+    expect(pub.authorization).toMatchObject({ type: 'oauth', credential: '认领码' });
+    // 观测接口：contracts 未覆盖 → method 保持 bindings/skeleton 回退（零回归）
+    const obs = data.interfaces.find((i) => i.kind === 'observation')!;
+    expect(obs).toBeDefined();
+  });
+
+  test('T1d 优先级：componentModel 存在时覆盖 model.md 内嵌组件映射段（components.md 为权威源）', () => {
+    const p2Model = parseProtocolFile(join(EXAMPLE_DIR, 'protocol/P2/model.md'));
+    const p2Specs = JSON.parse(
+      readFileSync(join(EXAMPLE_DIR, 'protocol/P2/derived/specs.json'), 'utf-8')
+    ) as SpecsEnvelope;
+    const componentModel = parseComponentsFile(join(EXAMPLE_DIR, 'protocol/P2/components.md'));
+    // 人为给 model.md IR 注入内嵌映射段（模拟迁移不彻底的老形态）→ 组件视图仍取 components.md
+    p2Model.derivable.componentMapping = {
+      interfaceImplementations: [{ interface: '匿名发布资源', component: 'legacy-component' }],
+      dimensionStorage: [],
+      componentTransfers: [],
+    };
+    const data = buildWebData({ specsEnvelope: p2Specs, model: p2Model, componentModel });
+    expect(data.components!.interfaceImplementations).toHaveLength(13);
+    expect(data.components!.interfaceImplementations[0].component).toBe('control-plane');
+  });
+
+  test('T1d 回退路径：无 componentModel（老实例）→ 组件视图来自 model.md 内嵌组件映射段（零回归）', () => {
+    const p2Model = parseProtocolFile(join(EXAMPLE_DIR, 'protocol/P2/model.md'));
+    const p2Specs = JSON.parse(
+      readFileSync(join(EXAMPLE_DIR, 'protocol/P2/derived/specs.json'), 'utf-8')
+    ) as SpecsEnvelope;
+    // 老形态：model.md 内嵌组件映射段（components.md 缺省）→ 组件视图走内嵌段
+    p2Model.derivable.componentMapping = {
+      interfaceImplementations: [{ interface: '匿名发布资源', component: 'control-plane', description: '老形态内嵌段' }],
+      dimensionStorage: [{ dimension: '形态', table: 'resources' }],
+      componentTransfers: [
+        { from: 'control-plane', to: 'data-plane', channel: 'event', mode: 'async' },
+      ],
+    };
+    const data = buildWebData({ specsEnvelope: p2Specs, model: p2Model });
+    expect(data.components).toBeDefined();
+    expect(data.components!.interfaceImplementations).toEqual([
+      { interface: '匿名发布资源', component: 'control-plane', description: '老形态内嵌段' },
+    ]);
+    expect(data.components!.dimensionStorage).toEqual([{ dimension: '形态', table: 'resources' }]);
+    expect(data.components!.componentTransfers).toHaveLength(1);
+    // 老形态内嵌段无组件定义 → components 字段缺省（viewer 显示占位降级，不崩）
+    expect(data.components!.components).toBeUndefined();
   });
 
   test('buildComponentsView：无「组件映射」段 → undefined（字段缺省路径）', () => {
     expect(buildComponentsView(undefined)).toBeUndefined();
   });
 
-  test('老模型（无「组件映射」段）→ 字段缺省且 JSON 序列化不出现', () => {
+  test('老模型（无 components.md，内嵌段已迁移）→ 字段缺省且 JSON 序列化不出现', () => {
     const data = buildWebData({ specsEnvelope: makeLegacyEnvelope(), model: makeLegacyModel() });
     expect(data.components).toBeUndefined();
     expect(JSON.stringify(data)).not.toContain('"components"');

@@ -35,10 +35,11 @@
  * - Web 服务接触令牌环境变量
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import * as yamlModule from 'yaml';
 import { findConfigPath } from '../project/context.js';
+import { parseComponentsFile } from '../parser/components.js';
 import type {
   SourceProtocolModel,
   InterfaceSpec,
@@ -57,6 +58,9 @@ import type {
   CredentialDeclaration,
   AdversarialCase,
   ComponentMappingDef,
+  ComponentModel,
+  ComponentDef,
+  ComponentContractDef,
 } from '../model/types.js';
 import type { DimensionKindEntry } from '../model/dimension-kind.js';
 import type { StorageSchema } from '../storagegen/index.js';
@@ -235,6 +239,8 @@ export interface WebStorageView {
  * 只投影 viewer 面板需要的结构化字段；description 为可选说明（人读）。
  */
 export interface WebComponentMappingView {
+  /** 组件定义（T1d：components.md「组件定义」段投影；老实例内嵌段无组件定义 → 缺省，零回归） */
+  components?: Array<{ name: string; description?: string; baseUrl?: string; auth?: string }>;
   /** 接口 → 实现组件（哪个 service/module 承载哪个 interface） */
   interfaceImplementations: Array<{ interface: string; component: string; description?: string }>;
   /** 实体维度 → 存储（维度落到哪张表 / 哪个字段） */
@@ -919,6 +925,33 @@ export function buildContractAuthView(
   return { type, credential: hit.name, selfContained: hit.selfContained };
 }
 
+/**
+ * T1d：components.md 接口契约 authorization → WebContractAuthView（pure function）。
+ * - 鉴权类型枚举（none/bearer/oauth/api-key）→ 原样透传（api-key 归 token，viewer 无独立徽章）；
+ * - 凭证引用（credentials 段凭证名）→ 按 selfContained 推断类型（local-verify→bearer /
+ *   needs-lookup→oauth / 其他→token）+ 凭证名；
+ * - 悬空引用（checker 会硬失败；webgen 容错降级）→ none + 显式标注。
+ */
+export function buildContractAuthorizationView(
+  authorization: string,
+  creds: CredentialDeclaration[] | undefined
+): WebContractAuthView | undefined {
+  const AUTH_ENUM = new Set(['none', 'bearer', 'oauth', 'api-key']);
+  if (AUTH_ENUM.has(authorization)) {
+    return { type: authorization === 'api-key' ? 'token' : (authorization as WebContractAuthView['type']) };
+  }
+  const cred = creds?.find((c) => c.name === authorization);
+  if (cred) {
+    const type = cred.selfContained === 'local-verify' ? 'bearer' : cred.selfContained === 'needs-lookup' ? 'oauth' : 'token';
+    return { type, credential: cred.name, selfContained: cred.selfContained };
+  }
+  return {
+    type: 'none',
+    degraded: true,
+    reason: `组件模型接口契约引用凭证 ${authorization} 未在 credentials 段声明（checker 应硬失败；此处降级展示）`,
+  };
+}
+
 /** T5a：按 action 名构建 transport 查表（bindings.interfaces ∪ transportFallback，bindings 优先） */
 export function buildTransportLookup(
   bindings: BindingConfig | undefined,
@@ -1455,6 +1488,12 @@ export interface DeriveWebInputs {
    * 视图的 transport 投影（method/path）；不涉及 binding 视图主体（零回归）。
    */
   transportFallback?: Array<{ action: string; method?: string; path?: string }>;
+  /**
+   * T1d：组件模型（components.md parseComponentsFile 产物，可选）。
+   * - 组件视图数据源优先于 model.md 内嵌组件映射段（老实例无 components.md → 内嵌段回退，零回归）；
+   * - interfaces[].transport/authorization 以 components.md contracts 为优先源（bindings/skeleton 回退）。
+   */
+  componentModel?: ComponentModel;
 }
 
 /** 由 inputs 构造 WebDataJson（pure function） */
@@ -1469,6 +1508,7 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
     impact,
     bindings,
     allProjectErrorCodes,
+    componentModel,
   } = inputs;
   const specs = specsEnvelope.specs;
   const interfaces = buildInterfaceViews(specs);
@@ -1483,6 +1523,30 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
       if (t) iface.transport = t;
       const auth = buildContractAuthView(iface.triggerRoleId, creds);
       if (auth) iface.authorization = auth;
+    }
+  }
+  // T1d：components.md 接口契约优先源（覆盖 bindings/skeleton 投影，不改变渲染形态）。
+  // - path/method：契约声明 → 覆盖 transport（未声明字段保留既有投影）；
+  // - authorization：契约声明（凭证引用或鉴权类型）→ 覆盖（无匹配 → 保留既有推断，零回归）。
+  {
+    const contracts = componentModel?.contracts ?? [];
+    if (contracts.length > 0) {
+      const byIface = new Map(contracts.map((c) => [c.interface, c]));
+      for (const iface of interfaces) {
+        const c = byIface.get(iface.name);
+        if (!c) continue;
+        if (c.path !== undefined || c.method !== undefined) {
+          iface.transport = {
+            ...(iface.transport ?? {}),
+            ...(c.path !== undefined ? { path: c.path } : {}),
+            ...(c.method !== undefined ? { method: c.method } : {}),
+          };
+        }
+        if (c.authorization !== undefined) {
+          const auth = buildContractAuthorizationView(c.authorization, model.metadata.credentials);
+          if (auth) iface.authorization = auth;
+        }
+      }
     }
   }
   const testCaseViews = buildTestCaseViews(testCases, verification);
@@ -1500,7 +1564,18 @@ export function buildWebData(inputs: DeriveWebInputs): WebDataJson {
   const modelRelations = model.derivable.relations;
   const storageView = buildStorageView(inputs.storage);
   const credentials = model.metadata.credentials;
-  const componentsView = buildComponentsView(model.derivable.componentMapping);
+  // T1d：组件视图数据源 = components.md（componentModel.mapping）优先，model.md 内嵌段回退（老实例零回归）；
+  // 组件定义（components.md「组件定义」段）随视图投影（老实例内嵌段无组件定义 → components 字段缺省）。
+  const componentsView = buildComponentsView(componentModel?.mapping ?? model.derivable.componentMapping);
+  const componentDefs = componentModel?.components;
+  if (componentsView && componentDefs && componentDefs.length > 0) {
+    componentsView.components = componentDefs.map((d: ComponentDef) => ({
+      name: d.name,
+      ...(d.description !== undefined ? { description: d.description } : {}),
+      ...(d.baseUrl !== undefined ? { baseUrl: d.baseUrl } : {}),
+      ...(d.auth !== undefined ? { auth: d.auth } : {}),
+    }));
+  }
   const adversarialCases = testCases?.adversarialCases;
   const exceptionPaths = (model.derivable.exceptions ?? []).map((e) => {
     const out: { id: string; name: string; errorCode?: string } = {
@@ -2357,6 +2432,63 @@ function renderWebPackageJson(): string {
 // ============================================================================
 
 /**
+ * T1d：加载组件模型（components.md，parseComponentsFile 产物）。
+ * 优先路径（按序）：
+ * 1. <rootDir>/components.md（多协议子协议根：protocol/<Pn>/components.md）；
+ * 2. <rootDir>/protocol/components.md（单协议项目 T1a 原约定，兼容）；
+ * 3. 多协议合并模型（<rootDir>/protocol/composition.md 存在）→ 子协议 components.md 并集
+ *    （组件定义按 name 去重、三张映射表 concat、接口契约 concat）——合并模型视图数据源。
+ * 均不存在 → undefined（buildWebData 回退 model.md 内嵌段，老实例零回归）。
+ */
+export function loadWebComponentModel(rootDir: string): ComponentModel | undefined {
+  const localCandidates = [join(rootDir, 'components.md'), join(rootDir, 'protocol', 'components.md')];
+  const local = localCandidates.find((p) => existsSync(p));
+  if (local) return parseComponentsFile(local);
+  if (existsSync(join(rootDir, 'protocol', 'composition.md'))) {
+    return mergeSubComponentModels(rootDir);
+  }
+  return undefined;
+}
+
+/** 收集 protocol 目录下各子协议 components.md 并合并为一个 ComponentModel（合并模型视图数据源） */
+function mergeSubComponentModels(rootDir: string): ComponentModel | undefined {
+  const protocolDir = join(rootDir, 'protocol');
+  const compFiles = readdirSync(protocolDir, { withFileTypes: true })
+    .filter(
+      (d) =>
+        d.isDirectory() &&
+        existsSync(join(protocolDir, d.name, 'model.md')) &&
+        existsSync(join(protocolDir, d.name, 'components.md'))
+    )
+    .map((d) => join(protocolDir, d.name, 'components.md'))
+    .sort();
+  if (compFiles.length === 0) return undefined;
+  const models = compFiles.map((p) => parseComponentsFile(p));
+  const components = new Map<string, ComponentDef>();
+  const mapping: ComponentMappingDef = {
+    interfaceImplementations: [],
+    dimensionStorage: [],
+    componentTransfers: [],
+  };
+  const contracts: ComponentContractDef[] = [];
+  for (const m of models) {
+    for (const d of m.components ?? []) {
+      if (!components.has(d.name)) components.set(d.name, d);
+    }
+    mapping.interfaceImplementations!.push(...(m.mapping.interfaceImplementations ?? []));
+    mapping.dimensionStorage!.push(...(m.mapping.dimensionStorage ?? []));
+    mapping.componentTransfers!.push(...(m.mapping.componentTransfers ?? []));
+    contracts.push(...(m.contracts ?? []));
+  }
+  return {
+    name: '合并组件模型',
+    components: [...components.values()],
+    mapping,
+    contracts: contracts.length > 0 ? contracts : undefined,
+  };
+}
+
+/**
  * 推导出 web 站点数据 + 静态页面（CLI 入口）
  *
  * 不直接执行 VitePress build；由 caller 决定是否调 buildSite。
@@ -2398,6 +2530,15 @@ export async function deriveWeb(
 
   // 2. 读取 model.md（仅取元数据 + 状态机）
   const model = parseModel(rootDir);
+
+  // T1d：组件模型加载 — components.md（协议根）优先，model.md 内嵌段回退（buildWebData 内执行）；
+  // 多协议合并模型（协议根无 components.md 但存在 composition.md）→ 收集子协议 components.md 并集。
+  const componentModel = loadWebComponentModel(rootDir);
+  if (componentModel) {
+    warnings.push(
+      `组件模型已加载（components.md${componentModel.sourcePath ? `：${componentModel.sourcePath}` : '（子协议并集）'}，T1d 新形态）`
+    );
+  }
 
   // 3. 读取可选产物（E7-I7 修复：区分 missing vs corrupt）
   const tcR = readOptionalJsonWithStatus<TestCaseSet>(join(rootDir, 'derived/test-cases.json'));
@@ -2462,6 +2603,7 @@ export async function deriveWeb(
     bindings: bindingsConfig,
     storage,
     transportFallback,
+    componentModel,
   });
 
   // 5. 防御性：redact sensitive fields（即使上游不慎写入）
