@@ -1,0 +1,1484 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-30T17:55:54.988Z",
+  "sourceModelVersion": "1.0.0",
+  "protocol": {
+    "name": "资源发布与兑现",
+    "version": "1.0.0",
+    "purpose": "匿名 SaaS 多协议拆分（R3b）· P2 资源发布与兑现：资源、认领码、短时映射实例、文件对象。本子协议自包含六张清单（操作=改实体维度、无状态机段、实体维度带 kind 断言）；跨协议约束（配额 INV-3/4 跨 P1、封禁连带 INV-6 跨 P1、服务器依赖 INV-9/数据面副本 INV-11 跨 P3）走组合层 protocol/composition.md",
+    "roles": [
+      {
+        "id": "publisher_tool",
+        "name": "专用工具（发布端）",
+        "roleType": "participant"
+      },
+      {
+        "id": "anonymous_visitor",
+        "name": "匿名访问者",
+        "roleType": "participant"
+      },
+      {
+        "id": "account_holder",
+        "name": "账号持有者（认领者）",
+        "roleType": "participant"
+      },
+      {
+        "id": "operator",
+        "name": "运营人员",
+        "roleType": "participant"
+      },
+      {
+        "id": "system",
+        "name": "系统自身（调度与观测）",
+        "roleType": "consensus"
+      }
+    ]
+  },
+  "interfaces": [
+    {
+      "id": "IF_SYS_OP1",
+      "name": "匿名发布资源",
+      "kind": "system",
+      "description": "发布形态合法（短时内网映射 | 长期文件托管 二选一）· 无账号、无配额校验（见待确认 #1）",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：派生 1 个认领码"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：派生 1 个认领码"
+        }
+      ],
+      "precondition": "发布形态合法（短时内网映射 | 长期文件托管 二选一）· 无账号、无配额校验（见待确认 #1）",
+      "postconditions": [
+        "派生 1 个认领码"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：发布形态合法（短时内网映射 | 长期文件托管 二选一）· 无账号、无配额校验（见待确认 #1）"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "派生 1 个认领码"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "派生 1 个认领码"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"发布形态合法（短时内网映射 | 长期文件托管 二选一）· 无账号、无配额校验（见待确认 #1）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP2",
+      "name": "上报心跳",
+      "kind": "system",
+      "description": "资源.形态=短时内网映射 ∧ 资源.处置状态=正常",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "资源.形态=短时内网映射 ∧ 资源.处置状态=正常",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：资源.形态=短时内网映射 ∧ 资源.处置状态=正常"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"资源.形态=短时内网映射 ∧ 资源.处置状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP3",
+      "name": "结束运行 / 断开",
+      "kind": "system",
+      "description": "连接状态=在线",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：并发占用随后释放（见 INV-5）"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：并发占用随后释放（见 INV-5）"
+        }
+      ],
+      "precondition": "连接状态=在线",
+      "postconditions": [
+        "并发占用随后释放（见 INV-5）"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：连接状态=在线"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "并发占用随后释放（见 INV-5）"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "并发占用随后释放（见 INV-5）"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"连接状态=在线\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP4",
+      "name": "上传文件内容",
+      "kind": "system",
+      "description": "资源.形态=长期文件托管 ∧ 资源.处置状态=正常",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "资源.形态=长期文件托管 ∧ 资源.处置状态=正常",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：资源.形态=长期文件托管 ∧ 资源.处置状态=正常"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"资源.形态=长期文件托管 ∧ 资源.处置状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP5",
+      "name": "请求访问资源（无认领码）",
+      "kind": "system",
+      "description": "访问策略=放行 ∧ 处置状态=正常",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：无; 判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：无; 判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+        }
+      ],
+      "precondition": "访问策略=放行 ∧ 处置状态=正常",
+      "postconditions": [
+        "无",
+        "判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：访问策略=放行 ∧ 处置状态=正常"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "无"
+        },
+        {
+          "kind": "description-only",
+          "description": "判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "无"
+        },
+        {
+          "kind": "description-only",
+          "description": "判断接口：不改状态，但系统依据状态决定代理还是拒绝（数据面兑现见 P3）"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"访问策略=放行 ∧ 处置状态=正常\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP6",
+      "name": "携带认领码访问",
+      "kind": "system",
+      "description": "归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：无; 判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：无; 判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+        }
+      ],
+      "precondition": "归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用",
+      "postconditions": [
+        "无",
+        "判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "无"
+        },
+        {
+          "kind": "description-only",
+          "description": "判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "无"
+        },
+        {
+          "kind": "description-only",
+          "description": "判断接口：依据状态决定进认领页还是拒绝（未登录则先引导登录）"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP7",
+      "name": "认领资源",
+      "kind": "system",
+      "description": "归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据; 若拆成两步，INV-2 必须降级为 eventually_within"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据; 若拆成两步，INV-2 必须降级为 eventually_within"
+        }
+      ],
+      "precondition": "归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)",
+      "postconditions": [
+        "跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据",
+        "若拆成两步，INV-2 必须降级为 eventually_within"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据"
+        },
+        {
+          "kind": "description-only",
+          "description": "若拆成两步，INV-2 必须降级为 eventually_within"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "跨实体同一事务 TX2——这是 INV-2 能标 always 的唯一依据"
+        },
+        {
+          "kind": "description-only",
+          "description": "若拆成两步，INV-2 必须降级为 eventually_within"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"归属状态=无归属 ∧ 处置状态=正常 ∧ 认领码.兑付状态=未使用 ∧ 账号状态（P1 账号域）=正常 ∧ (形态=短时内网映射 ⇒ 映射并发状态（P1 账号配额）≠已用尽) ∧ (形态=长期文件托管 ⇒ 文件空间状态（P1 账号配额）≠已用尽)\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP8",
+      "name": "移除资源",
+      "kind": "system",
+      "description": "处置状态≠已移除",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "处置状态≠已移除",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：处置状态≠已移除"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"处置状态≠已移除\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP9",
+      "name": "审查资源",
+      "kind": "system",
+      "description": "审核状态=待审",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "审核状态=待审",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：审核状态=待审"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"审核状态=待审\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP10",
+      "name": "封禁资源",
+      "kind": "system",
+      "description": "审核状态=违规",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：认领码不可兑付"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：认领码不可兑付"
+        }
+      ],
+      "precondition": "审核状态=违规",
+      "postconditions": [
+        "认领码不可兑付"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：审核状态=违规"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "认领码不可兑付"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "认领码不可兑付"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"审核状态=违规\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP11",
+      "name": "心跳超时判定",
+      "kind": "system",
+      "description": "连接状态=在线 ∧ 超过 T_hb 未收到心跳",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "连接状态=在线 ∧ 超过 T_hb 未收到心跳",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：连接状态=在线 ∧ 超过 T_hb 未收到心跳"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"连接状态=在线 ∧ 超过 T_hb 未收到心跳\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP12",
+      "name": "认领码过期",
+      "kind": "system",
+      "description": "认领码.兑付状态=未使用 ∧ 超过有效期",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "认领码.兑付状态=未使用 ∧ 超过有效期",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：认领码.兑付状态=未使用 ∧ 超过有效期"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"认领码.兑付状态=未使用 ∧ 超过有效期\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP13",
+      "name": "回收已移除资源",
+      "kind": "system",
+      "description": "处置状态=已移除 ∧ 超过保留期",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：删除文件对象 / 清除映射实例 / 归档记录"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：删除文件对象 / 清除映射实例 / 归档记录"
+        }
+      ],
+      "precondition": "处置状态=已移除 ∧ 超过保留期",
+      "postconditions": [
+        "删除文件对象 / 清除映射实例 / 归档记录"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：处置状态=已移除 ∧ 超过保留期"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "删除文件对象 / 清除映射实例 / 归档记录"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "删除文件对象 / 清除映射实例 / 归档记录"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"处置状态=已移除 ∧ 超过保留期\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_OBS_INV_INV-1",
+      "name": "observe_INV-1",
+      "kind": "observation",
+      "description": "observe_INV-1",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 放行须已认领且正常（INV-1）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 放行须已认领且正常（INV-1）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV-1"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV-2",
+      "name": "observe_INV-2",
+      "kind": "observation",
+      "description": "observe_INV-2",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 认领唯一性（INV-2）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 认领唯一性（INV-2）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV-2"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV-5",
+      "name": "observe_INV-5",
+      "kind": "observation",
+      "description": "observe_INV-5",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 离线不计并发（INV-5）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 离线不计并发（INV-5）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV-5"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV-7",
+      "name": "observe_INV-7",
+      "kind": "observation",
+      "description": "observe_INV-7",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 封禁即不可访问（INV-7）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 封禁即不可访问（INV-7）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV-7"
+      ]
+    },
+    {
+      "id": "IF_OBS_INV_INV-10",
+      "name": "observe_INV-10",
+      "kind": "observation",
+      "description": "observe_INV-10",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 移除即拒绝（INV-10）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 移除即拒绝（INV-10）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV-10"
+      ]
+    }
+  ],
+  "testCases": [],
+  "verification": {
+    "hasReport": false,
+    "passed": false,
+    "counts": {
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0
+    },
+    "deviationSummary": {
+      "stateMismatch": 0,
+      "fieldMismatch": 0,
+      "missingAction": 0,
+      "invariantViolation": 0,
+      "timingViolation": 0,
+      "errorMismatch": 0,
+      "unexpectedError": 0,
+      "other": 0
+    },
+    "sideBySide": []
+  },
+  "diff": null,
+  "impact": null,
+  "implCheck": null,
+  "stateMachine": {
+    "mermaid": "stateDiagram-v2",
+    "nodes": [],
+    "edges": [],
+    "edgeCoverage": {},
+    "invariantScope": {
+      "INV-1": {
+        "name": "放行须已认领且正常",
+        "scopeStateIds": [],
+        "carrierRoleIds": []
+      },
+      "INV-2": {
+        "name": "认领唯一性",
+        "scopeStateIds": [],
+        "carrierRoleIds": []
+      },
+      "INV-5": {
+        "name": "离线不计并发",
+        "scopeStateIds": [],
+        "carrierRoleIds": []
+      },
+      "INV-7": {
+        "name": "封禁即不可访问",
+        "scopeStateIds": [],
+        "carrierRoleIds": []
+      },
+      "INV-10": {
+        "name": "移除即拒绝",
+        "scopeStateIds": [],
+        "carrierRoleIds": []
+      }
+    }
+  },
+  "relations": {
+    "sourceModelVersion": "1.0.0",
+    "entries": [
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV-1",
+        "toId": "GLOBAL",
+        "derivedFrom": [
+          "INV-1"
+        ],
+        "scopeStateIds": []
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV-10",
+        "toId": "GLOBAL",
+        "derivedFrom": [
+          "INV-10"
+        ],
+        "scopeStateIds": []
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV-2",
+        "toId": "GLOBAL",
+        "derivedFrom": [
+          "INV-2"
+        ],
+        "scopeStateIds": []
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV-5",
+        "toId": "GLOBAL",
+        "derivedFrom": [
+          "INV-5"
+        ],
+        "scopeStateIds": []
+      },
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV-7",
+        "toId": "GLOBAL",
+        "derivedFrom": [
+          "INV-7"
+        ],
+        "scopeStateIds": []
+      },
+      {
+        "kind": "timing",
+        "fromId": "心跳超时判定",
+        "toId": "INV-5",
+        "derivedFrom": [
+          "TM3"
+        ],
+        "boundMs": 60000
+      }
+    ]
+  },
+  "redactionNotice": [
+    "本产物由 derive-web 机械生成；不含 authConfig.token/secret/password 等敏感字段。",
+    "本产物不读取 bindings.yaml；不读取进程环境变量。",
+    "P0 范围仅只读展示；编辑能力在 P1 提供。"
+  ],
+  "dimensions": [
+    {
+      "owner": "资源",
+      "dimension": "形态",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": []
+    },
+    {
+      "owner": "资源",
+      "dimension": "归属状态",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": [
+        "role"
+      ]
+    },
+    {
+      "owner": "资源",
+      "dimension": "处置状态",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": [
+        "role"
+      ]
+    },
+    {
+      "owner": "资源",
+      "dimension": "访问策略",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": [
+        "role"
+      ]
+    },
+    {
+      "owner": "资源",
+      "dimension": "审核状态",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": [
+        "role"
+      ]
+    },
+    {
+      "owner": "短时映射实例",
+      "dimension": "连接状态",
+      "kind": "observed",
+      "kindSource": "asserted",
+      "writers": [
+        "system"
+      ]
+    },
+    {
+      "owner": "文件对象",
+      "dimension": "存在性",
+      "kind": "observed",
+      "kindSource": "asserted",
+      "writers": [
+        "system"
+      ]
+    },
+    {
+      "owner": "认领码",
+      "dimension": "兑付状态",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": [
+        "role"
+      ]
+    },
+    {
+      "owner": "认领码",
+      "dimension": "有效期状态",
+      "kind": "observed",
+      "kindSource": "asserted",
+      "writers": [
+        "system"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "INV-1",
+      "name": "放行须已认领且正常",
+      "expression": "访问策略=放行 ⇒ 归属状态=已认领 ∧ 处置状态=正常",
+      "subject": [],
+      "dimensions": [
+        "归属状态",
+        "处置状态",
+        "访问策略"
+      ],
+      "timing": "always",
+      "remedy": {
+        "action": "拒绝访问，控制面告警并修正；修正期内数据面以本地副本为准",
+        "detection": "访问策略与归属状态一致性扫描"
+      },
+      "level": "state-machine",
+      "description": "强一致（同一记录内）。数据面需本地可判定，故访问策略从归属状态派生后冗余存储，由本不变量保证一致"
+    },
+    {
+      "id": "INV-2",
+      "name": "认领唯一性",
+      "expression": "归属状态=已认领 ⇒ 认领码.兑付状态=已使用 ∧ 归属账号唯一",
+      "subject": [],
+      "dimensions": [
+        "归属状态",
+        "兑付状态"
+      ],
+      "timing": "always",
+      "remedy": {
+        "action": "拒绝重复认领；检测到双花即冻结资源并告警",
+        "detection": "认领事务的兑付状态与归属账号唯一性校验"
+      },
+      "level": "state-machine",
+      "description": "强一致（认领需跨资源与认领码的同一事务，事务边界 TX2）"
+    },
+    {
+      "id": "INV-5",
+      "name": "离线不计并发",
+      "expression": "连接状态=离线 ⇒ 不计入并发占用",
+      "subject": [],
+      "dimensions": [
+        "连接状态"
+      ],
+      "timing": "eventually_within",
+      "bound": 60000,
+      "remedy": {
+        "action": "修正计数并释放配额余量；展示与配额判断以修正后为准",
+        "detection": "离线实例计数修正扫描"
+      },
+      "level": "state-machine",
+      "description": "最终一致；收敛上界见 TM3（T_hb + T_stat）"
+    },
+    {
+      "id": "INV-7",
+      "name": "封禁即不可访问",
+      "expression": "处置状态=已封禁 ⇒ 访问策略=拒绝 ∧ 认领码不可兑付",
+      "subject": [],
+      "dimensions": [
+        "处置状态",
+        "访问策略"
+      ],
+      "timing": "always",
+      "remedy": {
+        "action": "拒绝访问与认领；运营解除前保持",
+        "detection": "封禁资源访问与认领路径校验"
+      },
+      "level": "state-machine",
+      "description": "强一致（资源与认领码在同一事务内更新）"
+    },
+    {
+      "id": "INV-10",
+      "name": "移除即拒绝",
+      "expression": "处置状态=已移除 ⇒ 访问策略=拒绝",
+      "subject": [],
+      "dimensions": [
+        "处置状态",
+        "访问策略"
+      ],
+      "timing": "always",
+      "remedy": {
+        "action": "拒绝访问并触发底层回收（回收时机与可恢复性见待确认 #18）",
+        "detection": "已移除资源访问策略校验"
+      },
+      "level": "state-machine",
+      "description": "强一致（同一记录内）"
+    }
+  ],
+  "modelRelations": [
+    {
+      "from": "资源",
+      "to": "短时映射实例",
+      "type": "派生",
+      "constraint": "仅当 形态=短时内网映射；0..1 个。实例不可被声明、生命周期不同步、身份需追溯 ⇒ 与记录分开",
+      "onGone": "实例离线 ⇒ 资源不可达、并发占用释放（INV-5）；记录保留，工具重连是否复用同一实例身份待确认"
+    },
+    {
+      "from": "资源",
+      "to": "文件对象",
+      "type": "派生",
+      "constraint": "仅当 形态=长期文件托管；1 个",
+      "onGone": "文件缺失 ⇒ 资源不可达并告警；记录保留至回收。上传途中（记录已建、字节未完整）落于「缺失」档（待确认）"
+    },
+    {
+      "from": "资源",
+      "to": "认领码",
+      "type": "派生",
+      "constraint": "发布时生成 1 个，一码唯一绑一资源",
+      "onGone": "码失效或已使用 ⇒ 无归属资源永久不可认领；是否补发待确认"
+    }
+  ],
+  "storage": {
+    "dimensionCount": 9,
+    "coveredDimensionCount": 9,
+    "coverageRate": 1,
+    "entities": [
+      {
+        "entity": "资源",
+        "dimensionCount": 5,
+        "dimensions": [
+          {
+            "name": "形态",
+            "type": "TODO",
+            "kind": "declared"
+          },
+          {
+            "name": "归属状态",
+            "type": "TODO",
+            "kind": "declared"
+          },
+          {
+            "name": "处置状态",
+            "type": "TODO",
+            "kind": "declared"
+          },
+          {
+            "name": "访问策略",
+            "type": "TODO",
+            "kind": "declared"
+          },
+          {
+            "name": "审核状态",
+            "type": "TODO",
+            "kind": "declared"
+          }
+        ]
+      },
+      {
+        "entity": "短时映射实例",
+        "dimensionCount": 1,
+        "dimensions": [
+          {
+            "name": "连接状态",
+            "type": "TODO",
+            "kind": "observed"
+          }
+        ]
+      },
+      {
+        "entity": "文件对象",
+        "dimensionCount": 1,
+        "dimensions": [
+          {
+            "name": "存在性",
+            "type": "TODO",
+            "kind": "observed"
+          }
+        ]
+      },
+      {
+        "entity": "认领码",
+        "dimensionCount": 2,
+        "dimensions": [
+          {
+            "name": "兑付状态",
+            "type": "TODO",
+            "kind": "declared"
+          },
+          {
+            "name": "有效期状态",
+            "type": "TODO",
+            "kind": "observed"
+          }
+        ]
+      }
+    ]
+  },
+  "credentials": [
+    {
+      "name": "认领码",
+      "issuer": "system",
+      "holder": "publisher_tool",
+      "redeemer": "account_holder",
+      "selfContained": "needs-lookup",
+      "ttl": "待定（建议与未认领资源保留期一致，见待确认 #2）",
+      "revoke": "资源被移除或封禁即失效；一旦兑付不可再用",
+      "premise": "码空间足够大不可枚举（防暴力猜解）；仅经 HTTPS 传递；不得落日志与 Referer"
+    }
+  ],
+  "components": {
+    "interfaceImplementations": [
+      {
+        "interface": "匿名发布资源",
+        "component": "control-plane",
+        "description": "匿名发布登记资源记录并派生认领码（管理类写路径）"
+      },
+      {
+        "interface": "认领资源",
+        "component": "control-plane",
+        "description": "认领资源（跨资源与认领码同一事务；guard 跨协议校验 P1 账号/配额）"
+      },
+      {
+        "interface": "移除资源",
+        "component": "control-plane",
+        "description": "归属人移除资源"
+      },
+      {
+        "interface": "审查资源",
+        "component": "control-plane",
+        "description": "运营审查资源"
+      },
+      {
+        "interface": "封禁资源",
+        "component": "control-plane",
+        "description": "运营封禁资源"
+      },
+      {
+        "interface": "心跳超时判定",
+        "component": "control-plane",
+        "description": "心跳超时判定（调度）"
+      },
+      {
+        "interface": "认领码过期",
+        "component": "control-plane",
+        "description": "认领码过期判定（调度）"
+      },
+      {
+        "interface": "回收已移除资源",
+        "component": "control-plane",
+        "description": "已移除资源回收（调度）"
+      },
+      {
+        "interface": "请求访问资源（无认领码）",
+        "component": "data-plane",
+        "description": "兑现公网访问（代理/拒绝判定，服务兑现依赖 P3）"
+      },
+      {
+        "interface": "携带认领码访问",
+        "component": "data-plane",
+        "description": "携带认领码访问的跳转判定"
+      },
+      {
+        "interface": "上传文件内容",
+        "component": "data-plane",
+        "description": "文件上传兑现"
+      },
+      {
+        "interface": "上报心跳",
+        "component": "data-plane",
+        "description": "心跳接收（观测事实采集）"
+      },
+      {
+        "interface": "结束运行 / 断开",
+        "component": "data-plane",
+        "description": "断开事件接收（观测事实采集）"
+      }
+    ],
+    "dimensionStorage": [
+      {
+        "dimension": "形态",
+        "table": "resources",
+        "description": "资源记录（短时内网映射/长期文件托管）"
+      },
+      {
+        "dimension": "归属状态",
+        "table": "resources"
+      },
+      {
+        "dimension": "处置状态",
+        "table": "resources"
+      },
+      {
+        "dimension": "访问策略",
+        "table": "resources",
+        "description": "从归属状态派生的冗余副本（INV-1）"
+      },
+      {
+        "dimension": "审核状态",
+        "table": "resources"
+      },
+      {
+        "dimension": "连接状态",
+        "table": "mapping_instances"
+      },
+      {
+        "dimension": "存在性",
+        "table": "files"
+      },
+      {
+        "dimension": "兑付状态",
+        "table": "claim_codes"
+      },
+      {
+        "dimension": "有效期状态",
+        "table": "claim_codes"
+      }
+    ],
+    "componentTransfers": [
+      {
+        "from": "control-plane",
+        "to": "data-plane",
+        "channel": "event",
+        "mode": "async",
+        "description": "推送访问策略副本（组合层 INV-11，跨 P2/P3；T_sync 内收敛，超期未同步数据面 fail-closed）"
+      },
+      {
+        "from": "data-plane",
+        "to": "control-plane",
+        "channel": "event",
+        "mode": "async",
+        "description": "上报心跳/断开等观测事件（INV-5 离线释放数据来源）"
+      }
+    ]
+  },
+  "adversarialCases": [
+    {
+      "id": "X12_INV_1",
+      "kind": "convergence",
+      "source": "不变量 INV-1（放行须已认领且正常）remedy.detection",
+      "interfaceId": "INV-1",
+      "violation": "访问策略=放行 ⇒ 归属状态=已认领 ∧ 处置状态=正常",
+      "detection": "访问策略与归属状态一致性扫描",
+      "body": "/**\n * X12 收敛断言（G7-S4）\n * 数据源（model.md）：不变量 INV-1（放行须已认领且正常）remedy.detection\n * 断言：制造违约 ⇒ 等待 ≤ boundMs ⇒ 状态收敛（检测方式：访问策略与归属状态一致性扫描）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X12 收敛断言：INV-1 放行须已认领且正常', () => {\n  it('制造违约后收敛（boundMs 未声明）', async () => {\n    // 制造违约：违反不变量表达式「访问策略=放行 ⇒ 归属状态=已认领 ∧ 处置状态=正常」\n    makeViolation('访问策略=放行 ⇒ 归属状态=已认领 ∧ 处置状态=正常');\n    // 收敛等待上限未声明（无关联 timing.boundMs）：立即检查 + 显式标注降级\n    // 收敛断言：检测方式「访问策略与归属状态一致性扫描」\n    await expect(converged('访问策略与归属状态一致性扫描')).resolves.toBe(true);\n    expect(elapsed()).toBeGreaterThanOrEqual(0); // 无 boundMs：仅验证收敛发生\n  });\n});\n"
+    },
+    {
+      "id": "X12_INV_2",
+      "kind": "convergence",
+      "source": "不变量 INV-2（认领唯一性）remedy.detection",
+      "interfaceId": "INV-2",
+      "violation": "归属状态=已认领 ⇒ 认领码.兑付状态=已使用 ∧ 归属账号唯一",
+      "detection": "认领事务的兑付状态与归属账号唯一性校验",
+      "body": "/**\n * X12 收敛断言（G7-S4）\n * 数据源（model.md）：不变量 INV-2（认领唯一性）remedy.detection\n * 断言：制造违约 ⇒ 等待 ≤ boundMs ⇒ 状态收敛（检测方式：认领事务的兑付状态与归属账号唯一性校验）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X12 收敛断言：INV-2 认领唯一性', () => {\n  it('制造违约后收敛（boundMs 未声明）', async () => {\n    // 制造违约：违反不变量表达式「归属状态=已认领 ⇒ 认领码.兑付状态=已使用 ∧ 归属账号唯一」\n    makeViolation('归属状态=已认领 ⇒ 认领码.兑付状态=已使用 ∧ 归属账号唯一');\n    // 收敛等待上限未声明（无关联 timing.boundMs）：立即检查 + 显式标注降级\n    // 收敛断言：检测方式「认领事务的兑付状态与归属账号唯一性校验」\n    await expect(converged('认领事务的兑付状态与归属账号唯一性校验')).resolves.toBe(true);\n    expect(elapsed()).toBeGreaterThanOrEqual(0); // 无 boundMs：仅验证收敛发生\n  });\n});\n"
+    },
+    {
+      "id": "X12_INV_5",
+      "kind": "convergence",
+      "source": "不变量 INV-5（离线不计并发）remedy.detection",
+      "interfaceId": "INV-5",
+      "violation": "连接状态=离线 ⇒ 不计入并发占用",
+      "boundMs": 60000,
+      "detection": "离线实例计数修正扫描",
+      "body": "/**\n * X12 收敛断言（G7-S4）\n * 数据源（model.md）：不变量 INV-5（离线不计并发）remedy.detection\n * 断言：制造违约 ⇒ 等待 ≤ boundMs ⇒ 状态收敛（检测方式：离线实例计数修正扫描）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X12 收敛断言：INV-5 离线不计并发', () => {\n  it('制造违约后收敛（boundMs=60000）', async () => {\n    // 制造违约：违反不变量表达式「连接状态=离线 ⇒ 不计入并发占用」\n    makeViolation('连接状态=离线 ⇒ 不计入并发占用');\n    // 等待 ≤ 60000ms 后断言收敛\n    // 收敛断言：检测方式「离线实例计数修正扫描」\n    await expect(converged('离线实例计数修正扫描')).resolves.toBe(true);\n    expect(elapsed()).toBeLessThanOrEqual(60000);\n  });\n});\n"
+    },
+    {
+      "id": "X12_INV_7",
+      "kind": "convergence",
+      "source": "不变量 INV-7（封禁即不可访问）remedy.detection",
+      "interfaceId": "INV-7",
+      "violation": "处置状态=已封禁 ⇒ 访问策略=拒绝 ∧ 认领码不可兑付",
+      "detection": "封禁资源访问与认领路径校验",
+      "body": "/**\n * X12 收敛断言（G7-S4）\n * 数据源（model.md）：不变量 INV-7（封禁即不可访问）remedy.detection\n * 断言：制造违约 ⇒ 等待 ≤ boundMs ⇒ 状态收敛（检测方式：封禁资源访问与认领路径校验）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X12 收敛断言：INV-7 封禁即不可访问', () => {\n  it('制造违约后收敛（boundMs 未声明）', async () => {\n    // 制造违约：违反不变量表达式「处置状态=已封禁 ⇒ 访问策略=拒绝 ∧ 认领码不可兑付」\n    makeViolation('处置状态=已封禁 ⇒ 访问策略=拒绝 ∧ 认领码不可兑付');\n    // 收敛等待上限未声明（无关联 timing.boundMs）：立即检查 + 显式标注降级\n    // 收敛断言：检测方式「封禁资源访问与认领路径校验」\n    await expect(converged('封禁资源访问与认领路径校验')).resolves.toBe(true);\n    expect(elapsed()).toBeGreaterThanOrEqual(0); // 无 boundMs：仅验证收敛发生\n  });\n});\n"
+    },
+    {
+      "id": "X12_INV_10",
+      "kind": "convergence",
+      "source": "不变量 INV-10（移除即拒绝）remedy.detection",
+      "interfaceId": "INV-10",
+      "violation": "处置状态=已移除 ⇒ 访问策略=拒绝",
+      "detection": "已移除资源访问策略校验",
+      "body": "/**\n * X12 收敛断言（G7-S4）\n * 数据源（model.md）：不变量 INV-10（移除即拒绝）remedy.detection\n * 断言：制造违约 ⇒ 等待 ≤ boundMs ⇒ 状态收敛（检测方式：已移除资源访问策略校验）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X12 收敛断言：INV-10 移除即拒绝', () => {\n  it('制造违约后收敛（boundMs 未声明）', async () => {\n    // 制造违约：违反不变量表达式「处置状态=已移除 ⇒ 访问策略=拒绝」\n    makeViolation('处置状态=已移除 ⇒ 访问策略=拒绝');\n    // 收敛等待上限未声明（无关联 timing.boundMs）：立即检查 + 显式标注降级\n    // 收敛断言：检测方式「已移除资源访问策略校验」\n    await expect(converged('已移除资源访问策略校验')).resolves.toBe(true);\n    expect(elapsed()).toBeGreaterThanOrEqual(0); // 无 boundMs：仅验证收敛发生\n  });\n});\n"
+    },
+    {
+      "id": "X15_____expired",
+      "kind": "credential-expired",
+      "source": "credential: 段凭证 认领码（ttl=待定（建议与未认领资源保留期一致，见待确认 #2））",
+      "interfaceId": "认领码",
+      "expectFailure": true,
+      "expectedCredentialBehavior": "reject",
+      "credential": "认领码",
+      "selfContained": "needs-lookup",
+      "body": "/**\n * X15 凭证过期必须失效（G7-S6 / P2-6）\n * 数据源（model.md）：credential: 段凭证 认领码（ttl=待定（建议与未认领资源保留期一致，见待确认 #2））\n * 断言：凭证已过期时验证必须失败（过期 ⇒ 失效，S6-4）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X15 凭证过期必须失效：认领码', () => {\n  it('凭证 认领码 已过期（ttl=待定（建议与未认领资源保留期一致，见待确认 #2））时验证必须失败', () => {\n    // 制造过期：把凭证时间推进到 ttl 有效期之后\n    makeCredentialExpired('认领码');\n    // 验证凭证：过期 ⇒ 必须失效\n    const res = verifyCredential('认领码');\n    expect(res.valid).toBe(false);\n  });\n});\n"
+    },
+    {
+      "id": "X15_____revoked",
+      "kind": "credential-revoked",
+      "source": "credential: 段凭证 认领码（revoke=资源被移除或封禁即失效；一旦兑付不可再用）",
+      "interfaceId": "认领码",
+      "expectFailure": true,
+      "expectedCredentialBehavior": "reject",
+      "credential": "认领码",
+      "selfContained": "needs-lookup",
+      "body": "/**\n * X15 凭证已撤销必须失效（G7-S6 / P2-6）\n * 数据源（model.md）：credential: 段凭证 认领码（revoke=资源被移除或封禁即失效；一旦兑付不可再用）\n * 断言：凭证已撤销时验证必须失败（撤销 ⇒ 失效，S6-4）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X15 凭证已撤销必须失效：认领码', () => {\n  it('凭证 认领码 已撤销（revoke=资源被移除或封禁即失效；一旦兑付不可再用）时验证必须失败', () => {\n    // 制造撤销：按撤销语义 资源被移除或封禁即失效；一旦兑付不可再用 撤销凭证\n    makeCredentialRevoked('认领码');\n    // 验证凭证：已撤销 ⇒ 必须失效\n    const res = verifyCredential('认领码');\n    expect(res.valid).toBe(false);\n  });\n});\n"
+    },
+    {
+      "id": "X15_____lookup",
+      "kind": "credential-lookup",
+      "source": "credential: 段凭证 认领码（selfContained=needs-lookup）",
+      "interfaceId": "认领码",
+      "expectFailure": true,
+      "expectedCredentialBehavior": "reject",
+      "credential": "认领码",
+      "selfContained": "needs-lookup",
+      "body": "/**\n * X15 凭证回查失败（G7-S6 / P2-6）\n * 数据源（model.md）：credential: 段凭证 认领码（selfContained=needs-lookup）\n * 断言：回查失败时拒绝而非放行（needs-lookup，S6-3，fail-closed）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X15 凭证回查失败：认领码（needs-lookup）', () => {\n  it('回查失败时拒绝而非放行（needs-lookup，fail-closed）', () => {\n    // 制造回查失败：lookup 端点不可达 / 超时 / 5xx\n    simulateLookupFailure('认领码');\n    // needs-lookup：凭证需在线回查，回查失败必须拒绝而非放行（S6-3，fail-closed）\n    const res = verifyCredential('认领码');\n    expect(res.valid).toBe(false);\n  });\n});\n"
+    }
+  ]
+}

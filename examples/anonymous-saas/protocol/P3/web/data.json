@@ -1,0 +1,722 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-30T17:55:55.716Z",
+  "sourceModelVersion": "1.0.0",
+  "protocol": {
+    "name": "基础设施",
+    "version": "1.0.0",
+    "purpose": "匿名 SaaS 多协议拆分（R3b）· P3 基础设施：转发服务器、转发服务器实例、接入域名、域名证书。本子协议自包含六张清单（操作=改实体维度、无状态机段、实体维度带 kind 断言）；跨协议约束（映射/文件依赖服务器 INV-9、数据面访问策略副本 INV-11 跨 P2）走组合层 protocol/composition.md",
+    "roles": [
+      {
+        "id": "ops",
+        "name": "运维人员",
+        "roleType": "participant"
+      },
+      {
+        "id": "system",
+        "name": "系统自身（调度与观测）",
+        "roleType": "consensus"
+      },
+      {
+        "id": "anonymous_visitor",
+        "name": "匿名访问者（仅凭证引用）",
+        "roleType": "participant"
+      }
+    ]
+  },
+  "interfaces": [
+    {
+      "id": "IF_SYS_OP1",
+      "name": "登记转发服务器",
+      "kind": "system",
+      "description": "（新建登记，无既有状态 guard）",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "（新建登记，无既有状态 guard）",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：（新建登记，无既有状态 guard）"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"（新建登记，无既有状态 guard）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP2",
+      "name": "下线转发服务器",
+      "kind": "system",
+      "description": "在册状态=在册",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "在册状态=在册",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：在册状态=在册"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"在册状态=在册\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP3",
+      "name": "登记接入域名",
+      "kind": "system",
+      "description": "（新建登记，无既有状态 guard）",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "（新建登记，无既有状态 guard）",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：（新建登记，无既有状态 guard）"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"（新建登记，无既有状态 guard）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP4",
+      "name": "下线接入域名",
+      "kind": "system",
+      "description": "在册状态=在册",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "在册状态=在册",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：在册状态=在册"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"在册状态=在册\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP5",
+      "name": "登记 / 更换域名证书",
+      "kind": "system",
+      "description": "接入域名.在册状态=在册",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "effects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "状态变更副作用：有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出; 证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+          }
+        },
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "effects",
+          "type": "string[]",
+          "description": "状态变更副作用：有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出; 证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+        }
+      ],
+      "precondition": "接入域名.在册状态=在册",
+      "postconditions": [
+        "有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出",
+        "证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+      ],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：接入域名.在册状态=在册"
+        }
+      ],
+      "postconditionExpressions": [
+        {
+          "kind": "description-only",
+          "description": "有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出"
+        },
+        {
+          "kind": "description-only",
+          "description": "证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+        }
+      ],
+      "sideEffects": [
+        {
+          "kind": "description-only",
+          "description": "有效期档不由本操作写入，由「重算证书有效期档」从证书内容观测得出"
+        },
+        {
+          "kind": "description-only",
+          "description": "证书由运维在外部取得后登记进来，系统只接收结果——颁发机构不是本系统组件，不进模型"
+        }
+      ],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"接入域名.在册状态=在册\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP6",
+      "name": "吊销域名证书",
+      "kind": "system",
+      "description": "域名覆盖=已覆盖",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "域名覆盖=已覆盖",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：域名覆盖=已覆盖"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"域名覆盖=已覆盖\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP7",
+      "name": "探测转发服务器健康",
+      "kind": "system",
+      "description": "转发服务器.在册状态=在册（跨层 guard：作用在实例上，条件看它的记录）",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "转发服务器.在册状态=在册（跨层 guard：作用在实例上，条件看它的记录）",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：转发服务器.在册状态=在册（跨层 guard：作用在实例上，条件看它的记录）"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"转发服务器.在册状态=在册（跨层 guard：作用在实例上，条件看它的记录）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_SYS_OP8",
+      "name": "重算证书有效期档",
+      "kind": "system",
+      "description": "（周期性巡检）",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [],
+      "precondition": "（周期性巡检）",
+      "postconditions": [],
+      "preconditions": [
+        {
+          "kind": "legacy-stub",
+          "description": "guard 表达式含中文标点，自然语言未机械提取：（周期性巡检）"
+        }
+      ],
+      "postconditionExpressions": [],
+      "sideEffects": [],
+      "schemaKind": "legacy-stub",
+      "schemaDegradedReasons": [
+        "guard 表达式 \"（周期性巡检）\" 未机械提取为 JSON Schema（未按受限谓词语法书写，显式降级不静默，R2-1）"
+      ],
+      "actionType": "state_transition"
+    },
+    {
+      "id": "IF_OBS_INV_INV-8",
+      "name": "observe_INV-8",
+      "kind": "observation",
+      "description": "observe_INV-8",
+      "requestSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "holds": {
+            "type": "boolean",
+            "description": "不变量 在册域名必有有效证书（INV-8）当前是否成立"
+          }
+        },
+        "required": [
+          "holds"
+        ],
+        "additionalProperties": true
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "holds",
+          "type": "boolean",
+          "description": "不变量 在册域名必有有效证书（INV-8）当前是否成立",
+          "required": true
+        }
+      ],
+      "postconditions": [],
+      "preconditions": [],
+      "postconditionExpressions": [],
+      "schemaKind": "structured",
+      "invariantIds": [
+        "INV-8"
+      ]
+    }
+  ],
+  "testCases": [],
+  "verification": {
+    "hasReport": false,
+    "passed": false,
+    "counts": {
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0
+    },
+    "deviationSummary": {
+      "stateMismatch": 0,
+      "fieldMismatch": 0,
+      "missingAction": 0,
+      "invariantViolation": 0,
+      "timingViolation": 0,
+      "errorMismatch": 0,
+      "unexpectedError": 0,
+      "other": 0
+    },
+    "sideBySide": []
+  },
+  "diff": null,
+  "impact": null,
+  "implCheck": null,
+  "stateMachine": {
+    "mermaid": "stateDiagram-v2",
+    "nodes": [],
+    "edges": [],
+    "edgeCoverage": {},
+    "invariantScope": {
+      "INV-8": {
+        "name": "在册域名必有有效证书",
+        "scopeStateIds": [],
+        "carrierRoleIds": []
+      }
+    }
+  },
+  "relations": {
+    "sourceModelVersion": "1.0.0",
+    "entries": [
+      {
+        "kind": "invariant_scope",
+        "fromId": "INV-8",
+        "toId": "GLOBAL",
+        "derivedFrom": [
+          "INV-8"
+        ],
+        "scopeStateIds": []
+      },
+      {
+        "kind": "timing",
+        "fromId": "重算证书有效期档",
+        "toId": "INV-8",
+        "derivedFrom": [
+          "TM5"
+        ],
+        "boundMs": 1209600000
+      }
+    ]
+  },
+  "redactionNotice": [
+    "本产物由 derive-web 机械生成；不含 authConfig.token/secret/password 等敏感字段。",
+    "本产物不读取 bindings.yaml；不读取进程环境变量。",
+    "P0 范围仅只读展示；编辑能力在 P1 提供。"
+  ],
+  "dimensions": [
+    {
+      "owner": "转发服务器",
+      "dimension": "在册状态",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": [
+        "role"
+      ]
+    },
+    {
+      "owner": "转发服务器实例",
+      "dimension": "服务状态",
+      "kind": "observed",
+      "kindSource": "asserted",
+      "writers": [
+        "system"
+      ]
+    },
+    {
+      "owner": "接入域名",
+      "dimension": "在册状态",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": [
+        "role"
+      ]
+    },
+    {
+      "owner": "域名证书",
+      "dimension": "域名覆盖",
+      "kind": "declared",
+      "kindSource": "asserted",
+      "writers": [
+        "role"
+      ]
+    },
+    {
+      "owner": "域名证书",
+      "dimension": "有效期档",
+      "kind": "observed",
+      "kindSource": "asserted",
+      "writers": [
+        "system"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "INV-8",
+      "name": "在册域名必有有效证书",
+      "expression": "接入域名.在册状态=在册 ⇒ 存在 有效期档≠已过期 ∧ 域名覆盖=已覆盖 的证书",
+      "subject": [],
+      "dimensions": [
+        "在册状态",
+        "在册状态",
+        "域名覆盖",
+        "有效期档"
+      ],
+      "timing": "eventually_within",
+      "bound": 1209600000,
+      "remedy": {
+        "action": "告警运维；期间该域名 HTTPS fail-closed（拒绝握手）",
+        "detection": "在册域名证书覆盖与有效期档巡检"
+      },
+      "level": "state-machine",
+      "description": "最终一致（证书签发依赖外部 CA）；收敛上界见 TM5（T_cert 续期窗口）"
+    }
+  ],
+  "modelRelations": [
+    {
+      "from": "转发服务器",
+      "to": "转发服务器实例",
+      "type": "派生",
+      "constraint": "0..1 个（已登记但还没起来 ⇒ 无实例）。实例不可被声明只能观测，生命周期不同步（登记先于实例、下线后实例还在排空），身份需追溯（哪台机器）",
+      "onGone": "实例消失（探测中断、机器销毁）⇒ 该服务器不可承接新映射，记录保留待运维处置；期间其上已有映射不可达（INV-9）"
+    },
+    {
+      "from": "域名证书",
+      "to": "接入域名",
+      "type": "绑定",
+      "constraint": "一张证书可覆盖多个在册域名；每个在册域名至少一张有效证书（INV-8）",
+      "onGone": "域名下线 ⇒ 证书保留至过期，仍可覆盖其他域名"
+    },
+    {
+      "from": "转发服务器",
+      "to": "域名证书",
+      "type": "绑定",
+      "constraint": "配置层：这台机器须持有所服务域名的全部有效证书。绑到记录而不是实例——运维配的是机器，装载发生在其派生的实例上；SNI 选择的前提",
+      "onGone": "证书过期或吊销 ⇒ 对应 SNI 的 TLS 握手失败（fail-closed）"
+    }
+  ],
+  "storage": {
+    "dimensionCount": 5,
+    "coveredDimensionCount": 5,
+    "coverageRate": 1,
+    "entities": [
+      {
+        "entity": "转发服务器",
+        "dimensionCount": 1,
+        "dimensions": [
+          {
+            "name": "在册状态",
+            "type": "TODO",
+            "kind": "declared"
+          }
+        ]
+      },
+      {
+        "entity": "转发服务器实例",
+        "dimensionCount": 1,
+        "dimensions": [
+          {
+            "name": "服务状态",
+            "type": "TODO",
+            "kind": "observed"
+          }
+        ]
+      },
+      {
+        "entity": "接入域名",
+        "dimensionCount": 1,
+        "dimensions": [
+          {
+            "name": "在册状态",
+            "type": "TODO",
+            "kind": "declared"
+          }
+        ]
+      },
+      {
+        "entity": "域名证书",
+        "dimensionCount": 2,
+        "dimensions": [
+          {
+            "name": "域名覆盖",
+            "type": "TODO",
+            "kind": "declared"
+          },
+          {
+            "name": "有效期档",
+            "type": "TODO",
+            "kind": "observed"
+          }
+        ]
+      }
+    ]
+  },
+  "credentials": [
+    {
+      "name": "域名证书",
+      "issuer": "ops",
+      "holder": "ops",
+      "redeemer": "anonymous_visitor",
+      "selfContained": "local-verify",
+      "ttl": "由证书自身 notAfter 决定，系统只观测不签发（档位见 域名证书.有效期档）",
+      "revoke": "运维在控制台吊销 ⇒ 数据面停止装载；机构侧吊销本系统不感知",
+      "premise": "权威来自系统外部（证书由外部 CA 签发、运维仅登记），本地可验证——这正是凭证的定义；机构可信、私钥不泄露、多域名下 SNI 必须命中正确证书"
+    }
+  ],
+  "components": {
+    "interfaceImplementations": [
+      {
+        "interface": "登记转发服务器",
+        "component": "control-plane",
+        "description": "运维登记转发服务器"
+      },
+      {
+        "interface": "下线转发服务器",
+        "component": "control-plane",
+        "description": "运维下线转发服务器"
+      },
+      {
+        "interface": "登记接入域名",
+        "component": "control-plane",
+        "description": "运维登记接入域名"
+      },
+      {
+        "interface": "下线接入域名",
+        "component": "control-plane",
+        "description": "运维下线接入域名"
+      },
+      {
+        "interface": "登记 / 更换域名证书",
+        "component": "control-plane",
+        "description": "运维登记/更换域名证书"
+      },
+      {
+        "interface": "吊销域名证书",
+        "component": "control-plane",
+        "description": "运维吊销域名证书"
+      },
+      {
+        "interface": "探测转发服务器健康",
+        "component": "data-plane",
+        "description": "健康探测（观测事实采集）"
+      },
+      {
+        "interface": "重算证书有效期档",
+        "component": "control-plane",
+        "description": "证书有效期档巡检（调度）"
+      }
+    ],
+    "dimensionStorage": [
+      {
+        "dimension": "在册状态",
+        "table": "servers",
+        "description": "转发服务器在册状态"
+      },
+      {
+        "dimension": "服务状态",
+        "table": "servers_instances"
+      },
+      {
+        "dimension": "在册状态",
+        "table": "domains",
+        "description": "接入域名在册状态"
+      },
+      {
+        "dimension": "域名覆盖",
+        "table": "certs"
+      },
+      {
+        "dimension": "有效期档",
+        "table": "certs"
+      }
+    ],
+    "componentTransfers": [
+      {
+        "from": "control-plane",
+        "to": "data-plane",
+        "channel": "event",
+        "mode": "async",
+        "description": "装载/停止装载域名证书（SNI 选择前提；证书过期或吊销 ⇒ fail-closed）"
+      },
+      {
+        "from": "data-plane",
+        "to": "control-plane",
+        "channel": "event",
+        "mode": "async",
+        "description": "上报健康探测观测事件"
+      }
+    ]
+  },
+  "adversarialCases": [
+    {
+      "id": "X12_INV_8",
+      "kind": "convergence",
+      "source": "不变量 INV-8（在册域名必有有效证书）remedy.detection",
+      "interfaceId": "INV-8",
+      "violation": "接入域名.在册状态=在册 ⇒ 存在 有效期档≠已过期 ∧ 域名覆盖=已覆盖 的证书",
+      "boundMs": 1209600000,
+      "detection": "在册域名证书覆盖与有效期档巡检",
+      "body": "/**\n * X12 收敛断言（G7-S4）\n * 数据源（model.md）：不变量 INV-8（在册域名必有有效证书）remedy.detection\n * 断言：制造违约 ⇒ 等待 ≤ boundMs ⇒ 状态收敛（检测方式：在册域名证书覆盖与有效期档巡检）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X12 收敛断言：INV-8 在册域名必有有效证书', () => {\n  it('制造违约后收敛（boundMs=1209600000）', async () => {\n    // 制造违约：违反不变量表达式「接入域名.在册状态=在册 ⇒ 存在 有效期档≠已过期 ∧ 域名覆盖=已覆盖 的证书」\n    makeViolation('接入域名.在册状态=在册 ⇒ 存在 有效期档≠已过期 ∧ 域名覆盖=已覆盖 的证书');\n    // 等待 ≤ 1209600000ms 后断言收敛\n    // 收敛断言：检测方式「在册域名证书覆盖与有效期档巡检」\n    await expect(converged('在册域名证书覆盖与有效期档巡检')).resolves.toBe(true);\n    expect(elapsed()).toBeLessThanOrEqual(1209600000);\n  });\n});\n"
+    },
+    {
+      "id": "X15______expired",
+      "kind": "credential-expired",
+      "source": "credential: 段凭证 域名证书（ttl=由证书自身 notAfter 决定，系统只观测不签发（档位见 域名证书.有效期档））",
+      "interfaceId": "域名证书",
+      "expectFailure": true,
+      "expectedCredentialBehavior": "reject",
+      "credential": "域名证书",
+      "selfContained": "local-verify",
+      "body": "/**\n * X15 凭证过期必须失效（G7-S6 / P2-6）\n * 数据源（model.md）：credential: 段凭证 域名证书（ttl=由证书自身 notAfter 决定，系统只观测不签发（档位见 域名证书.有效期档））\n * 断言：凭证已过期时验证必须失败（过期 ⇒ 失效，S6-4）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X15 凭证过期必须失效：域名证书', () => {\n  it('凭证 域名证书 已过期（ttl=由证书自身 notAfter 决定，系统只观测不签发（档位见 域名证书.有效期档））时验证必须失败', () => {\n    // 制造过期：把凭证时间推进到 ttl 有效期之后\n    makeCredentialExpired('域名证书');\n    // 验证凭证：过期 ⇒ 必须失效\n    const res = verifyCredential('域名证书');\n    expect(res.valid).toBe(false);\n  });\n});\n"
+    },
+    {
+      "id": "X15______revoked",
+      "kind": "credential-revoked",
+      "source": "credential: 段凭证 域名证书（revoke=运维在控制台吊销 ⇒ 数据面停止装载；机构侧吊销本系统不感知）",
+      "interfaceId": "域名证书",
+      "expectFailure": true,
+      "expectedCredentialBehavior": "reject",
+      "credential": "域名证书",
+      "selfContained": "local-verify",
+      "body": "/**\n * X15 凭证已撤销必须失效（G7-S6 / P2-6）\n * 数据源（model.md）：credential: 段凭证 域名证书（revoke=运维在控制台吊销 ⇒ 数据面停止装载；机构侧吊销本系统不感知）\n * 断言：凭证已撤销时验证必须失败（撤销 ⇒ 失效，S6-4）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X15 凭证已撤销必须失效：域名证书', () => {\n  it('凭证 域名证书 已撤销（revoke=运维在控制台吊销 ⇒ 数据面停止装载；机构侧吊销本系统不感知）时验证必须失败', () => {\n    // 制造撤销：按撤销语义 运维在控制台吊销 ⇒ 数据面停止装载；机构侧吊销本系统不感知 撤销凭证\n    makeCredentialRevoked('域名证书');\n    // 验证凭证：已撤销 ⇒ 必须失效\n    const res = verifyCredential('域名证书');\n    expect(res.valid).toBe(false);\n  });\n});\n"
+    },
+    {
+      "id": "X15______lookup",
+      "kind": "credential-lookup",
+      "source": "credential: 段凭证 域名证书（selfContained=local-verify）",
+      "interfaceId": "域名证书",
+      "expectFailure": false,
+      "expectedCredentialBehavior": "verify",
+      "credential": "域名证书",
+      "selfContained": "local-verify",
+      "body": "/**\n * X15 凭证回查失败（G7-S6 / P2-6）\n * 数据源（model.md）：credential: 段凭证 域名证书（selfContained=local-verify）\n * 断言：回查失败时仍验证通过（local-verify，S6-2，fail-open）\n */\nimport { describe, it, expect } from '@jest/globals';\n\ndescribe('X15 凭证回查失败：域名证书（local-verify）', () => {\n  it('回查失败时验证仍通过（local-verify，fail-open）', () => {\n    // 制造回查失败：lookup 端点不可达 / 超时 / 5xx\n    simulateLookupFailure('域名证书');\n    // local-verify：凭证可本地验证，回查失败不阻断——仍验证通过（S6-2，fail-open）\n    const res = verifyCredential('域名证书');\n    expect(res.valid).toBe(true);\n  });\n});\n"
+    }
+  ]
+}

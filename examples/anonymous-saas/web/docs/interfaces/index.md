@@ -1,38 +1,33 @@
 # 接口列表
 
-> 共 40 个接口（系统 24 + 观测 16）
+> 共 35 个接口（系统 24 + 观测 11）
 
 | ID | 名称 | 类型 | 动作类型 | schemaKind |
 | --- | --- | --- | --- | --- |
-| [IF_SYS_T1](IF_SYS_T1) | publish_resource | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T2](IF_SYS_T2) | review_resource | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T3](IF_SYS_T3) | claim_resource | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T4](IF_SYS_T4) | remove_resource | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T5](IF_SYS_T5) | ban_resource | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T6](IF_SYS_T6) | ban_user | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T7](IF_SYS_T7) | login | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T8](IF_SYS_T8) | request_access | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T9](IF_SYS_T9) | visit_with_claim_code | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T10](IF_SYS_T10) | upload_file | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T11](IF_SYS_T11) | report_heartbeat | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T12](IF_SYS_T12) | disconnect_mapping | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T13](IF_SYS_T13) | heartbeat_timeout | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T14](IF_SYS_T14) | probe_server_health | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T15](IF_SYS_T15) | register_server | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T16](IF_SYS_T16) | deregister_server | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T17](IF_SYS_T17) | register_domain | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T18](IF_SYS_T18) | deregister_domain | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T19](IF_SYS_T19) | register_cert | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T20](IF_SYS_T20) | revoke_cert | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T21](IF_SYS_T21) | recalc_quota | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T22](IF_SYS_T22) | recalc_cert_validity | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T23](IF_SYS_T23) | claim_code_expire | 系统 | state_transition | legacy-stub |
-| [IF_SYS_T24](IF_SYS_T24) | recycle_removed | 系统 | state_transition | legacy-stub |
-| [IF_OBS_STATE_S0](IF_OBS_STATE_S0) | observe_未发布 | 观测 | observe | structured |
-| [IF_OBS_STATE_S1](IF_OBS_STATE_S1) | observe_已发布 | 观测 | observe | structured |
-| [IF_OBS_STATE_S2](IF_OBS_STATE_S2) | observe_已认领 | 观测 | observe | structured |
-| [IF_OBS_STATE_S3](IF_OBS_STATE_S3) | observe_已封禁 | 观测 | observe | structured |
-| [IF_OBS_STATE_S4](IF_OBS_STATE_S4) | observe_已移除 | 观测 | observe | structured |
+| [IF_SYS_OP1](IF_SYS_OP1) | 匿名发布资源 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP2](IF_SYS_OP2) | 上报心跳 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP3](IF_SYS_OP3) | 结束运行 / 断开 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP4](IF_SYS_OP4) | 上传文件内容 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP5](IF_SYS_OP5) | 请求访问资源（无认领码） | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP6](IF_SYS_OP6) | 携带认领码访问 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP7](IF_SYS_OP7) | 登录 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP8](IF_SYS_OP8) | 认领资源 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP9](IF_SYS_OP9) | 移除资源 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP10](IF_SYS_OP10) | 审查资源 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP11](IF_SYS_OP11) | 封禁资源 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP12](IF_SYS_OP12) | 封禁用户 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP13](IF_SYS_OP13) | 登记转发服务器 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP14](IF_SYS_OP14) | 下线转发服务器 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP15](IF_SYS_OP15) | 登记接入域名 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP16](IF_SYS_OP16) | 下线接入域名 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP17](IF_SYS_OP17) | 登记 / 更换域名证书 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP18](IF_SYS_OP18) | 吊销域名证书 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP19](IF_SYS_OP19) | 心跳超时判定 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP20](IF_SYS_OP20) | 探测转发服务器健康 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP21](IF_SYS_OP21) | 重算账号配额 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP22](IF_SYS_OP22) | 重算证书有效期档 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP23](IF_SYS_OP23) | 认领码过期 | 系统 | state_transition | legacy-stub |
+| [IF_SYS_OP24](IF_SYS_OP24) | 回收已移除资源 | 系统 | state_transition | legacy-stub |
 | [IF_OBS_INV_INV-1](IF_OBS_INV_INV-1) | observe_INV-1 | 观测 | observe | structured |
 | [IF_OBS_INV_INV-2](IF_OBS_INV_INV-2) | observe_INV-2 | 观测 | observe | structured |
 | [IF_OBS_INV_INV-3](IF_OBS_INV_INV-3) | observe_INV-3 | 观测 | observe | structured |
